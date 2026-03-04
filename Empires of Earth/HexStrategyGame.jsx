@@ -1206,27 +1206,41 @@ export default function HexStrategyGame() {
           </div>
         </div>}
 
-        {/* Turn-start popup queue */}
-        {turnPopups.length > 0 && <div style={{ position: "absolute", top: 90, left: "50%", transform: "translateX(-50%)", zIndex: 35, display: "flex", flexDirection: "column", gap: 8, alignItems: "center", pointerEvents: "auto" }}>
-          {turnPopups.map((popup, pi) => <div key={popup.id} style={{
-            background: popup.type === "event" ? "rgba(30,18,6,.96)" : popup.type === "tech" ? "rgba(6,14,30,.96)" : "rgba(10,20,10,.96)",
-            border: `2px solid ${popup.type === "event" ? "#d0a040" : popup.type === "tech" ? "#40a0d0" : "#60c060"}`,
-            borderRadius: 10, padding: "12px 24px",
-            color: popup.type === "event" ? "#ffd080" : popup.type === "tech" ? "#a0d8f0" : "#a0e0a0",
-            textAlign: "center",
-            boxShadow: `0 0 25px ${popup.type === "event" ? "rgba(200,160,40,.3)" : popup.type === "tech" ? "rgba(60,160,220,.3)" : "rgba(60,180,60,.3)"}`,
-            minWidth: 240, maxWidth: 320, cursor: popup.action ? "pointer" : "default"
-          }} onClick={() => {
-            if (popup.action === "tech") { setShowTech(true); }
-            if (popup.action === "city" && popup.cityId) { setShowCity(popup.cityId); }
-            setTurnPopups(prev => prev.filter(p2 => p2.id !== popup.id));
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: 2, marginBottom: 4 }}>{popup.title}</div>
-            <div style={{ fontSize: 10, opacity: .8 }}>{popup.body}</div>
-            {popup.action && <div style={{ fontSize: 8, marginTop: 6, opacity: .6, letterSpacing: 1 }}>Click to open</div>}
-            {!popup.action && <button onClick={e => { e.stopPropagation(); setTurnPopups(prev => prev.filter(p2 => p2.id !== popup.id)); }} style={{ ...btnStyle(false), marginTop: 6, fontSize: 8 }}>OK</button>}
-          </div>)}
-        </div>}
+        {/* Turn-start notification circles (stacked above log, only top one visible) */}
+        {turnPopups.length > 0 && (() => {
+          const popup = turnPopups[0];
+          const isTech = popup.type === "tech";
+          const isCity = popup.type === "city";
+          const isEvent = popup.type === "event";
+          const bgColor = isTech ? "rgba(6,14,30,.96)" : isCity ? "rgba(10,20,10,.96)" : "rgba(30,18,6,.96)";
+          const borderColor = isTech ? "#40a0d0" : isCity ? "#60c060" : "#d0a040";
+          const glowColor = isTech ? "rgba(60,160,220,.4)" : isCity ? "rgba(60,180,60,.4)" : "rgba(200,160,40,.4)";
+          const iconColor = isTech ? "#a0d8f0" : isCity ? "#a0e0a0" : "#ffd080";
+          const icon = isTech ? "🔬" : isCity ? "⚙" : "🎲";
+          return <div style={{ position: "absolute", bottom: 175, right: 14, zIndex: 35, pointerEvents: "auto" }}>
+            {turnPopups.length > 1 && <div style={{ position: "absolute", top: -4, right: -4, width: 14, height: 14, borderRadius: "50%", background: "#c05050", color: "#fff", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 36, border: "1px solid #e07070" }}>{turnPopups.length}</div>}
+            <div
+              title={isTech ? "Choose Research" : isCity ? `${popup.title} — Set Production` : popup.title}
+              onClick={() => {
+                if (popup.action === "tech") { setShowTech(true); }
+                if (popup.action === "city" && popup.cityId) { setShowCity(popup.cityId); }
+                setTurnPopups(prev => prev.filter(p2 => p2.id !== popup.id));
+              }}
+              style={{
+                width: 36, height: 36, borderRadius: "50%",
+                background: bgColor, border: `2px solid ${borderColor}`,
+                boxShadow: `0 0 12px ${glowColor}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", transition: "transform .15s ease",
+                position: "relative",
+              }}
+              onMouseEnter={e => e.currentTarget.style.transform = "scale(1.15)"}
+              onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              <span style={{ fontSize: 18, color: iconColor, lineHeight: 1 }}>{icon}</span>
+            </div>
+          </div>;
+        })()}
 
         {/* Tutorial tip cards */}
         {tutorialOn && gs && !aiThinking && (() => {
