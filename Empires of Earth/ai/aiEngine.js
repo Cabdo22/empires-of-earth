@@ -321,7 +321,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
                 defCity.hp = (defCity.hp || 20) - 5;
                 if (defCity.hp <= 0) {
                   enemyPlayer.cities = enemyPlayer.cities.filter(c => c.id !== defCity.id);
-                  defCity.hp = 10; defCity.hpMax = 20; aiPlayer.cities.push(defCity);
+                  defCity.hp = 10; defCity.hpMax = 20; defCity.captured = true; aiPlayer.cities.push(defCity);
                   if (defHex) defHex.ownerPlayerId = aiPlayer.id;
                   msg += ` 🏛${defCity.name} captured!`;
                 }
@@ -341,7 +341,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
           if (defCity.hp <= 0) {
             const defHex = hexAt(g.hexes, tc, tr);
             enemyPlayer.cities = enemyPlayer.cities.filter(c => c.id !== defCity.id);
-            defCity.hp = 10; defCity.hpMax = 20; aiPlayer.cities.push(defCity);
+            defCity.hp = 10; defCity.hpMax = 20; defCity.captured = true; aiPlayer.cities.push(defCity);
             if (defHex) defHex.ownerPlayerId = aiPlayer.id;
             if (unitDef.range === 0) { unit.hexCol = tc; unit.hexRow = tr; }
             msg = `AI ${unitDef.name} 🏛captured ${defCity.name}!`;
