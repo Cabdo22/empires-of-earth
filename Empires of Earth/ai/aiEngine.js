@@ -72,7 +72,7 @@ const aiPickProduction = (city, player, hexes, enemyPlayer) => {
 
   if ((militaryCount < enemyMilitary + 1) || enemyNearby) {
     const military = availUnits
-      .filter(u => u.id !== "settler" && u.id !== "scout" && u.id !== "nuke" && u.domain === "land")
+      .filter(u => u.id !== "settler" && u.id !== "scout" && u.id !== "nuke")
       .sort((a, b) => b.strength - a.strength);
     if (military.length > 0) return { type: "unit", itemId: military[0].id };
   }
@@ -89,7 +89,7 @@ const aiPickProduction = (city, player, hexes, enemyPlayer) => {
   }
 
   const fallback = availUnits
-    .filter(u => u.id !== "settler" && u.id !== "nuke" && u.domain === "land")
+    .filter(u => u.id !== "settler" && u.id !== "nuke")
     .sort((a, b) => b.strength - a.strength);
   if (fallback.length > 0) return { type: "unit", itemId: fallback[0].id };
 
