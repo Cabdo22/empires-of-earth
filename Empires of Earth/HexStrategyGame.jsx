@@ -33,6 +33,11 @@ import { genGrass, genTrees, genMtns, genWaves, genDetail, genCoast, genWaterCoa
 // Components
 import { ResourceIcon, UnitIcon } from './components/Icons.jsx';
 import MemoHex from './components/MemoHex.jsx';
+import { ModeSelectScreen, MapSizeScreen, CivSelectScreen, TurnTransitionScreen, VictoryScreen } from './components/GameScreens.jsx';
+
+// Hooks
+import { useCamera, MINIMAP_W, MINIMAP_H } from './hooks/useCamera.js';
+import { useGameActions } from './hooks/useGameActions.js';
 
 // Styles
 import { btnStyle, panelStyle } from './styles.js';
@@ -64,6 +69,8 @@ export default function HexStrategyGame() {
   const [techCollapsed, setTechCollapsed] = useState(false);
   const [cityCollapsed, setCityCollapsed] = useState(false);
   const [turnPopups, setTurnPopups] = useState([]);
+  const [showSaveLoad, setShowSaveLoad] = useState(false);
+  const [saveName, setSaveName] = useState("");
   const turnPopupShownRef = useRef(null);
   const [, forceRender] = useState(0);
   const victoryPlayed = useRef(false);
@@ -150,44 +157,17 @@ export default function HexStrategyGame() {
     return new Set(cp.units.filter(u => u.movementCurrent > 0 || (!u.hasAttacked && (UNIT_DEFS[u.unitType]?.range || 0) > 0)).map(u => u.id));
   }, [cp, phase]);
 
-  // Pan/zoom refs
-  const panRef = useRef({ x: 0, y: 0 }), zoomRef = useRef(1), isPanRef = useRef(false), psRef = useRef({ x: 0, y: 0, px: 0, py: 0 });
-  const gRef = useRef(null), svgRef = useRef(null), dirtyRef = useRef(false), gameContainerRef = useRef(null), uiOverlayRef = useRef(null);
+  // === CAMERA HOOK ===
+  const {
+    svgRef, gRef, gameContainerRef, uiOverlayRef, minimapRef, isPanRef, panRef,
+    wW, wH,
+    sched, onMD, onMM, onMU, onWh,
+    onMinimapDown, onMinimapMove, onMinimapUp,
+  } = useCamera({ hexes, gs, players, fogVisible, fogExplored, cpId });
+
   // Panel drag refs
   const techPosRef = useRef({ x: null, y: 95 }), cityPosRef = useRef({ x: null, y: 95 });
   const draggingPanelRef = useRef(null), dragOffsetRef = useRef({ x: 0, y: 0 });
-  // Minimap
-  const minimapRef = useRef(null), minimapRenderRef = useRef(null);
-  const MINIMAP_W = 160, MINIMAP_H = 140;
-  const wW = COLS * 1.5 * HEX_SIZE + HEX_SIZE * 2 + 100, wH = ROWS * SQRT3 * HEX_SIZE + SQRT3 * HEX_SIZE + 100;
-
-  const flush = useCallback(() => {
-    const z = zoomRef.current, p = panRef.current, cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-    if (gRef.current) gRef.current.style.transform = `translate(${p.x + cx - (wW * z) / 2}px,${p.y + cy - (wH * z) / 2}px) scale(${z})`;
-    dirtyRef.current = false;
-    if (minimapRenderRef.current) minimapRenderRef.current();
-  }, [wW, wH]);
-
-  const sched = useCallback(() => {
-    if (!dirtyRef.current) { dirtyRef.current = true; requestAnimationFrame(flush); }
-  }, [flush]);
-
-  useEffect(() => { flush(); }, [flush]);
-
-  // Center camera on player's first city when game starts
-  const gameCenteredRef = useRef(false);
-  useEffect(() => {
-    if (!gs || gameCenteredRef.current) return;
-    const player = gs.players.find(p => p.id === gs.currentPlayerId);
-    if (!player || !player.cities.length) return;
-    const city = player.cities[0];
-    const cityHex = hexes[city.hexId];
-    if (!cityHex) return;
-    const z = zoomRef.current;
-    panRef.current = { x: (wW * z) / 2 - cityHex.x * z, y: (wH * z) / 2 - cityHex.y * z };
-    gameCenteredRef.current = true;
-    sched();
-  }, [gs, hexes, wW, wH, sched]);
 
   useEffect(() => { if (Object.keys(flashes).length > 0) { const t = setTimeout(() => setFlashes({}), 800); return () => clearTimeout(t); } }, [flashes]);
   useEffect(() => { if (combatAnims.length > 0) { const t = setTimeout(() => setCombatAnims([]), 1200); return () => clearTimeout(t); } }, [combatAnims]);
@@ -207,150 +187,6 @@ export default function HexStrategyGame() {
       return { ...prev, explored: { ...ex, [cpId]: [...s] } };
     });
   }, [fogVisible, cpId]);
-
-  // === MINIMAP ===
-  const minimapScaleX = MINIMAP_W / wW, minimapScaleY = MINIMAP_H / wH;
-  const mmHexR = Math.max(2, Math.min(5, MINIMAP_W / (COLS * 2.2)));
-  const mmDragRef = useRef(false);
-
-  const drawMiniHex = (ctx, cx2, cy2, r) => {
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = (i * 60 - 30) * Math.PI / 180;
-      const px = cx2 + r * Math.cos(a), py = cy2 + r * Math.sin(a);
-      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-  };
-
-  const renderMinimap = useCallback(() => {
-    if (!minimapRef.current || !gs) return;
-    const ctx = minimapRef.current.getContext("2d");
-    const MTC = { grassland: "#5a9030", forest: "#1e6a38", mountain: "#6a6a5a", water: "#2a5a8a" };
-    ctx.fillStyle = "#0a0e06"; ctx.fillRect(0, 0, MINIMAP_W, MINIMAP_H);
-    for (const h of hexes) {
-      const cx2 = h.x * minimapScaleX, cy2 = h.y * minimapScaleY;
-      const vis = fogVisible.has(`${h.col},${h.row}`), expl = fogExplored.has(`${h.col},${h.row}`);
-      if (!vis && !expl) continue;
-      ctx.globalAlpha = vis ? 1 : 0.35;
-      ctx.fillStyle = MTC[h.terrainType] || "#444";
-      drawMiniHex(ctx, cx2, cy2, mmHexR); ctx.fill();
-      if (h.ownerPlayerId) {
-        const op2 = players.find(p2 => p2.id === h.ownerPlayerId);
-        if (op2) { ctx.globalAlpha = vis ? 0.3 : 0.15; ctx.fillStyle = op2.color; drawMiniHex(ctx, cx2, cy2, mmHexR); ctx.fill(); }
-      }
-    }
-    for (const p of players) {
-      ctx.fillStyle = p.color; ctx.globalAlpha = 1;
-      for (const c of p.cities) {
-        const ch = hexes[c.hexId]; if (!ch) continue;
-        const vis2 = fogVisible.has(`${ch.col},${ch.row}`) || fogExplored.has(`${ch.col},${ch.row}`);
-        if (!vis2) continue;
-        drawMiniHex(ctx, ch.x * minimapScaleX, ch.y * minimapScaleY, mmHexR + 1); ctx.fill();
-        ctx.strokeStyle = "#fff"; ctx.lineWidth = 0.5; ctx.stroke();
-      }
-    }
-    for (const p of players) {
-      ctx.fillStyle = p.colorLight || p.color; ctx.globalAlpha = 0.9;
-      for (const u of p.units) {
-        const vis2 = fogVisible.has(`${u.hexCol},${u.hexRow}`); if (!vis2) continue;
-        const uh = hexAt(hexes, u.hexCol, u.hexRow); if (!uh) continue;
-        ctx.beginPath(); ctx.arc(uh.x * minimapScaleX, uh.y * minimapScaleY, 1.2, 0, Math.PI * 2); ctx.fill();
-      }
-    }
-    ctx.globalAlpha = 1;
-    const z = zoomRef.current, pan = panRef.current;
-    const vpCx = window.innerWidth / 2, vpCy = window.innerHeight / 2;
-    const wl = ((wW * z) / 2 - pan.x - vpCx) / z, wt = ((wH * z) / 2 - pan.y - vpCy) / z;
-    const vpW = window.innerWidth / z, vpH = window.innerHeight / z;
-    ctx.strokeStyle = "rgba(255,220,100,.7)"; ctx.lineWidth = 1.5;
-    ctx.strokeRect(wl * minimapScaleX, wt * minimapScaleY, vpW * minimapScaleX, vpH * minimapScaleY);
-  }, [hexes, fogVisible, fogExplored, players, gs, minimapScaleX, minimapScaleY, wW, wH, mmHexR]);
-
-  useEffect(() => { minimapRenderRef.current = renderMinimap; renderMinimap(); }, [renderMinimap]);
-
-  const minimapNav = useCallback(e => {
-    if (!minimapRef.current) return;
-    const r = minimapRef.current.getBoundingClientRect();
-    const mx = e.clientX - r.left, my = e.clientY - r.top;
-    const worldX = mx / minimapScaleX, worldY = my / minimapScaleY;
-    const z = zoomRef.current;
-    panRef.current = { x: (wW * z) / 2 - worldX * z, y: (wH * z) / 2 - worldY * z };
-    sched();
-  }, [minimapScaleX, minimapScaleY, wW, wH, sched]);
-
-  const onMinimapDown = useCallback(e => { mmDragRef.current = true; minimapNav(e); }, [minimapNav]);
-  const onMinimapMove = useCallback(e => { if (mmDragRef.current) minimapNav(e); }, [minimapNav]);
-  const onMinimapUp = useCallback(() => { mmDragRef.current = false; }, []);
-
-  const onMD = useCallback(e => {
-    isPanRef.current = true;
-    psRef.current = { x: e.clientX, y: e.clientY, px: panRef.current.x, py: panRef.current.y };
-    if (svgRef.current) svgRef.current.style.cursor = "grabbing";
-  }, []);
-
-  const onMM = useCallback(e => {
-    if (!isPanRef.current) return;
-    panRef.current = { x: psRef.current.px + e.clientX - psRef.current.x, y: psRef.current.py + e.clientY - psRef.current.y };
-    sched();
-  }, [sched]);
-
-  const onMU = useCallback(() => {
-    isPanRef.current = false;
-    if (svgRef.current) svgRef.current.style.cursor = "grab";
-  }, []);
-
-  const onWh = useCallback(e => {
-    e.preventDefault(); e.stopPropagation();
-    const oldZ = zoomRef.current;
-    const newZ = Math.min(3, Math.max(.3, oldZ - e.deltaY * .001));
-    if (newZ === oldZ) return;
-    const mx = e.clientX, my = e.clientY;
-    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-    const p = panRef.current;
-    const wx = (mx - p.x - cx + wW * oldZ / 2) / oldZ;
-    const wy = (my - p.y - cy + wH * oldZ / 2) / oldZ;
-    panRef.current = { x: mx - cx + wW * newZ / 2 - wx * newZ, y: my - cy + wH * newZ / 2 - wy * newZ };
-    zoomRef.current = newZ;
-    sched();
-  }, [sched, wW, wH]);
-
-  // Attach wheel listener as non-passive
-  useEffect(() => {
-    const el = svgRef.current; if (!el) return;
-    const h = e => { e.preventDefault(); onWh(e); };
-    el.addEventListener("wheel", h, { passive: false });
-    const blockBrowserZoom = e => { if (e.ctrlKey || e.metaKey) e.preventDefault(); };
-    document.addEventListener("wheel", blockBrowserZoom, { passive: false, capture: true });
-    const blockKeyZoom = e => { if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "-" || e.key === "=" || e.key === "0")) e.preventDefault(); };
-    document.addEventListener("keydown", blockKeyZoom);
-    return () => {
-      el.removeEventListener("wheel", h);
-      document.removeEventListener("wheel", blockBrowserZoom, { capture: true });
-      document.removeEventListener("keydown", blockKeyZoom);
-    };
-  }, [onWh]);
-
-  // Keep UI overlay sized to visual viewport
-  useEffect(() => {
-    const vv = window.visualViewport; if (!vv) return;
-    let pollTimer = null, rafId = 0, polling = false;
-    const sync = () => {
-      const el = uiOverlayRef.current; if (!el) return;
-      el.style.width = vv.width + "px"; el.style.height = vv.height + "px";
-      el.style.left = vv.offsetLeft + "px"; el.style.top = vv.offsetTop + "px";
-    };
-    const pollLoop = () => { sync(); if (polling) rafId = requestAnimationFrame(pollLoop); };
-    const startPoll = () => { if (!polling) { polling = true; pollLoop(); } clearTimeout(pollTimer); pollTimer = setTimeout(() => { polling = false; }, 500); };
-    vv.addEventListener("resize", sync); vv.addEventListener("scroll", sync);
-    document.addEventListener("wheel", startPoll, { capture: true, passive: true });
-    sync();
-    return () => {
-      polling = false; cancelAnimationFrame(rafId); clearTimeout(pollTimer);
-      vv.removeEventListener("resize", sync); vv.removeEventListener("scroll", sync);
-      document.removeEventListener("wheel", startPoll, { capture: true });
-    };
-  }, []);
 
   // Panel drag handlers
   const onPanelDown = useCallback((e, panel) => {
@@ -392,157 +228,10 @@ export default function HexStrategyGame() {
     return () => window.removeEventListener("keydown", h);
   }, [sched, phase, cp, selU]);
 
-  // Alias module-level functions
-  const addLog = addLogMsg;
-  const checkVictory = checkVictoryState;
-
-  // === NUKE ===
-  const launchNuke = useCallback((nuId, tc, tr) => {
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const aP = g.players.find(p => p.id === g.currentPlayerId);
-      const dP = g.players.find(p => p.id !== g.currentPlayerId);
-      const ni = aP.units.findIndex(u => u.id === nuId); if (ni === -1) return prev;
-      aP.units.splice(ni, 1);
-      // Fighter interception
-      const interceptor = dP.units.find(u => {
-        if (u.unitType !== "fighter") return false;
-        return hexDist(u.hexCol, u.hexRow, tc, tr) <= 2;
-      });
-      if (interceptor) {
-        addLog(`✈ ${interceptor.unitType === "fighter" ? "Fighter" : "Unit"} intercepts nuke at (${tc},${tr})!`, g);
-        interceptor.hasAttacked = true;
-        const fl = {}; fl[`${tc},${tr}`] = "combat"; setFlashes(fl);
-        SFX.combat(); return g;
-      }
-      const blast = getHexesInRadius(tc, tr, 1, g.hexes); const fl = {};
-      for (const bh of blast) {
-        const k = `${bh.col},${bh.row}`; fl[k] = "nuke";
-        dP.units = dP.units.filter(u => !(u.hexCol === bh.col && u.hexRow === bh.row));
-        aP.units = aP.units.filter(u => !(u.hexCol === bh.col && u.hexRow === bh.row));
-        g.barbarians = (g.barbarians || []).filter(b => !(b.hexCol === bh.col && b.hexRow === bh.row));
-        const dc = dP.cities.find(c => { const h = g.hexes[c.hexId]; return h && h.col === bh.col && h.row === bh.row; });
-        if (dc) { dc.hp = Math.max(1, (dc.hp || 20) - 10); addLog(`☢ ${dc.name} hit! (${dc.hp}HP)`, g); }
-      }
-      addLog(`☢ NUCLEAR STRIKE at (${tc},${tr})!`, g); setFlashes(fl); checkVictory(g); return g;
-    });
-    setNukeM(null); setSelU(null); SFX.nuke();
-  }, []);
-
-  // === COMBAT ===
-  const tryCaptureCity = (city, attackerPlayer, defenderPlayer, hex, g) => {
-    defenderPlayer.cities = defenderPlayer.cities.filter(c => c.id !== city.id);
-    city.hp = 10; city.hpMax = 20; city.captured = true;
-    attackerPlayer.cities.push(city);
-    if (hex) hex.ownerPlayerId = attackerPlayer.id;
-    return `🏛${city.name} captured!`;
-  };
-
-  const doCombat = useCallback((attackerId, defCol, defRow) => {
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const attPlayer = g.players.find(p => p.id === g.currentPlayerId);
-      const defPlayer = g.players.find(p => p.id !== g.currentPlayerId);
-      const attUnit = attPlayer.units.find(u => u.id === attackerId);
-      if (!attUnit) return prev;
-      const attDef = UNIT_DEFS[attUnit.unitType];
-      const defUnit = defPlayer.units.find(u => u.hexCol === defCol && u.hexRow === defRow);
-      if (!g.barbarians) g.barbarians = [];
-      const barbUnit = g.barbarians.find(b => b.hexCol === defCol && b.hexRow === defRow);
-      const defCity = defPlayer.cities.find(c => { const h = g.hexes[c.hexId]; return h.col === defCol && h.row === defRow; });
-      const defHex = hexAt(g.hexes, defCol, defRow);
-      const flashKey = `${defCol},${defRow}`;
-      const defender = defUnit || barbUnit;
-
-      if (defender) {
-        const defDef = UNIT_DEFS[defender.unitType];
-        const defOwner = defUnit ? defPlayer : { researchedTechs: [], civilization: "Barbarian" };
-        const preview = calcCombatPreview(attUnit, attDef, defender, defDef, defHex?.terrainType, attPlayer, defOwner, !!defCity);
-        const atkDmg = attDef.ability === "rapid_shot" ? Math.ceil(preview.aDmg * 1.5) : preview.aDmg;
-        attUnit.hpCurrent = Math.max(0, attUnit.hpCurrent - preview.dDmg);
-        defender.hpCurrent = Math.max(0, defender.hpCurrent - atkDmg);
-        attUnit.hasAttacked = true;
-        let msg = `${attDef.name}→${barbUnit ? "Barb " : ""}${defDef.name}: ${atkDmg}dmg${attDef.ability === "rapid_shot" ? " (x1.5)" : ""}`;
-        if (preview.dDmg > 0) msg += ` took ${preview.dDmg}`;
-
-        if (defender.hpCurrent <= 0) {
-          if (defUnit) defPlayer.units = defPlayer.units.filter(u => u.id !== defUnit.id);
-          if (barbUnit) { g.barbarians = g.barbarians.filter(b => b.id !== barbUnit.id); attPlayer.gold += 5; }
-          msg += ` ☠${barbUnit ? "Barb +5💰 " : ""}${defDef.name}`;
-          if (attDef.range === 0 && !preview.atkDies) {
-            attUnit.hexCol = defCol; attUnit.hexRow = defRow; attUnit.movementCurrent = 0;
-            if (defCity && defUnit) {
-              defCity.hp = (defCity.hp || 20) - 5;
-              if (defCity.hp <= 0) msg += ` ${tryCaptureCity(defCity, attPlayer, defPlayer, defHex, g)}`;
-            }
-            if (barbUnit && defHex && !defHex.ownerPlayerId) defHex.ownerPlayerId = attPlayer.id;
-          }
-          if (attDef.ability === "heal_on_kill" && attUnit.hpCurrent > 0) {
-            const healAmt = Math.min(10, UNIT_DEFS[attUnit.unitType].hp - attUnit.hpCurrent);
-            if (healAmt > 0) { attUnit.hpCurrent += healAmt; msg += ` 🐆+${healAmt}HP`; }
-          }
-        }
-        if (preview.atkDies) { attPlayer.units = attPlayer.units.filter(u => u.id !== attUnit.id); msg += ` ☠${attDef.name}`; }
-        addLog(msg, g);
-      } else if (defCity) {
-        let cityDmg = attDef.strength * 2;
-        if (attDef.ability === "city_siege") cityDmg += 2;
-        defCity.hp = (defCity.hp || 20) - cityDmg;
-        attUnit.hasAttacked = true;
-        if (attDef.range === 0) attUnit.movementCurrent = 0;
-        let msg = `${attDef.name}→${defCity.name} (${Math.max(0, defCity.hp)}HP)`;
-        if (defCity.hp <= 0) {
-          msg = `${attDef.name} ${tryCaptureCity(defCity, attPlayer, defPlayer, defHex, g)}`;
-          if (attDef.range === 0) { attUnit.hexCol = defCol; attUnit.hexRow = defRow; }
-        }
-        addLog(msg, g);
-      }
-
-      setFlashes({ [flashKey]: "combat" });
-      const defPos = hexCenter(defCol, defRow);
-      const anims = []; const now = Date.now();
-      if (defender) {
-        const rawPv = calcCombatPreview(attUnit, attDef, defender, UNIT_DEFS[defender.unitType], defHex?.terrainType, attPlayer, defUnit ? defPlayer : { researchedTechs: [], civilization: "Barbarian" }, !!defCity);
-        const atkDmgShow = attDef.ability === "rapid_shot" ? Math.ceil(rawPv.aDmg * 1.5) : rawPv.aDmg;
-        anims.push({ id: now, x: defPos.x, y: defPos.y, dmg: atkDmgShow, color: "#ff4040", t: now });
-        if (preview.dDmg > 0) { const attPos = hexCenter(attUnit.hexCol, attUnit.hexRow); anims.push({ id: now + 1, x: attPos.x, y: attPos.y, dmg: preview.dDmg, color: "#ff8040", t: now }); }
-      } else if (defCity) {
-        let cd2 = attDef.strength * 2; if (attDef.ability === "city_siege") cd2 += 2;
-        anims.push({ id: now, x: defPos.x, y: defPos.y, dmg: cd2, color: "#ff4040", t: now });
-      }
-      if (anims.length > 0) setCombatAnims(prev => [...prev, ...anims]);
-      checkVictory(g);
-      return g;
-    });
-    setSelU(null); setPreview(null); SFX.combat();
-  }, []);
-
-  // === END TURN ===
-  const endTurn = useCallback(() => {
-    let sfxQ = [];
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const currentPlayer = g.players.find(p => p.id === g.currentPlayerId);
-      processResearchAndIncome(currentPlayer, g, sfxQ);
-      for (const city of currentPlayer.cities) processCityTurn(city, currentPlayer, g, sfxQ);
-      expandTerritory(currentPlayer, g);
-      g.currentPlayerId = g.currentPlayerId === "p1" ? "p2" : "p1";
-      if (g.currentPlayerId === "p1") {
-        g.turnNumber++; spawnBarbarians(g); processBarbarians(g); rollRandomEvent(g);
-      }
-      g.phase = "MOVEMENT";
-      const nextPlayer = g.players.find(p => p.id === g.currentPlayerId);
-      refreshUnits(nextPlayer, g);
-      addLog(`Turn ${g.turnNumber} — ${nextPlayer.name}`, g);
-      checkVictory(g);
-      return g;
-    });
-    setSelU(null); setSelH(null); setSettlerM(null); setNukeM(null); setPreview(null);
-    if (sfxQ.length > 0) sfxQ.forEach((s, i) => setTimeout(() => SFX[s]?.(), i * 150));
-    turnPopupShownRef.current = null;
-  }, []);
-
-  const advPhase = endTurn;
+  // === GAME ACTIONS HOOK ===
+  const { launchNuke, doCombat, endTurn, selResearch, upgradeUnit, setProd, moveU, foundCity } = useGameActions({
+    setGs, setSelU, setSelH, setSettlerM, setNukeM, setPreview, setFlashes, setCombatAnims, turnPopupShownRef,
+  });
 
   // --- AI auto-play ---
   useEffect(() => {
@@ -559,7 +248,7 @@ export default function HexStrategyGame() {
         afterAi.phase = "MOVEMENT";
         const p1 = afterAi.players.find(p => p.id === "p1");
         refreshUnits(p1, afterAi);
-        addLogMsg(`Turn ${afterAi.turnNumber} — ${p1.name}`, afterAi);
+        addLogMsg(`Turn ${afterAi.turnNumber} \u2014 ${p1.name}`, afterAi);
         checkVictoryState(afterAi);
         const aiP = afterAi.players.find(p => p.id === "p2");
         const aiVis = getVisibleHexes(aiP, afterAi.hexes);
@@ -595,94 +284,13 @@ export default function HexStrategyGame() {
     const popups = []; let pid = 0;
     const cp2 = gs.players.find(p => p.id === gs.currentPlayerId);
     if (!cp2) return;
-    if (gs.eventMsg) { popups.push({ id: pid++, type: "event", title: `🎲 ${gs.eventMsg.name}`, body: gs.eventMsg.desc }); }
-    if (!cp2.currentResearch) { popups.push({ id: pid++, type: "tech", title: "🔬 Choose Research", body: "No technology is being researched. Open the tech tree to pick one!", action: "tech" }); }
+    if (gs.eventMsg) { popups.push({ id: pid++, type: "event", title: `\u{1F3B2} ${gs.eventMsg.name}`, body: gs.eventMsg.desc }); }
+    if (!cp2.currentResearch) { popups.push({ id: pid++, type: "tech", title: "\u{1F52C} Choose Research", body: "No technology is being researched. Open the tech tree to pick one!", action: "tech" }); }
     for (const city of cp2.cities) {
-      if (!city.currentProduction) { popups.push({ id: pid++, type: "city", title: `🏛 ${city.name} — Idle`, body: `${city.name} has no production queue. Click it to choose what to build!`, action: "city", cityId: city.id }); }
+      if (!city.currentProduction) { popups.push({ id: pid++, type: "city", title: `\u{1F3DB} ${city.name} \u2014 Idle`, body: `${city.name} has no production queue. Click it to choose what to build!`, action: "city", cityId: city.id }); }
     }
     if (popups.length > 0) setTurnPopups(popups);
   }, [gs?.turnNumber, gs?.currentPlayerId, gs?.victoryStatus, turnTransition, gameMode]);
-
-  // --- Player action callbacks ---
-  const selResearch = useCallback((techId) => {
-    SFX.click();
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const player = g.players.find(p => p.id === g.currentPlayerId);
-      player.currentResearch = { techId, progress: 0 };
-      addLog(`${player.name} researching ${TECH_TREE[techId].name}`, g);
-      return g;
-    });
-  }, []);
-
-  const upgradeUnit = useCallback((unitId) => {
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const player = g.players.find(p => p.id === g.currentPlayerId);
-      const unit = player.units.find(u => u.id === unitId);
-      if (!unit) return prev;
-      const info = canUpgradeUnit(unit, player);
-      if (!info) return prev;
-      player.gold -= info.cost;
-      const oldDef = UNIT_DEFS[unit.unitType];
-      unit.unitType = info.toType;
-      const newDef = UNIT_DEFS[info.toType];
-      unit.hpCurrent = Math.ceil((unit.hpCurrent / oldDef.hp) * newDef.hp);
-      unit.movementCurrent = 0; unit.hasAttacked = true;
-      addLog(`⬆ ${oldDef.name} upgraded to ${newDef.name} (-${info.cost}💰)`, g);
-      return g;
-    });
-    SFX.click();
-  }, []);
-
-  const setProd = useCallback((cityId, type, itemId) => {
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const city = g.players.find(p => p.id === g.currentPlayerId).cities.find(c => c.id === cityId);
-      if (city) { city.currentProduction = { type, itemId }; city.productionProgress = 0; }
-      return g;
-    });
-  }, []);
-
-  const moveU = useCallback((unitId, targetCol, targetRow) => {
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const unit = g.players.find(p => p.id === g.currentPlayerId).units.find(u => u.id === unitId);
-      if (!unit) return prev;
-      unit.hexCol = targetCol; unit.hexRow = targetRow; unit.movementCurrent = 0;
-      return g;
-    });
-    setSelU(null); SFX.move();
-  }, []);
-
-  const foundCity = useCallback((unitId, col, row) => {
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const player = g.players.find(p => p.id === g.currentPlayerId);
-      const unitIdx = player.units.findIndex(u => u.id === unitId);
-      if (unitIdx === -1) return prev;
-      const hex = hexAt(g.hexes, col, row);
-      if (!hex || hex.terrainType === "water" || hex.terrainType === "mountain" || hex.cityId) return prev;
-      player.units.splice(unitIdx, 1);
-      const cityNum = player.cities.length + 1;
-      const civNames = CIV_DEFS[player.civilization]?.cityNames || ["Colony"];
-      const cityName = civNames[cityNum - 1] || `City ${cityNum}`;
-      const cityId = `${player.id}-c${cityNum}`;
-      player.cities.push({
-        id: cityId, name: cityName, hexId: hex.id, population: 1,
-        districts: [], currentProduction: null, productionProgress: 0,
-        foodAccumulated: 0, hp: 20, hpMax: 20,
-      });
-      hex.cityId = cityId; hex.ownerPlayerId = player.id;
-      for (const [nc, nr] of getNeighbors(col, row)) {
-        const neighbor = hexAt(g.hexes, nc, nr);
-        if (neighbor && !neighbor.ownerPlayerId && neighbor.terrainType !== "water") neighbor.ownerPlayerId = player.id;
-      }
-      addLog(`${player.name} founded ${cityName}!`, g);
-      return g;
-    });
-    setSettlerM(null); setSelU(null); SFX.found();
-  }, []);
 
   // === HEX EVENT DELEGATION ===
   const findHexFromEvent = useCallback(e => {
@@ -804,161 +412,26 @@ export default function HexStrategyGame() {
   // RENDER — SCREENS
   // ============================================================
 
-  // === MODE SELECTION SCREEN ===
-  if (!gameMode) {
-    const modeBtn = (label, desc, icon, mode) => (
-      <div onClick={() => { SFX.click(); setGameMode(mode); }}
-        style={{ padding: "24px 36px", borderRadius: 8, cursor: "pointer", background: "rgba(30,40,20,.6)",
-          border: "1px solid rgba(100,140,50,.4)", minWidth: 220, textAlign: "center", transition: "background .2s" }}
-        onMouseEnter={e => e.currentTarget.style.background = "rgba(100,160,50,.25)"}
-        onMouseLeave={e => e.currentTarget.style.background = "rgba(30,40,20,.6)"}>
-        <div style={{ fontSize: 36, marginBottom: 8 }}>{icon}</div>
-        <div style={{ color: "#c8d8a0", fontSize: 16, fontWeight: 600, letterSpacing: 2 }}>{label}</div>
-        <div style={{ color: "#6a7a50", fontSize: 10, marginTop: 6 }}>{desc}</div>
-      </div>
-    );
-    return (
-      <div style={{ width: "100vw", height: "100vh", background: "radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", fontFamily: "'Palatino Linotype',serif", gap: 32 }}>
-        <h1 style={{ color: "#c8d8a0", fontSize: 32, fontWeight: 400, letterSpacing: 8, textTransform: "uppercase", margin: 0 }}>Empires of Earth</h1>
-        <div style={{ color: "#6a7a50", fontSize: 12, letterSpacing: 3 }}>Select Game Mode</div>
-        <div style={{ display: "flex", gap: 24 }}>
-          {modeBtn("vs AI", "Play against the computer", "🤖", "ai")}
-          {modeBtn("Local", "Two players, one screen", "👥", "local")}
-        </div>
-        <div style={{ color: "#3a4a2a", fontSize: 9, marginTop: 8 }}>Fog of War · Barbarians · Random Events</div>
-      </div>
-    );
-  }
+  if (!gameMode) return <ModeSelectScreen setGameMode={setGameMode} />;
 
-  // === MAP SIZE SELECTION SCREEN ===
-  if (gameMode && !mapSizePick) {
-    const sizeBtn = (key, cfg, icon) => (
-      <div onClick={() => { SFX.click(); setMapSizePick(key); setMapConfig(key); }}
-        style={{ padding: "24px 36px", borderRadius: 8, cursor: "pointer", background: "rgba(30,40,20,.6)",
-          border: "1px solid rgba(100,140,50,.4)", minWidth: 200, textAlign: "center", transition: "background .2s" }}
-        onMouseEnter={e => e.currentTarget.style.background = "rgba(100,160,50,.25)"}
-        onMouseLeave={e => e.currentTarget.style.background = "rgba(30,40,20,.6)"}>
-        <div style={{ fontSize: 36, marginBottom: 8 }}>{icon}</div>
-        <div style={{ color: "#c8d8a0", fontSize: 16, fontWeight: 600, letterSpacing: 2 }}>{cfg.label}</div>
-        <div style={{ color: "#6a7a50", fontSize: 10, marginTop: 6 }}>{cfg.desc}</div>
-        <div style={{ color: "#4a5a3a", fontSize: 9, marginTop: 4 }}>{cfg.cols}×{cfg.rows} = {cfg.cols * cfg.rows} hexes</div>
-      </div>
-    );
-    return (
-      <div style={{ width: "100vw", height: "100vh", background: "radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", fontFamily: "'Palatino Linotype',serif", gap: 32 }}>
-        <h1 style={{ color: "#c8d8a0", fontSize: 32, fontWeight: 400, letterSpacing: 8, textTransform: "uppercase", margin: 0 }}>Empires of Earth</h1>
-        <div style={{ color: "#6a7a50", fontSize: 12, letterSpacing: 3 }}>Select Map Size</div>
-        <div style={{ display: "flex", gap: 24 }}>
-          {Object.entries(MAP_SIZES).map(([k, v]) => sizeBtn(k, v, k === "small" ? "🗺" : k === "medium" ? "🌍" : "🌏"))}
-        </div>
-        <div onClick={() => { setGameMode(null); }} style={{ color: "#6a7a50", fontSize: 9, cursor: "pointer", textDecoration: "underline", marginTop: 4 }}>← Back</div>
-      </div>
-    );
-  }
+  if (gameMode && !mapSizePick) return <MapSizeScreen setMapSizePick={setMapSizePick} setGameMode={setGameMode} />;
 
-  // === CIV SELECTION SCREEN ===
-  if (!gameStarted || !gs) {
-    const civKeys = Object.keys(CIV_DEFS);
-    const isAiMode = gameMode === "ai";
-    const step = isAiMode ? 1 : civPickStep;
-    const currentPid = step === 1 ? "p1" : "p2";
-    const picked = civPick[currentPid];
-    const otherPicked = step === 2 ? civPick.p1 : null;
+  if (!gameStarted || !gs) return <CivSelectScreen
+    gameMode={gameMode} civPick={civPick} setCivPick={setCivPick}
+    civPickStep={civPickStep} setCivPickStep={setCivPickStep}
+    setGs={setGs} setGameStarted={setGameStarted}
+    onBack={() => { if (gameMode !== "ai" && civPickStep === 2) setCivPickStep(1); else setMapSizePick(null); }}
+  />;
 
-    const startGame = () => {
-      let p2Civ = civPick.p2;
-      if (isAiMode) {
-        const available = civKeys.filter(k => k !== civPick.p1);
-        p2Civ = available[Math.floor(Math.random() * available.length)];
-      }
-      SFX.found();
-      setGs(createInitialState(civPick.p1, p2Civ));
-      setGameStarted(true);
-    };
+  if (turnTransition) return <TurnTransitionScreen turnTransition={turnTransition} turnNumber={turnNumber} onReady={() => setTurnTransition(null)} />;
 
-    const advanceToP2 = () => {
-      SFX.click();
-      setCivPickStep(2);
-      const avail = civKeys.filter(k => k !== civPick.p1);
-      if (!avail.includes(civPick.p2)) setCivPick(prev => ({ ...prev, p2: avail[0] }));
-    };
-
-    const stepLabel = isAiMode ? "Choose Your Civilization" : step === 1 ? "Player 1 — Choose Your Civilization" : "Player 2 — Choose Your Civilization";
-
-    return (
-      <div style={{ width: "100vw", minHeight: "100vh", background: "#0a0e06", display: "flex", flexDirection: "column", alignItems: "center", fontFamily: "'Palatino Linotype',serif", overflowY: "auto" }}>
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)", zIndex: 0, pointerEvents: "none" }}/>
-        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "24px 0 32px" }}>
-          <h1 style={{ color: "#c8d8a0", fontSize: 28, fontWeight: 400, letterSpacing: 8, textTransform: "uppercase", margin: 0 }}>Empires of Earth</h1>
-          <div style={{ color: "#6a7a50", fontSize: 12, letterSpacing: 3 }}>{stepLabel}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 280 }}>
-            {civKeys.map(ck => {
-              const cv = CIV_DEFS[ck]; const sel = picked === ck; const taken = otherPicked === ck;
-              return (
-                <div key={ck} onClick={() => { if (!taken) { SFX.click(); setCivPick(prev => ({ ...prev, [currentPid]: ck })); } }}
-                  style={{ padding: "6px 16px", borderRadius: 6, cursor: taken ? "not-allowed" : "pointer",
-                    background: sel ? "rgba(100,160,50,.3)" : taken ? "rgba(40,40,40,.3)" : "rgba(30,40,20,.6)",
-                    border: `1px solid ${sel ? cv.color : taken ? "#333" : "#3a4a2a"}`, opacity: taken ? .4 : 1, textAlign: "left" }}>
-                  <div style={{ color: cv.colorLight, fontSize: 11, fontWeight: 600, letterSpacing: 1 }}>{cv.name}</div>
-                  <div style={{ color: "#6a7a50", fontSize: 8, marginTop: 1 }}>{cv.bonus}</div>
-                  <div style={{ color: "#4a5a3a", fontSize: 7, marginTop: 1 }}>Capital: {cv.capital} {(() => { const uu = Object.values(UNIT_DEFS).find(u => u.civReq === ck); return uu ? <span style={{ color: "#8a9a6a" }}> · ★ {uu.name}{uu.replaces ? ` (${UNIT_DEFS[uu.replaces]?.name})` : ""}</span> : null; })()}</div>
-                </div>
-              );
-            })}
-          </div>
-          {isAiMode || step === 2 ? (
-            <button onClick={startGame}
-              style={{ padding: "8px 28px", borderRadius: 6, fontSize: 14, cursor: "pointer", border: "1px solid rgba(100,140,50,.6)", background: "rgba(100,160,50,.4)", color: "#e0f0c0", fontFamily: "inherit", letterSpacing: 3, marginTop: 4 }}>
-              {isAiMode ? "Start vs AI" : "Start Game"}
-            </button>
-          ) : (
-            <button onClick={advanceToP2}
-              style={{ padding: "8px 28px", borderRadius: 6, fontSize: 14, cursor: "pointer", border: "1px solid rgba(100,140,50,.6)", background: "rgba(100,160,50,.4)", color: "#e0f0c0", fontFamily: "inherit", letterSpacing: 3, marginTop: 4 }}>
-              Next → Player 2
-            </button>
-          )}
-          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            <div style={{ color: "#3a4a2a", fontSize: 9 }}>Fog of War · Barbarians · Random Events</div>
-            <div onClick={() => { if (!isAiMode && step === 2) { setCivPickStep(1); } else { setMapSizePick(null); } }} style={{ color: "#6a7a50", fontSize: 9, cursor: "pointer", textDecoration: "underline" }}>← Back</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Turn transition screen
-  if (turnTransition) {
-    return (
-      <div style={{ width: "100vw", height: "100vh", background: "radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", fontFamily: "'Palatino Linotype',serif", gap: 20 }}>
-        <div style={{ fontSize: 48, marginBottom: 4 }}>🔄</div>
-        <div style={{ color: "#6a7a50", fontSize: 14, letterSpacing: 3, textTransform: "uppercase" }}>Pass the device to</div>
-        <h1 style={{ color: turnTransition.playerColorLight || "#c8d8a0", fontSize: 32, letterSpacing: 6, margin: 0 }}>{turnTransition.playerName}</h1>
-        <div style={{ color: "#4a5a3a", fontSize: 10 }}>Turn {turnNumber}</div>
-        <button onClick={() => setTurnTransition(null)}
-          style={{ padding: "10px 32px", borderRadius: 6, fontSize: 16, cursor: "pointer", border: `1px solid ${turnTransition.playerColor}80`, background: `${turnTransition.playerColor}30`, color: turnTransition.playerColorLight || "#e0f0c0", fontFamily: "inherit", letterSpacing: 3, marginTop: 8 }}>
-          Ready
-        </button>
-      </div>
-    );
-  }
-
-  // Victory screen
   if (gs.victoryStatus) {
-    const w = players.find(p => p.id === gs.victoryStatus.winner);
     if (!victoryPlayed.current) { victoryPlayed.current = true; SFX.victory(); }
-    return (
-      <div style={{ width: "100vw", height: "100vh", background: "radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", fontFamily: "'Palatino Linotype',serif" }}>
-        <div style={{ fontSize: 60, marginBottom: 16 }}>🏆</div>
-        <h1 style={{ color: w?.color || "#fff", fontSize: 36, letterSpacing: 6, marginBottom: 8, textTransform: "uppercase" }}>{w?.name}</h1>
-        <div style={{ color: "#c8d8a0", fontSize: 20, letterSpacing: 3, marginBottom: 4 }}>{gs.victoryStatus.type} Victory</div>
-        <div style={{ color: "#6a7a50", fontSize: 14 }}>Turn {turnNumber}</div>
-        <button onClick={() => {
-          setGs(null); setGameStarted(false); setGameMode(null); setMapSizePick(null); setSelU(null); setSelH(null); setAiThinking(false); setTutorialOn(true); setTutorialDismissed({});
-          victoryPlayed.current = false; techPosRef.current = { x: null, y: 95 }; cityPosRef.current = { x: null, y: 95 };
-          setTechCollapsed(false); setCityCollapsed(false); setCivPickStep(1); setTurnTransition(null); setTurnPopups([]); turnPopupShownRef.current = null; prevCpId.current = null;
-        }} style={{ ...btnStyle(true), marginTop: 24, fontSize: 14, padding: "8px 24px" }}>New Game</button>
-      </div>
-    );
+    return <VictoryScreen gs={gs} players={players} turnNumber={turnNumber} onNewGame={() => {
+      setGs(null); setGameStarted(false); setGameMode(null); setMapSizePick(null); setSelU(null); setSelH(null); setAiThinking(false); setTutorialOn(true); setTutorialDismissed({});
+      victoryPlayed.current = false; techPosRef.current = { x: null, y: 95 }; cityPosRef.current = { x: null, y: 95 };
+      setTechCollapsed(false); setCityCollapsed(false); setCivPickStep(1); setTurnTransition(null); setTurnPopups([]); turnPopupShownRef.current = null; prevCpId.current = null;
+    }} />;
   }
 
   // ============================================================
@@ -1034,6 +507,7 @@ export default function HexStrategyGame() {
         {/* Action bar */}
         <div style={{ position: "absolute", top: 72, left: "50%", transform: "translateX(-50%)", zIndex: 10, display: "flex", gap: 4, alignItems: "center", pointerEvents: "auto" }}>
           <button onClick={() => setShowTech(!showTech)} style={btnStyle(showTech)}>🔬 Tech</button>
+          <button onClick={() => setShowSaveLoad(!showSaveLoad)} style={btnStyle(showSaveLoad)}>💾 Save/Load</button>
           <button onClick={() => { if (!tutorialOn) { setTutorialOn(true); setTutorialDismissed({}); } else { setTutorialOn(false); } }} style={btnStyle(tutorialOn)}>💡 Tips</button>
           {sud?.unitType === "settler" && <button onClick={() => setSettlerM(settlerM ? null : selU)} style={btnStyle(!!settlerM)}>🏕 Found City</button>}
           {sud?.unitType === "nuke" && <button onClick={() => setNukeM(nukeM ? null : selU)} style={btnStyle(!!nukeM)}>☢ Launch</button>}
@@ -1197,6 +671,47 @@ export default function HexStrategyGame() {
         {nukeM && <div style={{ position: "absolute", bottom: 52, left: "50%", transform: "translateX(-50%)", zIndex: 20, background: "rgba(80,40,0,.9)", border: "1px solid #ffa000", borderRadius: 6, padding: "6px 16px", color: "#ffd080", fontSize: 10, pointerEvents: "auto" }}>☢ Click target for nuclear strike (1-hex blast) · <span style={{ cursor: "pointer", color: "#f08080" }} onClick={() => setNukeM(null)}>Cancel</span></div>}
         {moveMsg && <div style={{ position: "absolute", bottom: 52, left: "50%", transform: "translateX(-50%)", zIndex: 20, background: "rgba(80,20,10,.92)", border: "1px solid rgba(240,100,60,.6)", borderRadius: 6, padding: "6px 16px", color: "#ffa080", fontSize: 10, pointerEvents: "none" }}>⚠ {moveMsg}</div>}
 
+        {/* Save/Load modal */}
+        {showSaveLoad && <div style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5,8,3,.5)", pointerEvents: "all" }} onClick={e => { if (e.target === e.currentTarget) setShowSaveLoad(false); }}>
+          <div style={{ ...panelStyle, width: 360, maxHeight: 420, display: "flex", flexDirection: "column", zIndex: 41 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <span style={{ color: "#c8d8a0", fontSize: 14, fontWeight: 600, letterSpacing: 2 }}>Save / Load Game</span>
+              <span style={{ cursor: "pointer", color: "#6a7a50", fontSize: 14 }} onClick={() => setShowSaveLoad(false)}>✕</span>
+            </div>
+            <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+              <input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder={`Turn ${turnNumber} - ${cp.name}`} style={{ flex: 1, background: "rgba(20,28,12,.9)", border: "1px solid rgba(100,140,50,.4)", borderRadius: 4, padding: "5px 8px", color: "#a0b880", fontSize: 10, fontFamily: "inherit", outline: "none" }}/>
+              <button onClick={() => {
+                const saves = JSON.parse(localStorage.getItem("eoe_saves") || "[]");
+                const name = saveName.trim() || `Turn ${turnNumber} - ${cp.name}`;
+                saves.unshift({ id: Date.now(), name, timestamp: new Date().toLocaleString(), gs: JSON.parse(JSON.stringify(gs)) });
+                localStorage.setItem("eoe_saves", JSON.stringify(saves));
+                setSaveName("");
+                setShowSaveLoad(false);
+              }} style={{ ...btnStyle(true), marginBottom: 0, marginRight: 0 }}>💾 Save</button>
+            </div>
+            <div style={{ color: "#6a7a50", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Saved Games</div>
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+              {(() => { const saves = JSON.parse(localStorage.getItem("eoe_saves") || "[]"); return saves.length === 0 ? <div style={{ color: "#5a6a4a", fontSize: 10, textAlign: "center", padding: 20 }}>No saves yet</div> : saves.map(s => <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(20,28,12,.6)", borderRadius: 4, padding: "6px 8px", border: "1px solid rgba(100,140,50,.15)" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: "#a0b880" }}>{s.name}</div>
+                  <div style={{ fontSize: 7, color: "#5a6a4a" }}>{s.timestamp}</div>
+                </div>
+                <button onClick={() => {
+                  setGs(s.gs); setShowTech(false); setShowCity(null); setSelH(null); setSelU(null);
+                  setSettlerM(null); setNukeM(null); setPreview(null); setTurnPopups([]);
+                  turnPopupShownRef.current = null; prevCpId.current = null;
+                  setShowSaveLoad(false); setGameStarted(true);
+                }} style={{ ...btnStyle(false), marginBottom: 0, marginRight: 0, fontSize: 9 }}>Load</button>
+                <button onClick={() => {
+                  const cur = JSON.parse(localStorage.getItem("eoe_saves") || "[]");
+                  localStorage.setItem("eoe_saves", JSON.stringify(cur.filter(x => x.id !== s.id)));
+                  forceRender(n => n + 1);
+                }} style={{ ...btnStyle(false), marginBottom: 0, marginRight: 0, fontSize: 9, color: "#c05050", borderColor: "rgba(180,60,60,.4)" }}>🗑</button>
+              </div>); })()}
+            </div>
+          </div>
+        </div>}
+
         {/* AI thinking overlay */}
         {aiThinking && <div style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5,8,3,.6)", pointerEvents: "all" }}>
           <div style={{ background: "rgba(15,20,10,.95)", border: "2px solid rgba(100,140,50,.5)", borderRadius: 12, padding: "24px 40px", textAlign: "center", boxShadow: "0 0 40px rgba(80,120,40,.2)" }}>
@@ -1206,7 +721,7 @@ export default function HexStrategyGame() {
           </div>
         </div>}
 
-        {/* Turn-start notification circles (stacked above log, only top one visible) */}
+        {/* Turn-start notification circles */}
         {turnPopups.length > 0 && (() => {
           const popup = turnPopups[0];
           const isTech = popup.type === "tech";

@@ -7,7 +7,7 @@ import { TECH_TREE } from '../data/techs.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { hexAt, getNeighbors, hexDist, gameRng } from '../data/constants.js';
 import { getPlayerMaxEra, calcCombatPreview } from '../engine/combat.js';
-import { getAvailableTechs, getAvailableUnits, getAvailableDistricts } from '../engine/economy.js';
+import { getAvailableTechs, getAvailableUnits, getAvailableDistricts, canUpgradeUnit } from '../engine/economy.js';
 import { getReachableHexes, getVisibleHexes } from '../engine/movement.js';
 import { addLogMsg, processResearchAndIncome, processCityTurn, expandTerritory, healGarrison } from '../engine/turnProcessing.js';
 import { getHexesInRadius } from '../data/constants.js';
@@ -397,6 +397,17 @@ export const aiExecuteTurn = (gameState) => {
   processResearchAndIncome(aiPlayer, g);
   for (const city of aiPlayer.cities) processCityTurn(city, aiPlayer, g);
   expandTerritory(aiPlayer, g);
+
+  // Upgrade units
+  for (const unit of aiPlayer.units) {
+    const info = canUpgradeUnit(unit, aiPlayer);
+    if (!info) continue;
+    const oldDef = UNIT_DEFS[unit.unitType];
+    aiPlayer.gold -= info.cost;
+    unit.hpCurrent = Math.ceil((unit.hpCurrent / oldDef.hp) * info.toDef.hp);
+    unit.unitType = info.toType;
+    addLogMsg(`AI ${oldDef.name} upgraded to ${info.toDef.name}`, g);
+  }
 
   // Movement & combat
   aiPlanAndExecuteMoves(g, aiPlayer, enemyPlayer, addLogMsg);
