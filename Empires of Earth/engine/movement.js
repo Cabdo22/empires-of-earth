@@ -38,19 +38,50 @@ export const getMoveBlockReason = (hex, unit, unitDef, reachSet, atkRangeSet, ph
   return "Out of movement range";
 };
 
+// Min-heap for Dijkstra priority queue
+const heapPush = (heap, node) => {
+  heap.push(node);
+  let i = heap.length - 1;
+  while (i > 0) {
+    const parent = (i - 1) >> 1;
+    if (heap[parent].cost <= heap[i].cost) break;
+    [heap[parent], heap[i]] = [heap[i], heap[parent]];
+    i = parent;
+  }
+};
+const heapPop = (heap) => {
+  const top = heap[0];
+  const last = heap.pop();
+  if (heap.length > 0) {
+    heap[0] = last;
+    let i = 0;
+    while (true) {
+      let smallest = i;
+      const l = 2 * i + 1, r = 2 * i + 2;
+      if (l < heap.length && heap[l].cost < heap[smallest].cost) smallest = l;
+      if (r < heap.length && heap[r].cost < heap[smallest].cost) smallest = r;
+      if (smallest === i) break;
+      [heap[smallest], heap[i]] = [heap[i], heap[smallest]];
+      i = smallest;
+    }
+  }
+  return top;
+};
+
 // Dijkstra-based pathfinding: returns set of hex keys reachable within movePoints
 export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain = "land", playerId = null, allPlayers = null, ability = null) => {
   const startKey = `${startCol},${startRow}`;
   const reachable = new Set();
   const costTo = { [startKey]: 0 };
-  const queue = [{ col: startCol, row: startRow, cost: 0 }];
+  const heap = [];
+  heapPush(heap, { col: startCol, row: startRow, cost: 0 });
 
-  while (queue.length > 0) {
-    queue.sort((a, b) => a.cost - b.cost);
-    const current = queue.shift();
+  while (heap.length > 0) {
+    const current = heapPop(heap);
     const currentKey = `${current.col},${current.row}`;
 
     if (current.cost > movePoints) continue;
+    if (costTo[currentKey] < current.cost) continue;
     if (currentKey !== startKey) reachable.add(currentKey);
 
     for (const [nc, nr] of getNeighbors(current.col, current.row)) {
@@ -67,7 +98,7 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
       if (costTo[neighborKey] !== undefined && costTo[neighborKey] <= totalCost) continue;
 
       costTo[neighborKey] = totalCost;
-      queue.push({ col: nc, row: nr, cost: totalCost });
+      heapPush(heap, { col: nc, row: nr, cost: totalCost });
     }
   }
 
