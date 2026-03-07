@@ -204,6 +204,17 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
       const eCityHex = g.hexes[eCity.hexId];
       const dist = hexDist(unit.hexCol, unit.hexRow, eCityHex.col, eCityHex.row);
       if (dist <= 3) {
+        // Fighter interception check (same as player nukes)
+        const interceptor = enemyPlayer.units.find(u =>
+          u.unitType === "fighter" && !u.hasAttacked &&
+          hexDist(u.hexCol, u.hexRow, eCityHex.col, eCityHex.row) <= 2
+        );
+        if (interceptor) {
+          aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id);
+          interceptor.hasAttacked = true;
+          addLogFn(`✈ Fighter intercepts AI nuke!`, g);
+          break;
+        }
         const blast = getHexesInRadius(eCityHex.col, eCityHex.row, 1, g.hexes);
         for (const bh of blast) {
           enemyPlayer.units = enemyPlayer.units.filter(u => !(u.hexCol === bh.col && u.hexRow === bh.row));
