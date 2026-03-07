@@ -5,7 +5,7 @@
 import { UNIT_DEFS } from '../data/units.js';
 import { TECH_TREE } from '../data/techs.js';
 import { CIV_DEFS } from '../data/civs.js';
-import { hexAt, getNeighbors, hexDist, gameRng } from '../data/constants.js';
+import { hexAt, getNeighbors, hexDist, gameRng, COLS, ROWS } from '../data/constants.js';
 import { getPlayerMaxEra, calcCombatPreview } from '../engine/combat.js';
 import { getAvailableTechs, getAvailableUnits, getAvailableDistricts, canUpgradeUnit } from '../engine/economy.js';
 import { getReachableHexes, getVisibleHexes } from '../engine/movement.js';
@@ -61,7 +61,8 @@ const aiPickProduction = (city, player, hexes, enemyPlayer) => {
   const enemyMilitary = enemyPlayer.units.length;
   const settlerCount = player.units.filter(u => u.unitType === "settler").length;
 
-  if (player.cities.length < 3 && settlerCount === 0 && availUnits.some(u => u.id === "settler")) {
+  const maxCities = Math.max(3, Math.floor(COLS * ROWS / 80));
+  if (player.cities.length < maxCities && settlerCount === 0 && availUnits.some(u => u.id === "settler")) {
     return { type: "unit", itemId: "settler" };
   }
 
@@ -166,7 +167,8 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
         return hexDist(unit.hexCol, unit.hexRow, ch.col, ch.row) < 3;
       });
 
-      if (standingGood && !tooClose && aiPlayer.cities.length < 5) {
+      const maxFoundCities = Math.max(3, Math.floor(COLS * ROWS / 80));
+      if (standingGood && !tooClose && aiPlayer.cities.length < maxFoundCities) {
         const cityNum = aiPlayer.cities.length + 1;
         const civNames = CIV_DEFS[aiPlayer.civilization]?.cityNames || ["Colony"];
         const cityName = civNames[cityNum - 1] || `City ${cityNum}`;
