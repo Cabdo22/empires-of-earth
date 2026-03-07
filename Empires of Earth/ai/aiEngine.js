@@ -136,6 +136,13 @@ const aiFindCityLocation = (settler, player, hexes) => {
 const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
   for (const unit of aiPlayer.units) {
     const def = UNIT_DEFS[unit.unitType];
+    // Field healing: units that didn't move or attack last turn heal +2 HP
+    if (unit.movementCurrent > 0 && !unit.hasAttacked) {
+      const maxHp = def?.hp || 10;
+      if (unit.hpCurrent < maxHp) {
+        unit.hpCurrent = Math.min(maxHp, unit.hpCurrent + 2);
+      }
+    }
     let mv = def?.move || 2;
     if (aiPlayer.civilization === "England" && def?.domain === "sea") mv += 1;
     unit.movementCurrent = mv;
