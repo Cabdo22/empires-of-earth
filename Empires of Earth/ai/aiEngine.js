@@ -169,10 +169,10 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
 
       const maxFoundCities = Math.max(3, Math.floor(COLS * ROWS / 80));
       if (standingGood && !tooClose && aiPlayer.cities.length < maxFoundCities) {
-        const cityNum = aiPlayer.cities.length + 1;
+        g.nextCityId = (g.nextCityId || 0) + 1;
         const civNames = CIV_DEFS[aiPlayer.civilization]?.cityNames || ["Colony"];
-        const cityName = civNames[cityNum - 1] || `City ${cityNum}`;
-        const cityId = `${aiPlayer.id}-c${cityNum}`;
+        const cityName = civNames[aiPlayer.cities.length] || `City ${g.nextCityId}`;
+        const cityId = `${aiPlayer.id}-c${g.nextCityId}`;
 
         aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id);
         aiPlayer.cities.push({

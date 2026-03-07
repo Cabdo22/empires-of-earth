@@ -218,10 +218,10 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
       const hex = hexAt(g.hexes, col, row);
       if (!hex || hex.terrainType === "water" || hex.terrainType === "mountain" || hex.cityId) return prev;
       player.units.splice(unitIdx, 1);
-      const cityNum = player.cities.length + 1;
+      g.nextCityId = (g.nextCityId || 0) + 1;
       const civNames = CIV_DEFS[player.civilization]?.cityNames || ["Colony"];
-      const cityName = civNames[cityNum - 1] || `City ${cityNum}`;
-      const cityId = `${player.id}-c${cityNum}`;
+      const cityName = civNames[player.cities.length] || `City ${g.nextCityId}`;
+      const cityId = `${player.id}-c${g.nextCityId}`;
       player.cities.push({
         id: cityId, name: cityName, hexId: hex.id, population: 1,
         districts: [], currentProduction: null, productionProgress: 0,
