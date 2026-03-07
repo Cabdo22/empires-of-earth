@@ -369,7 +369,25 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
           if (dist < goalDist) { goalDist = dist; goalCol = eCH.col; goalRow = eCH.row; }
         }
 
-        if (goalCol !== null) {
+        if (unit.unitType === "scout") {
+          // Scouts explore: prefer unowned hexes they haven't visited
+          const keys = [...reachable].filter(k => !occupiedHexes.has(k));
+          if (keys.length > 0) {
+            const unowned = keys.filter(k => {
+              const [c, r] = k.split(",").map(Number);
+              const h = hexAt(g.hexes, c, r);
+              return h && !h.ownerPlayerId;
+            });
+            const pool = unowned.length > 0 ? unowned : keys;
+            const rk = pool[Math.floor(gameRng(g) * pool.length)];
+            const [mc, mr] = rk.split(",").map(Number);
+            occupiedHexes.delete(`${unit.hexCol},${unit.hexRow}`);
+            unit.hexCol = mc;
+            unit.hexRow = mr;
+            unit.movementCurrent = 0;
+            occupiedHexes.add(`${mc},${mr}`);
+          }
+        } else if (goalCol !== null) {
           let bestMove = null, bestMoveDist = goalDist;
           for (const key of reachable) {
             if (occupiedHexes.has(key)) continue;
@@ -383,17 +401,6 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
             unit.hexRow = bestMove.row;
             unit.movementCurrent = 0;
             occupiedHexes.add(`${bestMove.col},${bestMove.row}`);
-          }
-        } else if (unit.unitType === "scout") {
-          const keys = [...reachable].filter(k => !occupiedHexes.has(k));
-          if (keys.length > 0) {
-            const rk = keys[Math.floor(gameRng(g) * keys.length)];
-            const [mc, mr] = rk.split(",").map(Number);
-            occupiedHexes.delete(`${unit.hexCol},${unit.hexRow}`);
-            unit.hexCol = mc;
-            unit.hexRow = mr;
-            unit.movementCurrent = 0;
-            occupiedHexes.add(`${mc},${mr}`);
           }
         }
       }
