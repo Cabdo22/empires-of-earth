@@ -150,6 +150,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
   }
 
   const processedUnits = new Set();
+  const occupiedHexes = new Set(aiPlayer.units.map(u => `${u.hexCol},${u.hexRow}`));
 
   // Settlers first
   for (const unit of [...aiPlayer.units]) {
@@ -187,10 +188,12 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
         continue;
       }
 
-      if (bestLoc) {
+      if (bestLoc && !occupiedHexes.has(`${bestLoc.col},${bestLoc.row}`)) {
+        occupiedHexes.delete(`${unit.hexCol},${unit.hexRow}`);
         unit.hexCol = bestLoc.col;
         unit.hexRow = bestLoc.row;
         unit.movementCurrent = 0;
+        occupiedHexes.add(`${bestLoc.col},${bestLoc.row}`);
       }
     }
   }
@@ -367,23 +370,28 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
         if (goalCol !== null) {
           let bestMove = null, bestMoveDist = goalDist;
           for (const key of reachable) {
+            if (occupiedHexes.has(key)) continue;
             const [mc, mr] = key.split(",").map(Number);
             const dist = hexDist(mc, mr, goalCol, goalRow);
             if (dist < bestMoveDist) { bestMoveDist = dist; bestMove = { col: mc, row: mr }; }
           }
           if (bestMove) {
+            occupiedHexes.delete(`${unit.hexCol},${unit.hexRow}`);
             unit.hexCol = bestMove.col;
             unit.hexRow = bestMove.row;
             unit.movementCurrent = 0;
+            occupiedHexes.add(`${bestMove.col},${bestMove.row}`);
           }
         } else if (unit.unitType === "scout") {
-          const keys = [...reachable];
+          const keys = [...reachable].filter(k => !occupiedHexes.has(k));
           if (keys.length > 0) {
             const rk = keys[Math.floor(gameRng(g) * keys.length)];
             const [mc, mr] = rk.split(",").map(Number);
+            occupiedHexes.delete(`${unit.hexCol},${unit.hexRow}`);
             unit.hexCol = mc;
             unit.hexRow = mr;
             unit.movementCurrent = 0;
+            occupiedHexes.add(`${mc},${mr}`);
           }
         }
       }
