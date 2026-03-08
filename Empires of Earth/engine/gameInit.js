@@ -52,7 +52,7 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
     {
       id: "p1", civilization: civ1, name: c1.name,
       color: c1.color, colorBg: c1.colorBg, colorLight: c1.colorLight,
-      gold: 5, researchedTechs: ["basic_tools"], currentResearch: null,
+      gold: 20, researchedTechs: ["basic_tools"], currentResearch: null,
       cities: [{
         id: c1.capital.toLowerCase(), name: c1.capital, hexId: p1H.id, population: 1,
         districts: [], currentProduction: null, productionProgress: 0, foodAccumulated: 0, hp: 20, hpMax: 20,
@@ -62,7 +62,7 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
     {
       id: "p2", civilization: civ2, name: c2.name,
       color: c2.color, colorBg: c2.colorBg, colorLight: c2.colorLight,
-      gold: 5, researchedTechs: ["basic_tools"], currentResearch: null,
+      gold: 20, researchedTechs: ["basic_tools"], currentResearch: null,
       cities: [{
         id: c2.capital.toLowerCase(), name: c2.capital, hexId: p2H.id, population: 1,
         districts: [], currentProduction: null, productionProgress: 0, foodAccumulated: 0, hp: 20, hpMax: 20,

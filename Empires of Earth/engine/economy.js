@@ -11,7 +11,7 @@ import { hexAt, getNeighbors } from '../data/constants.js';
 // Calculate per-city yields
 export const calcCityYields = (city, player, hexes) => {
   const cityHex = hexes[city.hexId];
-  let food = 1, prod = 1, science = 1, gold = 0;
+  let food = 5, prod = 5, science = 5, gold = 2;
 
   // Population contributes to yields
   const pop = city.population || 1;
@@ -33,11 +33,11 @@ export const calcCityYields = (city, player, hexes) => {
   }
 
   // Tech bonuses
-  if (player.researchedTechs.includes("agriculture") && cityHex.terrainType === "grassland") food += 1;
-  if (player.researchedTechs.includes("mysticism")) science += 1;
-  if (player.researchedTechs.includes("engineering")) prod += 1;
-  if (player.researchedTechs.includes("guilds")) gold += 2;
-  if (player.researchedTechs.includes("fusion_power")) science += 3;
+  if (player.researchedTechs.includes("agriculture") && cityHex.terrainType === "grassland") food += 2;
+  if (player.researchedTechs.includes("mysticism")) science += 2;
+  if (player.researchedTechs.includes("engineering")) prod += 2;
+  if (player.researchedTechs.includes("guilds")) gold += 3;
+  if (player.researchedTechs.includes("fusion_power")) science += 5;
 
   // District bonuses
   for (const districtId of city.districts) {
@@ -106,7 +106,7 @@ export const getAvailableUnits = (player, city) => {
   return Object.entries(UNIT_DEFS)
     .filter(([id, u]) => {
       if (u.techReq && !player.researchedTechs.includes(u.techReq)) return false;
-      if (id === "nuke") return hasNuclearDistrict && player.gold >= 15;
+      if (id === "nuke") return hasNuclearDistrict && player.gold >= 50;
       if (MILITARY_REQ_UNITS.has(id) && !hasMilitaryDistrict) return false;
       if (replacedByUnique.has(id)) return false;
       if (u.civReq && u.civReq !== player.civilization) return false;
@@ -120,7 +120,7 @@ export const getUpgradeCost = (fromType) => {
   const from = UNIT_DEFS[fromType];
   const to = UNIT_DEFS[UPGRADE_PATHS[fromType]];
   if (!from || !to) return 0;
-  return Math.max(2, (to.cost - from.cost) * 2);
+  return Math.max(8, Math.floor((to.cost - from.cost) * 1.5));
 };
 
 export const canUpgradeUnit = (unit, player) => {

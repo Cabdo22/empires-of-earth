@@ -37,7 +37,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
     city.productionProgress += yields.production;
     const isUnit = city.currentProduction.type === "unit";
     const def = isUnit ? UNIT_DEFS[city.currentProduction.itemId] : DISTRICT_DEFS[city.currentProduction.itemId];
-    const effCost = def ? (isUnit && player.civilization === "Germany" ? Math.max(1, def.cost - 1) : def.cost) : 0;
+    const effCost = def ? (isUnit && player.civilization === "Germany" ? Math.max(1, def.cost - 3) : def.cost) : 0;
     if (def && city.productionProgress >= effCost) {
       if (isUnit) {
         const cityHex = g.hexes[city.hexId];
@@ -47,7 +47,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
           hexCol: cityHex.col, hexRow: cityHex.row,
           movementCurrent: def.move, hpCurrent: def.hp, hasAttacked: false,
         });
-        if (city.currentProduction.itemId === "nuke") player.gold -= 15;
+        if (city.currentProduction.itemId === "nuke") player.gold -= 50;
       } else {
         city.districts.push(city.currentProduction.itemId);
       }
@@ -58,7 +58,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
     }
   }
   city.foodAccumulated += yields.food;
-  const growthThreshold = city.population * 10;
+  const growthThreshold = city.population * 25;
   if (city.foodAccumulated >= growthThreshold) {
     city.population++;
     city.foodAccumulated -= growthThreshold;

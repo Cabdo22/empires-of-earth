@@ -9,7 +9,7 @@ export const RANDOM_EVENTS = [
     id: "gold_rush", name: "Gold Rush!", desc: "Traders bring wealth.",
     effect: (g) => {
       const cp = g.players.find(p => p.id === g.currentPlayerId);
-      cp.gold += 8;
+      cp.gold += 25;
     },
   },
   {
@@ -24,14 +24,14 @@ export const RANDOM_EVENTS = [
     id: "eureka", name: "Eureka!", desc: "A breakthrough advances research.",
     effect: (g) => {
       const cp = g.players.find(p => p.id === g.currentPlayerId);
-      if (cp.currentResearch) cp.currentResearch.progress += 3;
+      if (cp.currentResearch) cp.currentResearch.progress += 12;
     },
   },
   {
     id: "harvest", name: "Bountiful Harvest", desc: "Surplus food for all cities.",
     effect: (g) => {
       const cp = g.players.find(p => p.id === g.currentPlayerId);
-      cp.cities.forEach(c => c.foodAccumulated += 5);
+      cp.cities.forEach(c => c.foodAccumulated += 15);
     },
   },
   {

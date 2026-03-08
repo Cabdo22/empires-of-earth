@@ -54,7 +54,7 @@ export const CIV_DEFS = {
   },
   Germany: {
     name: "German Empire", color: "#7f8c8d", colorBg: "#3a4040", colorLight: "#b0c0c0",
-    bonus: "-1 unit cost, +1 prod with Workshop",
+    bonus: "-3 unit cost, +1 prod with Workshop",
     desc: "Industrial powerhouse with unmatched engineering.",
     capital: "Berlin",
     cityNames: ["Hamburg", "Munich", "Cologne", "Frankfurt", "Dresden"],

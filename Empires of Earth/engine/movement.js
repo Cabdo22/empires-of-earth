@@ -69,12 +69,32 @@ const heapPop = (heap) => {
 };
 
 // Dijkstra-based pathfinding: returns set of hex keys reachable within movePoints
-export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain = "land", playerId = null, allPlayers = null, ability = null) => {
+export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain = "land", playerId = null, allPlayers = null, ability = null, barbarians = null) => {
   const startKey = `${startCol},${startRow}`;
   const reachable = new Set();
   const costTo = { [startKey]: 0 };
   const heap = [];
   heapPush(heap, { col: startCol, row: startRow, cost: 0 });
+
+  // Build sets of enemy-occupied and friendly-occupied hex keys for blocking
+  const enemyOccupied = new Set();
+  const friendlyOccupied = new Set();
+  if (playerId && allPlayers) {
+    for (const p of allPlayers) {
+      for (const u of p.units) {
+        const uk = `${u.hexCol},${u.hexRow}`;
+        if (uk === startKey) continue;
+        if (p.id === playerId) friendlyOccupied.add(uk);
+        else enemyOccupied.add(uk);
+      }
+    }
+  }
+  if (barbarians) {
+    for (const b of barbarians) {
+      const bk = `${b.hexCol},${b.hexRow}`;
+      if (bk !== startKey) enemyOccupied.add(bk);
+    }
+  }
 
   while (heap.length > 0) {
     const current = heapPop(heap);
@@ -83,6 +103,9 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
     if (current.cost > movePoints) continue;
     if (costTo[currentKey] < current.cost) continue;
     if (currentKey !== startKey) reachable.add(currentKey);
+
+    // Don't expand from enemy-occupied hexes (can't path through enemies)
+    if (enemyOccupied.has(currentKey)) continue;
 
     for (const [nc, nr] of getNeighbors(current.col, current.row)) {
       const neighborKey = `${nc},${nr}`;
@@ -101,6 +124,9 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
       heapPush(heap, { col: nc, row: nr, cost: totalCost });
     }
   }
+
+  // Remove friendly-occupied hexes from destinations (no stacking)
+  for (const fk of friendlyOccupied) reachable.delete(fk);
 
   // Air units can only land on friendly cities
   if (domain === "air" && playerId && allPlayers) {
@@ -144,7 +170,7 @@ export const getVisibleHexes = (player, hexes) => {
   for (const city of player.cities) {
     const cityHex = hexes[city.hexId];
     for (const h of hexes) {
-      if (hexDist(cityHex.col, cityHex.row, h.col, h.row) <= FOG_SIGHT.default + 1) {
+      if (hexDist(cityHex.col, cityHex.row, h.col, h.row) <= 1) {
         visible.add(`${h.col},${h.row}`);
       }
     }

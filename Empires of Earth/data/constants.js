@@ -12,15 +12,16 @@ export let P1_START = { col: 2, row: 5 };
 export let P2_START = { col: 8, row: 3 };
 
 export const MAP_SIZES = {
-  small:  { label: "Small",  desc: "~250 hexes · Quick game",  cols: 16, rows: 16 },
-  medium: { label: "Medium", desc: "~500 hexes · Standard game", cols: 22, rows: 22 },
-  large:  { label: "Large",  desc: "~1000 hexes · Epic game",  cols: 32, rows: 32 },
+  small:  { label: "Small",  desc: "~250 hexes · Quick game",  cols: 16, rows: 16, territorialWin: 0.55 },
+  medium: { label: "Medium", desc: "~500 hexes · Standard game", cols: 22, rows: 22, territorialWin: 0.60 },
+  large:  { label: "Large",  desc: "~1000 hexes · Epic game",  cols: 32, rows: 32, territorialWin: 0.65 },
 };
 
 export const setMapConfig = (sizeKey) => {
   const cfg = MAP_SIZES[sizeKey] || MAP_SIZES.small;
   COLS = cfg.cols;
   ROWS = cfg.rows;
+  TERRITORIAL_WIN = cfg.territorialWin || 0.60;
   P1_START = { col: Math.floor(COLS * 0.2), row: Math.floor(ROWS * 0.5) };
   P2_START = { col: Math.floor(COLS * 0.8), row: Math.floor(ROWS * 0.3) };
 };
@@ -90,8 +91,8 @@ export const getHexesInRadius = (col, row, radius, hexes) =>
 
 // Game balance constants
 export const CITY_DEF_BONUS = 2;
-export const TERRITORIAL_WIN = 0.6;
-export const FOG_SIGHT = { scout: 3, fighter: 4, bomber: 3, default: 2 };
+export let TERRITORIAL_WIN = 0.6;
+export const FOG_SIGHT = { scout: 2, fighter: 3, bomber: 2, default: 1 };
 
 // Legacy phase constants kept for compatibility — game now uses single "MOVEMENT" phase
 export const PHASES = ["MOVEMENT"];

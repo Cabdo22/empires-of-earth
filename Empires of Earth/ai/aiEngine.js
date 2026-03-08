@@ -317,7 +317,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
 
           if (pv.defDies) {
             if (bestTarget.isUnit) enemyPlayer.units = enemyPlayer.units.filter(u => u.id !== defender.id);
-            if (bestTarget.isBarb) { g.barbarians = g.barbarians.filter(b => b.id !== defender.id); aiPlayer.gold += 5; }
+            if (bestTarget.isBarb) { g.barbarians = g.barbarians.filter(b => b.id !== defender.id); aiPlayer.gold += 15; }
             msg += ` ☠${defDef.name}`;
 
             if (unitDef.range === 0 && !pv.atkDies) {
@@ -359,7 +359,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
     // Movement phase
     if (unit.movementCurrent > 0 && aiPlayer.units.includes(unit)) {
       const domain = unitDef.domain || "land";
-      const reachable = getReachableHexes(unit.hexCol, unit.hexRow, unit.movementCurrent, g.hexes, domain, aiPlayer.id, g.players, unitDef.ability);
+      const reachable = getReachableHexes(unit.hexCol, unit.hexRow, unit.movementCurrent, g.hexes, domain, aiPlayer.id, g.players, unitDef.ability, g.barbarians);
       if (reachable.size > 0) {
         let goalCol = null, goalRow = null, goalDist = Infinity;
 
