@@ -13,7 +13,7 @@ import { aiExecuteTurn } from './ai/aiEngine.js';
 import { SFX } from './sfx.js';
 import { genGrass, genTrees, genMtns, genWaves, genDetail, genCoast, genWaterCoast } from './components/ProceduralVisuals.js';
 import MemoHex from './components/MemoHex.jsx';
-import { btnStyle } from './styles.js';
+import { btnStyle, panelStyle } from './styles.js';
 import { usePanelDrag } from './hooks/usePanelDrag.js';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
 import { usePanZoom } from './hooks/usePanZoom.js';
@@ -44,6 +44,8 @@ export default function HexStrategyGame(){
   const[selH,setSelH]=useState(null);
   const[selU,setSelU]=useState(null);
   const[showTech,setShowTech]=useState(false);
+  const[showSaveLoad,setShowSaveLoad]=useState(false);
+  const[saveName,setSaveName]=useState("");
   const[showCity,setShowCity]=useState(null);
   const[settlerM,setSettlerM]=useState(null);
   const[nukeM,setNukeM]=useState(null);
@@ -693,19 +695,51 @@ export default function HexStrategyGame(){
 
       {/* Title */}
       <div style={{position:"absolute",top:0,left:0,right:0,height:50,background:"linear-gradient(180deg,rgba(10,14,6,.95) 0%,rgba(10,14,6,0) 100%)",zIndex:10,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:8,pointerEvents:"none"}}>
-        <div style={{textAlign:"center"}}><h1 style={{color:"#c8d8a0",fontSize:18,fontWeight:400,letterSpacing:6,textTransform:"uppercase",margin:0}}>Empires of Earth</h1>
-          <div style={{color:"#6a7a50",fontSize:8,letterSpacing:3,marginTop:1}}>Turn {turnNumber} · {cp.name}</div></div></div>
+        <div style={{textAlign:"center"}}><h1 style={{color:"#dce8c0",fontSize:20,fontWeight:600,letterSpacing:6,textTransform:"uppercase",margin:0}}>Empires of Earth</h1>
+          <div style={{color:"#98aa78",fontSize:10,letterSpacing:3,marginTop:2}}>Turn {turnNumber} · {cp.name}</div></div></div>
 
       {/* End Turn button */}
       <div style={{position:"absolute",top:48,left:"50%",transform:"translateX(-50%)",zIndex:10,display:"flex",gap:6,alignItems:"center",background:"rgba(10,14,6,.85)",borderRadius:6,padding:"3px 8px",border:"1px solid rgba(100,140,50,.3)",pointerEvents:"auto"}}>
-        <button onClick={endTurn} style={{...btnStyle(true),marginBottom:0,marginRight:0,fontSize:10,padding:"5px 16px",letterSpacing:1}}>End Turn →</button>
+        <button onClick={endTurn} style={{...btnStyle(true),marginBottom:0,marginRight:0,fontSize:14,fontWeight:600,padding:"8px 24px",letterSpacing:1.5}}>End Turn →</button>
       </div>
 
       {/* Player panel */}
       <PlayerPanel cp={cp} hexes={hexes} landOwned={landOwned} totalLand={totalLand} barbarians={barbarians}/>
 
       {/* Action bar */}
-      <ActionBar showTech={showTech} setShowTech={setShowTech} tutorialOn={tutorialOn} setTutorialOn={setTutorialOn} setTutorialDismissed={setTutorialDismissed} sud={sud} selU={selU} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} upgradeUnit={upgradeUnit} cp={cp} actable={actable}/>
+      <ActionBar showTech={showTech} setShowTech={setShowTech} showSaveLoad={showSaveLoad} setShowSaveLoad={setShowSaveLoad} tutorialOn={tutorialOn} setTutorialOn={setTutorialOn} setTutorialDismissed={setTutorialDismissed} sud={sud} selU={selU} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} upgradeUnit={upgradeUnit} cp={cp} actable={actable}/>
+
+      {/* Save/Load modal */}
+      {showSaveLoad && <div style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5,8,3,.5)", pointerEvents: "all" }} onClick={e => { if (e.target === e.currentTarget) setShowSaveLoad(false); }}>
+        <div style={{ ...panelStyle, width: 360, maxHeight: 420, display: "flex", flexDirection: "column", zIndex: 41 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <span style={{ color: "#dce8c0", fontSize: 16, fontWeight: 600, letterSpacing: 2 }}>Save / Load Game</span>
+            <span style={{ cursor: "pointer", color: "#8a9a70", fontSize: 16 }} onClick={() => setShowSaveLoad(false)}>✕</span>
+          </div>
+          <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+            <input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder={`Turn ${turnNumber} - ${cp.name}`} style={{ flex: 1, background: "rgba(20,28,12,.9)", border: "1px solid rgba(100,140,50,.4)", borderRadius: 4, padding: "6px 10px", color: "#c8dca8", fontSize: 12, fontFamily: "inherit", outline: "none" }}/>
+            <button onClick={() => {
+              const saves = JSON.parse(localStorage.getItem("eoe_saves") || "[]");
+              const name = saveName.trim() || `Turn ${turnNumber} - ${cp.name}`;
+              saves.unshift({ id: Date.now(), name, date: new Date().toLocaleString(), data: JSON.stringify(gs) });
+              localStorage.setItem("eoe_saves", JSON.stringify(saves.slice(0, 20)));
+              setSaveName("");
+              setShowSaveLoad(false);
+            }} style={{ ...btnStyle(true), marginBottom: 0, marginRight: 0 }}>💾 Save</button>
+          </div>
+          <div style={{ color: "#8a9a70", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Saved Games</div>
+          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+            {(() => { const saves = JSON.parse(localStorage.getItem("eoe_saves") || "[]"); return saves.length === 0 ? <div style={{ color: "#5a6a4a", fontSize: 10, textAlign: "center", padding: 20 }}>No saves yet</div> : saves.map(s => <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(20,28,12,.6)", borderRadius: 4, padding: "6px 8px", border: "1px solid rgba(100,140,50,.15)" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#c8dca8", fontSize: 11 }}>{s.name}</div>
+                <div style={{ color: "#6a7a50", fontSize: 8 }}>{s.date}</div>
+              </div>
+              <button onClick={() => { setGs(JSON.parse(s.data)); setShowSaveLoad(false); turnPopupShownRef.current = null; }} style={{ ...btnStyle(false), marginBottom: 0, marginRight: 0, fontSize: 9, padding: "3px 8px" }}>Load</button>
+              <button onClick={() => { const saves2 = JSON.parse(localStorage.getItem("eoe_saves") || "[]").filter(s2 => s2.id !== s.id); localStorage.setItem("eoe_saves", JSON.stringify(saves2)); setShowSaveLoad(false); setTimeout(() => setShowSaveLoad(true), 0); }} style={{ ...btnStyle(false), marginBottom: 0, marginRight: 0, fontSize: 9, padding: "3px 8px", color: "#e07070" }}>✕</button>
+            </div>); })()}
+          </div>
+        </div>
+      </div>}
 
       {/* Combat preview */}
       <CombatPreview preview={preview}/>
@@ -728,7 +762,7 @@ export default function HexStrategyGame(){
       <BottomInfo selH={selH} hexes={hexes} unitMap={unitMap} players={players} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} moveMsg={moveMsg}/>
 
       {/* AI thinking overlay */}
-      {aiThinking&&<div style={{position:"absolute",inset:0,zIndex:40,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(5,8,3,.6)",pointerEvents:"all"}}><div style={{background:"rgba(15,20,10,.95)",border:"2px solid rgba(100,140,50,.5)",borderRadius:12,padding:"24px 40px",textAlign:"center",boxShadow:"0 0 40px rgba(80,120,40,.2)"}}><div style={{fontSize:28,marginBottom:8,animation:"pulse 1.5s ease-in-out infinite"}}>🤖</div><div style={{color:"#c8d8a0",fontSize:16,fontWeight:600,letterSpacing:3}}>AI is thinking...</div><div style={{color:"#6a7a50",fontSize:10,marginTop:6}}>The enemy plots its next move</div></div></div>}
+      {aiThinking&&<div style={{position:"absolute",inset:0,zIndex:40,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(5,8,3,.6)",pointerEvents:"all"}}><div style={{background:"rgba(15,20,10,.95)",border:"2px solid rgba(100,140,50,.5)",borderRadius:12,padding:"24px 40px",textAlign:"center",boxShadow:"0 0 40px rgba(80,120,40,.2)"}}><div style={{fontSize:28,marginBottom:8,animation:"pulse 1.5s ease-in-out infinite"}}>🤖</div><div style={{color:"#c8d8a0",fontSize:16,fontWeight:600,letterSpacing:3}}>AI is thinking...</div><div style={{color:"#8a9a70",fontSize:12,marginTop:6}}>The enemy plots its next move</div></div></div>}
 
       {/* Turn-start popup queue */}
       <NotificationCircles turnPopups={turnPopups} setTurnPopups={setTurnPopups} setShowTech={setShowTech} setShowCity={setShowCity}/>
