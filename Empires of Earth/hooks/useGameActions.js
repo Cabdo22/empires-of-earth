@@ -84,8 +84,8 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
 
         if (defender.hpCurrent <= 0) {
           if (defUnit) defPlayer.units = defPlayer.units.filter(u => u.id !== defUnit.id);
-          if (barbUnit) { g.barbarians = g.barbarians.filter(b => b.id !== barbUnit.id); attPlayer.gold += 5; }
-          msg += ` \u2620${barbUnit ? "Barb +5\u{1F4B0} " : ""}${defDef.name}`;
+          if (barbUnit) { g.barbarians = g.barbarians.filter(b => b.id !== barbUnit.id); attPlayer.gold += 15; }
+          msg += ` \u2620${barbUnit ? "Barb +15\u{1F4B0} " : ""}${defDef.name}`;
           if (attDef.range === 0 && !preview.atkDies) {
             attUnit.hexCol = defCol; attUnit.hexRow = defRow; attUnit.movementCurrent = 0;
             if (defCity && defUnit) {
