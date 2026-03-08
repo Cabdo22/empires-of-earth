@@ -45,7 +45,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
         let spawnCol = cityHex.col, spawnRow = cityHex.row;
         if (isHexOccupied(spawnCol, spawnRow, g.players, g.barbarians)) {
           const open = findOpenNeighbor(spawnCol, spawnRow, g.hexes, g.players, g.barbarians);
-          if (!open) continue; // delay production — city is surrounded
+          if (!open) return; // delay production — city is surrounded
           spawnCol = open.col;
           spawnRow = open.row;
         }
