@@ -8,6 +8,7 @@ import { TECH_TREE } from '../data/techs.js';
 import { RANDOM_EVENTS } from '../data/events.js';
 import { COLS, ROWS, hexAt, getNeighbors, hexDist, gameRng, FOG_SIGHT } from '../data/constants.js';
 import { calcCityYields, calcPlayerIncome } from './economy.js';
+import { isHexOccupied, findOpenNeighbor } from './movement.js';
 
 // Append a log message (keeps last 30)
 export const addLogMsg = (msg, g) => {
@@ -41,10 +42,17 @@ export const processCityTurn = (city, player, g, sfxQ) => {
     if (def && city.productionProgress >= effCost) {
       if (isUnit) {
         const cityHex = g.hexes[city.hexId];
+        let spawnCol = cityHex.col, spawnRow = cityHex.row;
+        if (isHexOccupied(spawnCol, spawnRow, g.players, g.barbarians)) {
+          const open = findOpenNeighbor(spawnCol, spawnRow, g.hexes, g.players, g.barbarians);
+          if (!open) continue; // delay production — city is surrounded
+          spawnCol = open.col;
+          spawnRow = open.row;
+        }
         g.nextUnitId = (g.nextUnitId || 0) + 1;
         player.units.push({
           id: `${player.id}-u${g.nextUnitId}`, unitType: city.currentProduction.itemId,
-          hexCol: cityHex.col, hexRow: cityHex.row,
+          hexCol: spawnCol, hexRow: spawnRow,
           movementCurrent: def.move, hpCurrent: def.hp, hasAttacked: false,
         });
         if (city.currentProduction.itemId === "nuke") player.gold -= 50;
@@ -122,6 +130,7 @@ export const spawnBarbarians = (g) => {
   if (g.turnNumber % 3 !== 0 || g.barbarians.length >= maxBarbs) return;
   const emptyHexes = g.hexes.filter(h =>
     h.terrainType !== "water" && h.terrainType !== "mountain" && !h.cityId && !h.ownerPlayerId
+      && !isHexOccupied(h.col, h.row, g.players, g.barbarians)
   );
   if (emptyHexes.length === 0) return;
   const spawnHex = emptyHexes[Math.floor(gameRng(g) * emptyHexes.length)];
@@ -169,7 +178,7 @@ export const processBarbarians = (g) => {
         const dist = hexDist(nc, nr, bestHex.col, bestHex.row);
         if (dist < moveTargetDist) { moveTargetDist = dist; moveTarget = { col: nc, row: nr }; }
       }
-      if (moveTarget) { barb.hexCol = moveTarget.col; barb.hexRow = moveTarget.row; }
+      if (moveTarget && !isHexOccupied(moveTarget.col, moveTarget.row, g.players, g.barbarians, barb.id)) { barb.hexCol = moveTarget.col; barb.hexRow = moveTarget.row; }
     }
 
     if (bestDist <= 1 && !barb.hasAttacked) {

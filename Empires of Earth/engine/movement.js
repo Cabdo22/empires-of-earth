@@ -142,6 +142,33 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
   return reachable;
 };
 
+// Check if a hex is occupied by any unit (player or barbarian)
+export const isHexOccupied = (col, row, allPlayers, barbarians, excludeUnitId = null) => {
+  for (const p of allPlayers) {
+    for (const u of p.units) {
+      if (u.id === excludeUnitId) continue;
+      if (u.hexCol === col && u.hexRow === row) return true;
+    }
+  }
+  if (barbarians) {
+    for (const b of barbarians) {
+      if (b.id === excludeUnitId) continue;
+      if (b.hexCol === col && b.hexRow === row) return true;
+    }
+  }
+  return false;
+};
+
+// Find nearest unoccupied passable neighbor hex
+export const findOpenNeighbor = (col, row, hexes, allPlayers, barbarians) => {
+  for (const [nc, nr] of getNeighbors(col, row)) {
+    const nh = hexAt(hexes, nc, nr);
+    if (!nh || nh.terrainType === "water" || nh.terrainType === "mountain") continue;
+    if (!isHexOccupied(nc, nr, allPlayers, barbarians)) return { col: nc, row: nr };
+  }
+  return null;
+};
+
 // All hex keys within ranged-attack distance
 export const getRangedTargets = (col, row, range) => {
   const targets = new Set();

@@ -3,6 +3,7 @@
 // ============================================================
 
 import { gameRng } from './constants.js';
+import { isHexOccupied } from '../engine/movement.js';
 
 export const RANDOM_EVENTS = [
   {
@@ -38,7 +39,7 @@ export const RANDOM_EVENTS = [
     id: "raid", name: "Barbarian Raid!", desc: "Barbarians attack your borders.",
     effect: (g, addLog) => {
       const empties = g.hexes.filter(h => h.terrainType !== "water" && h.terrainType !== "mountain" && !h.cityId);
-      const border = empties.filter(h => !h.ownerPlayerId);
+      const border = empties.filter(h => !h.ownerPlayerId && !isHexOccupied(h.col, h.row, g.players, g.barbarians));
       if (border.length > 0) {
         const bh = border[Math.floor(gameRng(g) * border.length)];
         g.nextUnitId = (g.nextUnitId || 0) + 1;

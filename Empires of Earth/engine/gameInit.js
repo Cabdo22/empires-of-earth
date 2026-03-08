@@ -6,7 +6,7 @@ import { COLS, ROWS, P1_START, P2_START, hexCenter, hexAt } from '../data/consta
 import { UNIT_DEFS } from '../data/units.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { generateMap } from './mapGen.js';
-import { getVisibleHexes } from './movement.js';
+import { getVisibleHexes, findOpenNeighbor } from './movement.js';
 
 let uidCtr = 0;
 
@@ -48,6 +48,10 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
   const p2H = hexAt(hexes, P2_START.col, P2_START.row);
   const c1 = CIV_DEFS[civ1], c2 = CIV_DEFS[civ2];
 
+  // Find adjacent hexes for scouts (no stacking on start hex)
+  const p1Scout = findOpenNeighbor(P1_START.col, P1_START.row, hexes, [], []);
+  const p2Scout = findOpenNeighbor(P2_START.col, P2_START.row, hexes, [], []);
+
   const players = [
     {
       id: "p1", civilization: civ1, name: c1.name,
@@ -57,7 +61,7 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
         id: c1.capital.toLowerCase(), name: c1.capital, hexId: p1H.id, population: 1,
         districts: [], currentProduction: null, productionProgress: 0, foodAccumulated: 0, hp: 20, hpMax: 20,
       }],
-      units: [mkUnit("p1", "warrior", P1_START.col, P1_START.row), mkUnit("p1", "scout", P1_START.col, P1_START.row)],
+      units: [mkUnit("p1", "warrior", P1_START.col, P1_START.row), mkUnit("p1", "scout", p1Scout?.col ?? P1_START.col, p1Scout?.row ?? P1_START.row)],
     },
     {
       id: "p2", civilization: civ2, name: c2.name,
@@ -67,7 +71,7 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
         id: c2.capital.toLowerCase(), name: c2.capital, hexId: p2H.id, population: 1,
         districts: [], currentProduction: null, productionProgress: 0, foodAccumulated: 0, hp: 20, hpMax: 20,
       }],
-      units: [mkUnit("p2", "warrior", P2_START.col, P2_START.row), mkUnit("p2", "scout", P2_START.col, P2_START.row)],
+      units: [mkUnit("p2", "warrior", P2_START.col, P2_START.row), mkUnit("p2", "scout", p2Scout?.col ?? P2_START.col, p2Scout?.row ?? P2_START.row)],
     },
   ];
 

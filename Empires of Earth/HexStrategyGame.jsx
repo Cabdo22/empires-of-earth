@@ -5,7 +5,7 @@ import { UNIT_DEFS } from './data/units.js';
 import { CIV_DEFS } from './data/civs.js';
 import { calcCombatPreview } from './engine/combat.js';
 import { calcPlayerIncome, canUpgradeUnit } from './engine/economy.js';
-import { getMoveBlockReason, getReachableHexes, getRangedTargets, getVisibleHexes } from './engine/movement.js';
+import { getMoveBlockReason, getReachableHexes, getRangedTargets, getVisibleHexes, isHexOccupied } from './engine/movement.js';
 import { processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg } from './engine/turnProcessing.js';
 import { checkVictoryState } from './engine/victory.js';
 import { createInitialState } from './engine/gameInit.js';
@@ -232,7 +232,7 @@ export default function HexStrategyGame(){
           msg += ` ☠${barbUnit ? "Barb +5💰 " : ""}${defDef.name}`;
 
           // Melee attacker advances into the hex
-          if (attDef.range === 0 && !preview.atkDies) {
+          if (attDef.range === 0 && !preview.atkDies && !isHexOccupied(defCol, defRow, g.players, g.barbarians, attUnit.id)) {
             attUnit.hexCol = defCol;
             attUnit.hexRow = defRow;
             attUnit.movementCurrent = 0;
@@ -271,7 +271,7 @@ export default function HexStrategyGame(){
         let msg = `${attDef.name}→${defCity.name} (${Math.max(0, defCity.hp)}HP)`;
         if (defCity.hp <= 0) {
           msg = `${attDef.name} ${tryCaptureCity(defCity, attPlayer, defPlayer, defHex, g)}`;
-          if (attDef.range === 0) { attUnit.hexCol = defCol; attUnit.hexRow = defRow; }
+          if (attDef.range === 0 && !isHexOccupied(defCol, defRow, g.players, g.barbarians, attUnit.id)) { attUnit.hexCol = defCol; attUnit.hexRow = defRow; }
         }
 
         addLog(msg, g);
@@ -472,6 +472,7 @@ export default function HexStrategyGame(){
       const g = JSON.parse(JSON.stringify(prev));
       const unit = g.players.find(p => p.id === g.currentPlayerId).units.find(u => u.id === unitId);
       if (!unit) return prev;
+      if (isHexOccupied(targetCol, targetRow, g.players, g.barbarians, unit.id)) return prev;
       unit.hexCol = targetCol;
       unit.hexRow = targetRow;
       unit.movementCurrent = 0;

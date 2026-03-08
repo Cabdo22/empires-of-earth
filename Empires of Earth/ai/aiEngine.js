@@ -8,7 +8,7 @@ import { CIV_DEFS } from '../data/civs.js';
 import { hexAt, getNeighbors, hexDist, gameRng, COLS, ROWS } from '../data/constants.js';
 import { getPlayerMaxEra, calcCombatPreview } from '../engine/combat.js';
 import { getAvailableTechs, getAvailableUnits, getAvailableDistricts, canUpgradeUnit } from '../engine/economy.js';
-import { getReachableHexes, getVisibleHexes } from '../engine/movement.js';
+import { getReachableHexes, getVisibleHexes, isHexOccupied } from '../engine/movement.js';
 import { addLogMsg, processResearchAndIncome, processCityTurn, expandTerritory, healGarrison } from '../engine/turnProcessing.js';
 import { getHexesInRadius } from '../data/constants.js';
 
@@ -320,7 +320,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
             if (bestTarget.isBarb) { g.barbarians = g.barbarians.filter(b => b.id !== defender.id); aiPlayer.gold += 15; }
             msg += ` ☠${defDef.name}`;
 
-            if (unitDef.range === 0 && !pv.atkDies) {
+            if (unitDef.range === 0 && !pv.atkDies && !isHexOccupied(tc, tr, g.players, g.barbarians, unit.id)) {
               unit.hexCol = tc; unit.hexRow = tr; unit.movementCurrent = 0;
               if (defCity && bestTarget.isUnit) {
                 defCity.hp = (defCity.hp || 20) - 5;
@@ -348,7 +348,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
             enemyPlayer.cities = enemyPlayer.cities.filter(c => c.id !== defCity.id);
             defCity.hp = 10; defCity.hpMax = 20; defCity.captured = true; aiPlayer.cities.push(defCity);
             if (defHex) defHex.ownerPlayerId = aiPlayer.id;
-            if (unitDef.range === 0) { unit.hexCol = tc; unit.hexRow = tr; }
+            if (unitDef.range === 0 && !isHexOccupied(tc, tr, g.players, g.barbarians, unit.id)) { unit.hexCol = tc; unit.hexRow = tr; }
             msg = `AI ${unitDef.name} 🏛captured ${defCity.name}!`;
           }
           addLogFn(msg, g);
