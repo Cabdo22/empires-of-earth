@@ -651,7 +651,7 @@ export default function HexStrategyGame(){
 
   // Turn transition screen (hotseat: hide board between turns)
   if(turnTransition){
-    return <TurnTransitionScreen turnTransition={turnTransition} turnNumber={turnNumber} setTurnTransition={setTurnTransition}/>;
+    return <TurnTransitionScreen turnTransition={turnTransition} turnNumber={turnNumber} onReady={() => setTurnTransition(null)}/>;
   }
 
   // Victory
