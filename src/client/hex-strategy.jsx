@@ -174,7 +174,7 @@ const TUTORIAL_TIPS = [
     trigger: (gs, dismissed) => gs && gs.turnNumber <= 2 && dismissed["welcome"],
     icon: "🗺",
     title: "Movement & Combat",
-    body: "Click a unit to select it (or press Tab to cycle). Blue highlights show where it can move — right-click to move there. Red highlights show attack targets — right-click to attack.",
+    body: "Click a unit to select it (or press Tab to cycle). Blue highlights show where it can move — click to move there. Red highlights show attack targets — click to attack.",
     position: "top",
   },
   {
@@ -700,6 +700,19 @@ export default function HexStrategyGame({ onlineMode, onShowOnline }){
     if(nukeM){setNukeM(null);return;}
     if(settlerM&&hex.terrainType!=="water"&&hex.terrainType!=="mountain"&&!hex.cityId){foundCity(settlerM,hex.col,hex.row);return;}
     if(settlerM){setSettlerM(null);return;}
+
+    // --- Single-click move/attack: if a unit is selected and we clicked a valid target, act ---
+    if(selU&&phase==="MOVEMENT"&&!uSel2){
+      const inMv=reach.has(uk)&&eU.length===0&&!(cE&&cE.player.id!==cpId);
+      const inMelee=sud&&sud.def?.range===0&&!sud.hasAttacked&&reach.has(uk)&&hasTgt;
+      const inRng=sud&&sud.def?.range>0&&!sud.hasAttacked&&atkRange.has(uk)&&hasTgt;
+      if(inMelee||inRng){doCombat(selU,hex.col,hex.row);return;}
+      if(inMv){moveU(selU,hex.col,hex.row);return;}
+      // Show blocked feedback if we tried to act on an unreachable hex
+      if(!isMy){const blk=getMoveBlockReason(hex,sud,sud?.def,reach,atkRange,phase,cpId,players);
+        if(blk){setMoveMsg(blk);setFlashes(prev=>({...prev,[uk]:"blocked"}));return;}}
+    }
+
     if(cE&&cE.player.id===cpId){
       // City hex with our units: first click selects unit, second click opens city panel
       if(isMy&&!uSel2&&phase==="MOVEMENT"){setSelU(myU[0].id);setSelH(null);return;}
@@ -712,7 +725,7 @@ export default function HexStrategyGame({ onlineMode, onShowOnline }){
       if(myU.length>1){const ci=myU.findIndex(u=>u.id===selU);setSelU(myU[(ci+1)%myU.length].id);}
       else{const su=myU[0];if(su.unitType==="settler"){setSettlerM(su.id);return;}if(su.unitType==="nuke"){setNukeM(su.id);return;}setSelU(null);setSelH(hex.id);}
     }else{setSelU(null);setSelH(selH===hex.id?null:hex.id);}
-  },[findHexFromEvent,fogVisible,unitMap,cityMap,cpId,selU,nukeM,nukeR,settlerM,phase,selH,launchNuke,foundCity,doCombat,moveU]);
+  },[findHexFromEvent,fogVisible,unitMap,cityMap,cpId,selU,nukeM,nukeR,settlerM,phase,selH,launchNuke,foundCity,doCombat,moveU,reach,atkRange,sud,players]);
 
   const onHexCtx=useCallback(e=>{
     e.preventDefault();e.stopPropagation();if(isPanRef.current||phase!=="MOVEMENT")return;
@@ -1009,7 +1022,7 @@ export default function HexStrategyGame({ onlineMode, onShowOnline }){
         <div style={{display:"flex",justifyContent:"space-between",fontSize:8,marginTop:2,color:"#6a7a50"}}>
           <div>{preview.ahp}→{Math.max(0,preview.ahp-preview.dDmg)}</div>
           <div>{preview.dhp}→{Math.max(0,preview.dhp-preview.aDmg)}</div></div>
-        <div style={{textAlign:"center",fontSize:7,color:"#5a6a4a",marginTop:3}}>Right-click to attack</div>
+        <div style={{textAlign:"center",fontSize:7,color:"#5a6a4a",marginTop:3}}>Click to attack</div>
       </div>}
 
       {/* Tech tree */}
@@ -1077,7 +1090,7 @@ export default function HexStrategyGame({ onlineMode, onShowOnline }){
             {si.defBonus>0&&<span style={{color:"#60a0d0"}}>+{si.defBonus}def</span>}
             {uH.length>0&&<span style={{color:"#ffd740"}}>{uH.map(u=>UNIT_DEFS[u.unitType]?.icon).join("")}</span>}
             {oP&&<span style={{color:oP.colorLight}}>⚑{oP.name.slice(0,6)}</span>}
-          </div>);})():(<span style={{color:"#3a4a2a",fontSize:9,letterSpacing:2}}>Tab=cycle Esc=deselect RightClick=move/attack</span>)}
+          </div>);})():(<span style={{color:"#3a4a2a",fontSize:9,letterSpacing:2}}>Tab=cycle Esc=deselect Click=select/move/attack</span>)}
       </div>
 
       {settlerM&&<div style={{position:"absolute",bottom:52,left:"50%",transform:"translateX(-50%)",zIndex:20,background:"rgba(40,80,20,.9)",border:"1px solid #40e040",borderRadius:6,padding:"6px 16px",color:"#a0f0a0",fontSize:10,pointerEvents:"auto"}}>🏕 Click land hex to found city · <span style={{cursor:"pointer",color:"#f08080"}} onClick={()=>setSettlerM(null)}>Cancel</span></div>}
