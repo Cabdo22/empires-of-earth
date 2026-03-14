@@ -138,7 +138,7 @@ export default function HexStrategyGame(){
   },[fogVisible,cpId]);
 
   // Keyboard shortcuts
-  useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef });
+  useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity });
 
   // addLog and checkVictory delegate to module-level pure functions
   const addLog=addLogMsg;
@@ -566,6 +566,14 @@ export default function HexStrategyGame(){
     if(nukeM){setNukeM(null);return;}
     if(settlerM&&hex.terrainType!=="water"&&hex.terrainType!=="mountain"&&!hex.cityId){foundCity(settlerM,hex.col,hex.row);return;}
     if(settlerM){setSettlerM(null);return;}
+    // LEFT-CLICK MOVE/ATTACK (Mac/Chrome compatible)
+    if(selU&&phase==="MOVEMENT"&&!uSel2){
+      const inMv=reach.has(uk)&&eU.length===0&&!(cE&&cE.player.id!==cpId);
+      const inMelee=sud&&sud.def?.range===0&&!sud.hasAttacked&&hexDist(sud.hexCol,sud.hexRow,hex.col,hex.row)<=1&&hasTgt;
+      const inRng=sud&&sud.def?.range>0&&!sud.hasAttacked&&atkRange.has(uk)&&hasTgt;
+      if(inMelee||inRng){doCombat(selU,hex.col,hex.row);return;}
+      if(inMv){moveU(selU,hex.col,hex.row);return;}
+    }
     if(cE&&cE.player.id===cpId){
       // City hex with our units: first click selects unit, second click opens city panel
       if(isMy&&!uSel2&&phase==="MOVEMENT"){setSelU(myU[0].id);setSelH(null);return;}
