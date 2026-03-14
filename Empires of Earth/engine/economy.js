@@ -91,11 +91,15 @@ export const calcPlayerIncome = (player, hexes) => {
   return { food, production, science, gold };
 };
 
-// Techs available for research
+// Techs available for research (supports prereqMin for "N of M" gating)
 export const getAvailableTechs = (player) =>
-  Object.values(TECH_TREE).filter(
-    t => !player.researchedTechs.includes(t.id) && t.prereqs.every(p => player.researchedTechs.includes(p))
-  );
+  Object.values(TECH_TREE).filter(t => {
+    if (player.researchedTechs.includes(t.id)) return false;
+    if (t.prereqs.length === 0) return true;
+    const met = t.prereqs.filter(p => player.researchedTechs.includes(p)).length;
+    const needed = t.prereqMin || t.prereqs.length;
+    return met >= needed;
+  });
 
 // Units available for production in a city
 export const getAvailableUnits = (player, city) => {
