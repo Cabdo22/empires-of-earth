@@ -2,7 +2,7 @@
 // AI DECISION ENGINE
 // ============================================================
 
-import { UNIT_DEFS } from '../data/units.js';
+import { UNIT_DEFS, SIEGE_UNITS } from '../data/units.js';
 import { TECH_TREE } from '../data/techs.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { hexAt, getNeighbors, hexDist, gameRng, COLS, ROWS } from '../data/constants.js';
@@ -289,8 +289,12 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
         if (dist > range) continue;
         const garrison = enemyPlayer.units.find(u => u.hexCol === eCH.col && u.hexRow === eCH.row);
         if (!garrison) {
-          let score = unitDef.strength * 2;
-          if (eCity.hp - unitDef.strength * 2 <= 0) score += 30;
+          const isSiege = SIEGE_UNITS.has(unit.unitType);
+          const cityDmg = isSiege ? unitDef.strength * 3 : Math.max(1, Math.floor(unitDef.strength * 0.5));
+          let score = cityDmg;
+          if (eCity.hp - cityDmg <= 0) score += 30;
+          // Non-siege melee units should avoid attacking cities (they take 5 counter-damage)
+          if (!isSiege && unitDef.range === 0) score -= 10;
           if (score > bestTargetScore) {
             bestTargetScore = score;
             bestTarget = { col: eCH.col, row: eCH.row, isCity: true, city: eCity };
@@ -324,7 +328,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
             if (unitDef.range === 0 && !pv.atkDies && !isHexOccupied(tc, tr, g.players, g.barbarians, unit.id)) {
               unit.hexCol = tc; unit.hexRow = tr; unit.movementCurrent = 0;
               if (defCity && bestTarget.isUnit) {
-                defCity.hp = (defCity.hp || 20) - 5;
+                defCity.hp = (defCity.hp || 20) - 3;
                 if (defCity.hp <= 0) {
                   enemyPlayer.cities = enemyPlayer.cities.filter(c => c.id !== defCity.id);
                   defCity.hp = 10; defCity.hpMax = 20; defCity.captured = true; aiPlayer.cities.push(defCity);
@@ -339,11 +343,19 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
           addLogFn(msg, g);
         } else if (bestTarget.isCity) {
           const defCity = bestTarget.city;
-          defCity.hp = (defCity.hp || 20) - unitDef.strength * 2;
+          const isSiege = SIEGE_UNITS.has(unit.unitType);
+          let cityDmg = isSiege ? unitDef.strength * 3 : Math.max(1, Math.floor(unitDef.strength * 0.5));
+          if (unitDef.ability === "city_siege") cityDmg += 3;
+          defCity.hp = (defCity.hp || 20) - cityDmg;
           unit.hasAttacked = true;
           if (unitDef.range === 0) unit.movementCurrent = 0;
+          // City counter-damage for melee non-siege
+          if (unitDef.range === 0 && !isSiege) {
+            unit.hpCurrent -= 5;
+          }
 
-          let msg = `AI ${unitDef.name}→${defCity.name} (${Math.max(0, defCity.hp)}HP)`;
+          let msg = `AI ${unitDef.name}→${defCity.name}: ${cityDmg}dmg (${Math.max(0, defCity.hp)}HP)`;
+          if (unit.hpCurrent <= 0) { aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id); msg += ` ☠${unitDef.name}`; }
           if (defCity.hp <= 0) {
             const defHex = hexAt(g.hexes, tc, tr);
             enemyPlayer.cities = enemyPlayer.cities.filter(c => c.id !== defCity.id);

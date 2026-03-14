@@ -59,8 +59,15 @@ export const calcCombatPreview = (attUnit, attDef, defUnit, defDef, defTerrain, 
   if (defPlayer.civilization === "Ottoman" && siegeTypes.includes(defUnit.unitType)) defStr += 1;
 
   // Damage formula: attacker deals (str*3 - enemy str), ranged units take no counter-damage
-  const attackDmg = Math.max(1, Math.round(attStr * 3 - defStr));
+  let attackDmg = Math.max(1, Math.round(attStr * 3 - defStr));
   const counterDmg = attDef.range > 0 ? 0 : Math.max(1, Math.round(defStr * 2 - attStr));
+
+  // Percentage-based defense: city 25% reduction, forest 15% reduction
+  if (inCity) {
+    attackDmg = Math.max(1, Math.round(attackDmg * 0.75));
+  } else if (defTerrain === "forest") {
+    attackDmg = Math.max(1, Math.round(attackDmg * 0.85));
+  }
 
   return {
     aDmg: attackDmg,

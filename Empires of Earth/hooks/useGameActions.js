@@ -5,7 +5,7 @@
 import { useCallback } from "react";
 import { hexCenter, hexAt, getNeighbors, hexDist, getHexesInRadius } from '../data/constants.js';
 import { TECH_TREE } from '../data/techs.js';
-import { UNIT_DEFS } from '../data/units.js';
+import { UNIT_DEFS, SIEGE_UNITS } from '../data/units.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { calcCombatPreview } from '../engine/combat.js';
 import { canUpgradeUnit } from '../engine/economy.js';
@@ -89,7 +89,7 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
           if (attDef.range === 0 && !preview.atkDies) {
             attUnit.hexCol = defCol; attUnit.hexRow = defRow; attUnit.movementCurrent = 0;
             if (defCity && defUnit) {
-              defCity.hp = (defCity.hp || 20) - 5;
+              defCity.hp = (defCity.hp || 20) - 3;
               if (defCity.hp <= 0) msg += ` ${tryCaptureCity(defCity, attPlayer, defPlayer, defHex, g)}`;
             }
             if (barbUnit && defHex && !defHex.ownerPlayerId) defHex.ownerPlayerId = attPlayer.id;
@@ -102,13 +102,24 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
         if (preview.atkDies) { attPlayer.units = attPlayer.units.filter(u => u.id !== attUnit.id); msg += ` \u2620${attDef.name}`; }
         addLogMsg(msg, g);
       } else if (defCity) {
-        let cityDmg = attDef.strength * 2;
-        if (attDef.ability === "city_siege") cityDmg += 2;
+        const isSiege = SIEGE_UNITS.has(attUnit.unitType);
+        let cityDmg = isSiege ? attDef.strength * 3 : Math.max(1, Math.floor(attDef.strength * 0.5));
+        if (attDef.ability === "city_siege") cityDmg += 3;
         defCity.hp = (defCity.hp || 20) - cityDmg;
         attUnit.hasAttacked = true;
         if (attDef.range === 0) attUnit.movementCurrent = 0;
-        let msg = `${attDef.name}\u2192${defCity.name} (${Math.max(0, defCity.hp)}HP)`;
-        if (defCity.hp <= 0) {
+        // City counter-damage: melee non-siege attackers take 5 damage
+        let cityCounter = 0;
+        if (attDef.range === 0 && !isSiege) {
+          cityCounter = 5;
+          attUnit.hpCurrent -= cityCounter;
+        }
+        let msg = `${attDef.name}\u2192${defCity.name}: ${cityDmg}dmg (${Math.max(0, defCity.hp)}HP)`;
+        if (cityCounter > 0) msg += ` took ${cityCounter}`;
+        if (attUnit.hpCurrent <= 0) {
+          attPlayer.units = attPlayer.units.filter(u => u.id !== attUnit.id);
+          msg += ` \u2620${attDef.name}`;
+        } else if (defCity.hp <= 0) {
           msg = `${attDef.name} ${tryCaptureCity(defCity, attPlayer, defPlayer, defHex, g)}`;
           if (attDef.range === 0) { attUnit.hexCol = defCol; attUnit.hexRow = defRow; }
         }
@@ -124,8 +135,14 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
         anims.push({ id: now, x: defPos.x, y: defPos.y, dmg: atkDmgShow, color: "#ff4040", t: now });
         if (rawPv.dDmg > 0) { const attPos = hexCenter(attUnit.hexCol, attUnit.hexRow); anims.push({ id: now + 1, x: attPos.x, y: attPos.y, dmg: rawPv.dDmg, color: "#ff8040", t: now }); }
       } else if (defCity) {
-        let cd2 = attDef.strength * 2; if (attDef.ability === "city_siege") cd2 += 2;
+        const isSiege2 = SIEGE_UNITS.has(attUnit.unitType);
+        let cd2 = isSiege2 ? attDef.strength * 3 : Math.max(1, Math.floor(attDef.strength * 0.5));
+        if (attDef.ability === "city_siege") cd2 += 3;
         anims.push({ id: now, x: defPos.x, y: defPos.y, dmg: cd2, color: "#ff4040", t: now });
+        if (attDef.range === 0 && !isSiege2) {
+          const attPos = hexCenter(attUnit.hexCol, attUnit.hexRow);
+          anims.push({ id: now + 1, x: attPos.x, y: attPos.y, dmg: 5, color: "#ff8040", t: now });
+        }
       }
       if (anims.length > 0) setCombatAnims(prev => [...prev, ...anims]);
       checkVictoryState(g);

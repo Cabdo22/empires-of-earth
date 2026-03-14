@@ -44,6 +44,11 @@ export const MILITARY_REQ_UNITS = new Set([
   "tank", "modern_infantry", "artillery", "mech", "fighter", "bomber", "panzer", "marine"
 ]);
 
+// Siege units — deal full damage to cities
+export const SIEGE_UNITS = new Set([
+  "catapult", "great_bombard", "artillery", "battleship", "man_o_war", "bomber"
+]);
+
 // Unit upgrade paths: base unit → upgraded unit
 export const UPGRADE_PATHS = {
   warrior: "swordsman", swordsman: "musketman", musketman: "modern_infantry",
