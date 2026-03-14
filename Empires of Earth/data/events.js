@@ -17,8 +17,11 @@ export const RANDOM_EVENTS = [
     id: "plague", name: "Plague Strikes", desc: "Disease reduces city population.",
     effect: (g) => {
       const cp = g.players.find(p => p.id === g.currentPlayerId);
-      const c = cp.cities[Math.floor(gameRng(g) * cp.cities.length)];
-      if (c && c.population > 1) { c.population--; c.foodAccumulated = 0; }
+      const eligible = cp.cities.filter(c => c.population >= 4);
+      if (eligible.length === 0) return;
+      const c = eligible[Math.floor(gameRng(g) * eligible.length)];
+      c.population--;
+      c.foodAccumulated = 0;
     },
   },
   {

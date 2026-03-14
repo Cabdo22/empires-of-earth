@@ -3,15 +3,21 @@
 // ============================================================
 
 import React, { memo } from "react";
-import { HEX_POINTS } from '../data/constants.js';
+import { HEX_POINTS, HEX_SIZE } from '../data/constants.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
 import { ResourceIcon, UnitIcon } from './Icons.jsx';
 
+// Pre-compute hex edge vertices for border rendering (flat-top hex)
+const HEX_VERTICES = Array.from({ length: 6 }, (_, i) => {
+  const angle = (Math.PI / 180) * 60 * i;
+  return { x: HEX_SIZE * Math.cos(angle), y: HEX_SIZE * Math.sin(angle) };
+});
+
 const MemoHex = memo(function MemoHex({
   hex, vis, isHovered, isSelected, inMoveRange, inAttackRange, inNukeRange,
   units, unitCount, city, player, unitSelected, settlerMode, canAct, flash,
-  isFogged, isExplored, blockReason
+  isFogged, isExplored, blockReason, borderEdges, borderColor
 }) {
   const t = hex.terrainType;
 
@@ -90,6 +96,13 @@ const MemoHex = memo(function MemoHex({
 
       {/* Territory tint */}
       {hex.ownerPlayerId && player && <polygon points={HEX_POINTS} fill={player.color} opacity=".08"/>}
+
+      {/* City border lines */}
+      {borderEdges && borderColor && borderEdges.map((draw, i) => {
+        if (!draw) return null;
+        const v1 = HEX_VERTICES[i], v2 = HEX_VERTICES[(i + 1) % 6];
+        return <line key={`b${i}`} x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke={borderColor} strokeWidth={2.5} opacity={0.7} />;
+      })}
       {hex.resource && !city && <g style={{pointerEvents:"none"}}><ResourceIcon type={hex.resource} x={0} y={0} s={16}/></g>}
 
       {/* City */}

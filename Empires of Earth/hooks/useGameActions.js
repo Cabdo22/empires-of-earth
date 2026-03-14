@@ -9,7 +9,8 @@ import { UNIT_DEFS, SIEGE_UNITS } from '../data/units.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { calcCombatPreview } from '../engine/combat.js';
 import { canUpgradeUnit } from '../engine/economy.js';
-import { processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg } from '../engine/turnProcessing.js';
+import { processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg, initCityBorders } from '../engine/turnProcessing.js';
+import { autoAssignTiles } from '../engine/economy.js';
 import { checkVictoryState } from '../engine/victory.js';
 import { SFX } from '../sfx.js';
 
@@ -18,6 +19,12 @@ const tryCaptureCity = (city, attackerPlayer, defenderPlayer, hex, g) => {
   city.hp = 10; city.hpMax = 20; city.captured = true;
   attackerPlayer.cities.push(city);
   if (hex) hex.ownerPlayerId = attackerPlayer.id;
+  // Transfer border ownership and reassign tiles
+  for (const hid of (city.borderHexIds || [])) {
+    const bh = g.hexes[hid];
+    if (bh) { bh.ownerPlayerId = attackerPlayer.id; bh.cityBorderId = city.id; }
+  }
+  autoAssignTiles(city, g.hexes);
   return `\u{1F3DB}${city.name} captured!`;
 };
 
@@ -239,21 +246,33 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
       const civNames = CIV_DEFS[player.civilization]?.cityNames || ["Colony"];
       const cityName = civNames[player.cities.length] || `City ${g.nextCityId}`;
       const cityId = `${player.id}-c${g.nextCityId}`;
-      player.cities.push({
+      const newCity = {
         id: cityId, name: cityName, hexId: hex.id, population: 1,
         districts: [], currentProduction: null, productionProgress: 0,
         foodAccumulated: 0, hp: 20, hpMax: 20,
-      });
-      hex.cityId = cityId; hex.ownerPlayerId = player.id;
-      for (const [nc, nr] of getNeighbors(col, row)) {
-        const neighbor = hexAt(g.hexes, nc, nr);
-        if (neighbor && !neighbor.ownerPlayerId && neighbor.terrainType !== "water") neighbor.ownerPlayerId = player.id;
-      }
+        workedTileIds: [], borderHexIds: [],
+      };
+      player.cities.push(newCity);
+      hex.cityId = cityId;
+      initCityBorders(newCity, player, g.hexes);
       addLogMsg(`${player.name} founded ${cityName}!`, g);
       return g;
     });
     setSettlerM(null); setSelU(null); SFX.found();
   }, [setGs, setSettlerM, setSelU]);
 
-  return { launchNuke, doCombat, endTurn, selResearch, upgradeUnit, setProd, moveU, foundCity };
+  // Toggle a tile assignment in a city (manual citizen override)
+  const reassignTile = useCallback((cityId, tileHexId) => {
+    setGs(prev => {
+      const g = JSON.parse(JSON.stringify(prev));
+      const player = g.players.find(p => p.id === g.currentPlayerId);
+      const city = player?.cities.find(c => c.id === cityId);
+      if (!city) return prev;
+      // Just re-run auto-assign (toggle not needed for now — auto is default)
+      autoAssignTiles(city, g.hexes);
+      return g;
+    });
+  }, [setGs]);
+
+  return { launchNuke, doCombat, endTurn, selResearch, upgradeUnit, setProd, moveU, foundCity, reassignTile };
 }

@@ -7,6 +7,7 @@ import { UNIT_DEFS } from '../data/units.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { generateMap } from './mapGen.js';
 import { getVisibleHexes, findOpenNeighbor } from './movement.js';
+import { initCityBorders } from './turnProcessing.js';
 
 let uidCtr = 0;
 
@@ -38,8 +39,10 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
         uk: `${col},${row}`,
         terrainType: g.terrain,
         resource: g.resource,
+        isCoastal: g.isCoastal || false,
         ownerPlayerId: null,
         cityId: null,
+        cityBorderId: null,
       });
     }
   }
@@ -60,6 +63,7 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
       cities: [{
         id: c1.capital.toLowerCase(), name: c1.capital, hexId: p1H.id, population: 1,
         districts: [], currentProduction: null, productionProgress: 0, foodAccumulated: 0, hp: 20, hpMax: 20,
+        workedTileIds: [], borderHexIds: [],
       }],
       units: [mkUnit("p1", "warrior", P1_START.col, P1_START.row), mkUnit("p1", "scout", p1Scout?.col ?? P1_START.col, p1Scout?.row ?? P1_START.row)],
     },
@@ -70,15 +74,18 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
       cities: [{
         id: c2.capital.toLowerCase(), name: c2.capital, hexId: p2H.id, population: 1,
         districts: [], currentProduction: null, productionProgress: 0, foodAccumulated: 0, hp: 20, hpMax: 20,
+        workedTileIds: [], borderHexIds: [],
       }],
       units: [mkUnit("p2", "warrior", P2_START.col, P2_START.row), mkUnit("p2", "scout", p2Scout?.col ?? P2_START.col, p2Scout?.row ?? P2_START.row)],
     },
   ];
 
   p1H.cityId = c1.capital.toLowerCase();
-  p1H.ownerPlayerId = "p1";
   p2H.cityId = c2.capital.toLowerCase();
-  p2H.ownerPlayerId = "p2";
+
+  // Initialize city borders and tile assignments
+  initCityBorders(players[0].cities[0], players[0], hexes);
+  initCityBorders(players[1].cities[0], players[1], hexes);
 
   // Compute initial explored hexes
   const explored = {};

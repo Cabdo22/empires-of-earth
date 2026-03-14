@@ -9,7 +9,8 @@ import { hexAt, getNeighbors, hexDist, gameRng, COLS, ROWS } from '../data/const
 import { getPlayerMaxEra, calcCombatPreview } from '../engine/combat.js';
 import { getAvailableTechs, getAvailableUnits, getAvailableDistricts, canUpgradeUnit } from '../engine/economy.js';
 import { getReachableHexes, getVisibleHexes, isHexOccupied } from '../engine/movement.js';
-import { addLogMsg, processResearchAndIncome, processCityTurn, expandTerritory, healGarrison } from '../engine/turnProcessing.js';
+import { addLogMsg, processResearchAndIncome, processCityTurn, expandTerritory, healGarrison, initCityBorders } from '../engine/turnProcessing.js';
+import { autoAssignTiles } from '../engine/economy.js';
 import { getHexesInRadius } from '../data/constants.js';
 
 // ---- Research selection ----
@@ -176,17 +177,15 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
         const cityId = `${aiPlayer.id}-c${g.nextCityId}`;
 
         aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id);
-        aiPlayer.cities.push({
+        const newCity = {
           id: cityId, name: cityName, hexId: hex.id, population: 1,
           districts: [], currentProduction: null, productionProgress: 0,
           foodAccumulated: 0, hp: 20, hpMax: 20,
-        });
+          workedTileIds: [], borderHexIds: [],
+        };
+        aiPlayer.cities.push(newCity);
         hex.cityId = cityId;
-        hex.ownerPlayerId = aiPlayer.id;
-        for (const [nc, nr] of getNeighbors(unit.hexCol, unit.hexRow)) {
-          const nh = hexAt(g.hexes, nc, nr);
-          if (nh && !nh.ownerPlayerId && nh.terrainType !== "water") nh.ownerPlayerId = aiPlayer.id;
-        }
+        initCityBorders(newCity, aiPlayer, g.hexes);
         addLogFn(`${aiPlayer.name} founded ${cityName}!`, g);
         continue;
       }
@@ -333,6 +332,12 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
                   enemyPlayer.cities = enemyPlayer.cities.filter(c => c.id !== defCity.id);
                   defCity.hp = 10; defCity.hpMax = 20; defCity.captured = true; aiPlayer.cities.push(defCity);
                   if (defHex) defHex.ownerPlayerId = aiPlayer.id;
+                  // Update border ownership and reassign tiles
+                  for (const hid of (defCity.borderHexIds || [])) {
+                    const bh = g.hexes[hid];
+                    if (bh) { bh.ownerPlayerId = aiPlayer.id; bh.cityBorderId = defCity.id; }
+                  }
+                  autoAssignTiles(defCity, g.hexes);
                   msg += ` 🏛${defCity.name} captured!`;
                 }
               }
@@ -361,6 +366,11 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
             enemyPlayer.cities = enemyPlayer.cities.filter(c => c.id !== defCity.id);
             defCity.hp = 10; defCity.hpMax = 20; defCity.captured = true; aiPlayer.cities.push(defCity);
             if (defHex) defHex.ownerPlayerId = aiPlayer.id;
+            for (const hid of (defCity.borderHexIds || [])) {
+              const bh = g.hexes[hid];
+              if (bh) { bh.ownerPlayerId = aiPlayer.id; bh.cityBorderId = defCity.id; }
+            }
+            autoAssignTiles(defCity, g.hexes);
             if (unitDef.range === 0 && !isHexOccupied(tc, tr, g.players, g.barbarians, unit.id)) { unit.hexCol = tc; unit.hexRow = tr; }
             msg = `AI ${unitDef.name} 🏛captured ${defCity.name}!`;
           }

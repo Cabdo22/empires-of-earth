@@ -76,7 +76,11 @@ const placeResources = (grid, rng, protectedHexes) => {
   }
 
   for (const [c, r] of water) {
-    if (rng() < 0.25) grid[c][r].resource = "oil";
+    if (grid[c][r].isCoastal && rng() < 0.12) {
+      grid[c][r].resource = "fish";
+    } else if (rng() < 0.15) {
+      grid[c][r].resource = "oil";
+    }
   }
 };
 
@@ -87,7 +91,7 @@ export const generateMap = () => {
   const protectedHexes = new Set([key(P1_START.col, P1_START.row), key(P2_START.col, P2_START.row)]);
 
   const grid = Array.from({ length: COLS }, () =>
-    Array.from({ length: ROWS }, () => ({ terrain: "grassland", resource: null }))
+    Array.from({ length: ROWS }, () => ({ terrain: "grassland", resource: null, isCoastal: false }))
   );
 
   const growUntil = (terrain, targetTiles, minBlob, maxBlob) => {
@@ -106,6 +110,15 @@ export const generateMap = () => {
 
   grid[P1_START.col][P1_START.row].terrain = "grassland";
   grid[P2_START.col][P2_START.row].terrain = "grassland";
+
+  // Mark coastal water tiles (adjacent to any land)
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      if (grid[c][r].terrain === "water") {
+        grid[c][r].isCoastal = getNeighbors(c, r).some(([nc, nr]) => grid[nc][nr].terrain !== "water");
+      }
+    }
+  }
 
   placeResources(grid, rng, protectedHexes);
   return grid;

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { HEX_SIZE, SQRT3, COLS, ROWS, hexCenter, hexAt, getNeighbors, hexDist, getHexesInRadius } from './data/constants.js';
+import { HEX_SIZE, SQRT3, COLS, ROWS, hexCenter, hexAt, getNeighbors, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS } from './data/constants.js';
 import { TECH_TREE } from './data/techs.js';
 import { UNIT_DEFS } from './data/units.js';
 import { CIV_DEFS } from './data/civs.js';
@@ -623,10 +623,24 @@ export default function HexStrategyGame(){
     const ownerP=hex.ownerPlayerId?players.find(p=>p.id===hex.ownerPlayerId):null;
     const blkReason=selU&&phase==="MOVEMENT"&&sud&&!uSel&&!fogged?getMoveBlockReason(hex,sud,sud.def,reach,atkRange,phase,cpId,players):null;
 
+    // Compute city border edges for this hex
+    let bEdges = null, bColor = null;
+    if (hex.cityBorderId && ownerP) {
+      const deltas = hex.col % 2 === 0 ? EVEN_COL_NEIGHBORS : ODD_COL_NEIGHBORS;
+      bEdges = deltas.map(([dc, dr]) => {
+        const nc = hex.col + dc, nr = hex.row + dr;
+        if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) return true;
+        const nh = hexAt(hexes, nc, nr);
+        return !nh || nh.cityBorderId !== hex.cityBorderId;
+      });
+      bColor = ownerP.color;
+    }
+
     return <MemoHex key={hex.id} hex={hex} vis={visData[i]}
       isHovered={hovH===hex.id} isSelected={selH===hex.id} inMoveRange={inMv} inAttackRange={!!(inMelee||inRng)} inNukeRange={!!inNk}
       unitSelected={!!uSel} units={fogged?null:uH} unitCount={fogged?0:uH.length}
-      city={fogged?null:(cE?.city||null)} player={cE?.player||ownerP} settlerMode={!!settlerM} canAct={!!canA} flash={flashes[uk]||null} isFogged={fogged} isExplored={isExplored2} blockReason={blkReason}/>;
+      city={fogged?null:(cE?.city||null)} player={cE?.player||ownerP} settlerMode={!!settlerM} canAct={!!canA} flash={flashes[uk]||null} isFogged={fogged} isExplored={isExplored2} blockReason={blkReason}
+      borderEdges={bEdges} borderColor={bColor}/>;
   }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,actable,nukeM,nukeR,flashes,fogVisible,fogExplored]);
 
   // Tooltip overlay data (rendered above all hexes)

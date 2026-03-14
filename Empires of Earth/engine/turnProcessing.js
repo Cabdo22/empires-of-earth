@@ -7,7 +7,7 @@ import { DISTRICT_DEFS } from '../data/districts.js';
 import { TECH_TREE } from '../data/techs.js';
 import { RANDOM_EVENTS } from '../data/events.js';
 import { COLS, ROWS, hexAt, getNeighbors, hexDist, gameRng, FOG_SIGHT } from '../data/constants.js';
-import { calcCityYields, calcPlayerIncome } from './economy.js';
+import { calcCityYields, calcPlayerIncome, autoAssignTiles, isWorkableHex, getHexYields } from './economy.js';
 import { isHexOccupied, findOpenNeighbor } from './movement.js';
 
 // Append a log message (keeps last 30)
@@ -70,28 +70,77 @@ export const processCityTurn = (city, player, g, sfxQ) => {
       city.productionProgress = 0;
     }
   }
-  city.foodAccumulated += yields.food;
-  const growthThreshold = city.population * 25;
+  // Food consumption: each citizen eats 2 food
+  const foodConsumed = city.population * 2;
+  const surplus = yields.food - foodConsumed;
+  if (surplus > 0) city.foodAccumulated += surplus;
+
+  const growthThreshold = 10 + city.population * 5;
   if (city.foodAccumulated >= growthThreshold) {
     city.population++;
     city.foodAccumulated -= growthThreshold;
     addLogMsg(`${city.name} grew to pop ${city.population}!`, g);
+    // Auto-assign new citizen and check border growth
+    autoAssignTiles(city, g.hexes);
+    const workableInBorder = (city.borderHexIds || []).filter(
+      hid => hid !== city.hexId && isWorkableHex(g.hexes[hid])
+    ).length;
+    if (city.population > workableInBorder) {
+      growCityBorder(city, player, g.hexes);
+    }
   }
   const baseHpMax = city.hpMax || 20;
   const hpMax = player.researchedTechs.includes("stone_working") ? Math.max(baseHpMax, 25) : baseHpMax;
   if (city.hp < hpMax) city.hp = Math.min(hpMax, city.hp + 2);
 };
 
-// Expand territory around all of a player's cities
-export const expandTerritory = (player, g) => {
-  for (const city of player.cities) {
-    const cityHex = g.hexes[city.hexId];
-    for (const [nc, nr] of getNeighbors(cityHex.col, cityHex.row)) {
-      const neighbor = hexAt(g.hexes, nc, nr);
-      if (neighbor && !neighbor.ownerPlayerId && neighbor.terrainType !== "water") {
-        neighbor.ownerPlayerId = player.id;
-      }
+// Legacy — territory now managed via city borders
+export const expandTerritory = () => {};
+
+// Initialize city borders (1-hex radius) and auto-assign tiles
+export const initCityBorders = (city, player, hexes) => {
+  const cityHex = hexes[city.hexId];
+  city.borderHexIds = [city.hexId];
+  cityHex.cityBorderId = city.id;
+  cityHex.ownerPlayerId = player.id;
+
+  for (const [nc, nr] of getNeighbors(cityHex.col, cityHex.row)) {
+    const nh = hexAt(hexes, nc, nr);
+    if (!nh) continue;
+    if (nh.terrainType === "water" && !nh.isCoastal) continue; // skip deep water
+    if (nh.cityBorderId) continue; // already claimed by another city
+    nh.cityBorderId = city.id;
+    nh.ownerPlayerId = player.id;
+    city.borderHexIds.push(nh.id);
+  }
+
+  autoAssignTiles(city, hexes);
+};
+
+// Grow city border by 1 hex (highest yield adjacent unowned hex)
+export const growCityBorder = (city, player, hexes) => {
+  let bestHex = null, bestTotal = -1;
+
+  for (const borderHexId of city.borderHexIds) {
+    const bh = hexes[borderHexId];
+    for (const [nc, nr] of getNeighbors(bh.col, bh.row)) {
+      const nh = hexAt(hexes, nc, nr);
+      if (!nh || nh.cityBorderId) continue;
+      if (nh.terrainType === "mountain") continue;
+      if (nh.terrainType === "water" && !nh.isCoastal) continue;
+
+      const y = getHexYields(nh);
+      const total = y.food + y.production + y.gold;
+      if (total > bestTotal) { bestTotal = total; bestHex = nh; }
     }
+  }
+
+  if (bestHex) {
+    bestHex.cityBorderId = city.id;
+    bestHex.ownerPlayerId = player.id;
+    city.borderHexIds.push(bestHex.id);
+    autoAssignTiles(city, hexes);
+    // Log message handled by caller (processCityTurn has access to g)
   }
 };
 

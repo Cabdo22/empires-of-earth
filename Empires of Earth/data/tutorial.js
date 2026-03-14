@@ -64,7 +64,7 @@ export const TUTORIAL_TIPS = [
     trigger: (gs) => gs && gs.turnNumber === 3,
     icon: "🏆",
     title: "Victory Conditions",
-    body: "There are three ways to win: Domination (capture all enemy cities), Science (research Quantum Computing + Fusion Power), or Territorial (control 60% of land). Plan your strategy accordingly!",
+    body: "There are two ways to win: Domination (capture all enemy cities) or Science (research Quantum Computing, Fusion Power, and Space Program). Plan your strategy accordingly!",
     position: "center",
   },
 ];

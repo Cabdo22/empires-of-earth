@@ -1,5 +1,5 @@
 // ============================================================
-// ECONOMY ENGINE — yields, tech availability, unit/district production
+// ECONOMY ENGINE — tile-based yields, tech availability, unit/district production
 // ============================================================
 
 import { TERRAIN_INFO, RESOURCE_INFO } from '../data/terrain.js';
@@ -8,15 +8,84 @@ import { UNIT_DEFS, MILITARY_REQ_UNITS, UPGRADE_PATHS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
 import { hexAt, getNeighbors } from '../data/constants.js';
 
-// Calculate per-city yields
+// ---- Tile yield helpers ----
+
+// Get yields for a single hex based on terrain + resource
+export const getHexYields = (hex) => {
+  if (!hex) return { food: 0, production: 0, gold: 0 };
+  const terrain = TERRAIN_INFO[hex.terrainType];
+  if (!terrain) return { food: 0, production: 0, gold: 0 };
+
+  // Mountains are unworkable
+  if (hex.terrainType === "mountain") return { food: 0, production: 0, gold: 0 };
+  // Deep water (non-coastal) is unworkable
+  if (hex.terrainType === "water" && !hex.isCoastal) return { food: 0, production: 0, gold: 0 };
+
+  let food = terrain.food || 0;
+  let production = terrain.prod || 0;
+  let gold = terrain.gold || 0;
+
+  // Resource bonuses
+  if (hex.resource && RESOURCE_INFO[hex.resource]) {
+    const bonus = RESOURCE_INFO[hex.resource].bonus;
+    food += (bonus.food || 0);
+    production += (bonus.prod || 0);
+    gold += (bonus.gold || 0);
+  }
+
+  return { food, production, gold };
+};
+
+// Whether a hex can be worked by a citizen
+export const isWorkableHex = (hex) => {
+  if (!hex) return false;
+  if (hex.terrainType === "mountain") return false;
+  if (hex.terrainType === "water" && !hex.isCoastal) return false;
+  return true;
+};
+
+// Auto-assign citizens to the highest-yield tiles in city borders
+export const autoAssignTiles = (city, hexes) => {
+  const workable = (city.borderHexIds || [])
+    .filter(hid => hid !== city.hexId && isWorkableHex(hexes[hid]))
+    .map(hid => {
+      const y = getHexYields(hexes[hid]);
+      return { hid, total: y.food + y.production + y.gold };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  // Pop N = city center (always worked) + N adjacent tiles
+  const slots = city.population || 1;
+  city.workedTileIds = workable.slice(0, slots).map(w => w.hid);
+};
+
+// ---- City yield calculation (tile-based) ----
+
 export const calcCityYields = (city, player, hexes) => {
   const cityHex = hexes[city.hexId];
-  let food = 5, prod = 5, science = 5, gold = 2;
 
-  // Population contributes to yields
-  const pop = city.population || 1;
-  prod += Math.floor(pop / 2);
-  gold += Math.floor((pop + 1) / 2);
+  // Start with city center tile yields
+  const centerY = getHexYields(cityHex);
+  let food = centerY.food;
+  let prod = centerY.production;
+  let gold = centerY.gold;
+  let science = 1; // base 1 science per city
+
+  // Add worked tile yields
+  for (const tileId of (city.workedTileIds || [])) {
+    const tileY = getHexYields(hexes[tileId]);
+    food += tileY.food;
+    prod += tileY.production;
+    gold += tileY.gold;
+  }
+
+  // Coastal adjacency bonus: +1 food if city hex is adjacent to water
+  const neighbors = getNeighbors(cityHex.col, cityHex.row);
+  const adjacentWater = neighbors.some(([nc, nr]) => {
+    const nh = hexAt(hexes, nc, nr);
+    return nh?.terrainType === "water";
+  });
+  if (adjacentWater) food += 1;
 
   // Civilization bonuses
   if (player.civilization === "Rome") prod += 1;
@@ -24,13 +93,8 @@ export const calcCityYields = (city, player, hexes) => {
   if (player.civilization === "Egypt" && cityHex.terrainType === "grassland") food += 1;
   if (player.civilization === "America") gold += 1;
 
-  // England: +1 gold from adjacent water tiles
-  if (player.civilization === "England") {
-    for (const [nc, nr] of getNeighbors(cityHex.col, cityHex.row)) {
-      const nh = hexAt(hexes, nc, nr);
-      if (nh?.terrainType === "water") { gold += 1; break; }
-    }
-  }
+  // England: +1 gold from adjacent water
+  if (player.civilization === "England" && adjacentWater) gold += 1;
 
   // Tech bonuses
   if (player.researchedTechs.includes("agriculture") && cityHex.terrainType === "grassland") food += 2;
@@ -38,7 +102,7 @@ export const calcCityYields = (city, player, hexes) => {
   if (player.researchedTechs.includes("engineering")) prod += 2;
   if (player.researchedTechs.includes("guilds")) gold += 3;
   if (player.researchedTechs.includes("pottery")) gold += 1;
-  if (player.researchedTechs.includes("currency")) gold += Math.floor(pop / 2);
+  if (player.researchedTechs.includes("currency")) gold += Math.floor((city.population || 1) / 2);
   if (player.researchedTechs.includes("telecommunications")) science += 3;
   if (player.researchedTechs.includes("fusion_power")) science += 5;
   if (player.researchedTechs.includes("space_program")) science += 4;
@@ -63,17 +127,6 @@ export const calcCityYields = (city, player, hexes) => {
   if (player.civilization === "Germany" && city.districts.includes("workshop")) prod += 1;
   // Ottoman: +1 gold from captured cities
   if (player.civilization === "Ottoman" && city.captured) gold += 1;
-
-  // Neighboring resource bonuses
-  for (const [nc, nr] of getNeighbors(cityHex.col, cityHex.row)) {
-    const neighbor = hexAt(hexes, nc, nr);
-    if (neighbor?.resource && RESOURCE_INFO[neighbor.resource]) {
-      const bonus = RESOURCE_INFO[neighbor.resource].bonus;
-      food += (bonus.food || 0);
-      prod += (bonus.prod || 0);
-      gold += (bonus.gold || 0);
-    }
-  }
 
   return { food, production: prod, science, gold };
 };
