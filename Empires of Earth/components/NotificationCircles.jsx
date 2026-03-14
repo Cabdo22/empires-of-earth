@@ -1,7 +1,6 @@
 import React from "react";
 
 const CIRCLE_CFG = {
-  event: { emoji: "🎲", border: "#d0a040", bg: "rgba(30,18,6,.96)", glow: "rgba(200,160,40,.4)" },
   tech:  { emoji: "🔬", border: "#40a0d0", bg: "rgba(6,14,30,.96)", glow: "rgba(60,160,220,.4)" },
   city:  { emoji: "⚙",  border: "#60c060", bg: "rgba(10,20,10,.96)", glow: "rgba(60,180,60,.4)" },
 };

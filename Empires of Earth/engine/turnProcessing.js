@@ -219,7 +219,7 @@ export const rollRandomEvent = (g) => {
   if (gameRng(g) < 0.20) {
     const evt = RANDOM_EVENTS[Math.floor(gameRng(g) * RANDOM_EVENTS.length)];
     evt.effect(g, addLogMsg);
-    g.eventMsg = { name: evt.name, desc: evt.desc };
+    g.eventMsg = { id: evt.id, name: evt.name, desc: evt.desc };
     addLogMsg(`🎲 Event: ${evt.name} — ${evt.desc}`, g);
   } else {
     g.eventMsg = null;

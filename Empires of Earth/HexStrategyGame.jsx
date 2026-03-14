@@ -30,6 +30,7 @@ import { BottomInfo } from './components/BottomInfo.jsx';
 import { NotificationCircles } from './components/NotificationCircles.jsx';
 import { TutorialTips } from './components/TutorialTips.jsx';
 import { MinimapDisplay } from './components/MinimapDisplay.jsx';
+import { EventPopup } from './components/EventPopup.jsx';
 
 let uidCtr = 0;
 
@@ -60,6 +61,7 @@ export default function HexStrategyGame(){
   const[techCollapsed,setTechCollapsed]=useState(false);
   const[cityCollapsed,setCityCollapsed]=useState(false);
   const[turnPopups,setTurnPopups]=useState([]); // [{id,type,title,body,action}] turn-start popups
+  const[eventPopup,setEventPopup]=useState(null); // random event popup {id,name,desc}
   const turnPopupShownRef=useRef(null); // tracks which turn+player combo we've shown popups for
   const victoryPlayed=useRef(false);
   const prevCpId=useRef(null);
@@ -136,9 +138,6 @@ export default function HexStrategyGame(){
       for(const k of fogVisible){if(!s.has(k)){s.add(k);changed=true;}}
       if(!changed)return prev;return{...prev,explored:{...ex,[cpId]:[...s]}};});
   },[fogVisible,cpId]);
-
-  // Keyboard shortcuts
-  useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity });
 
   // addLog and checkVictory delegate to module-level pure functions
   const addLog=addLogMsg;
@@ -344,6 +343,9 @@ export default function HexStrategyGame(){
   // Keep advPhase as alias for compatibility
   const advPhase = endTurn;
 
+  // Keyboard shortcuts (must be after endTurn is defined)
+  useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity });
+
   // --- AI auto-play: when it's p2's turn in AI mode, execute AI after a short delay ---
   useEffect(() => {
     if (gameMode !== "ai" || !gs || gs.victoryStatus) return;
@@ -410,8 +412,8 @@ export default function HexStrategyGame(){
     const popups=[];let pid=0;
     const cp2=gs.players.find(p=>p.id===gs.currentPlayerId);
     if(!cp2)return;
-    // Event popup (from previous turn processing)
-    if(gs.eventMsg){popups.push({id:pid++,type:"event",title:`🎲 ${gs.eventMsg.name}`,body:gs.eventMsg.desc});}
+    // Event popup (shown as dedicated modal)
+    if(gs.eventMsg) setEventPopup(gs.eventMsg);
     // Idle research
     if(!cp2.currentResearch){popups.push({id:pid++,type:"tech",title:"🔬 Choose Research",body:"No technology is being researched. Open the tech tree to pick one!",action:"tech"});}
     // Idle city production
@@ -772,6 +774,9 @@ export default function HexStrategyGame(){
 
       {/* AI thinking overlay */}
       {aiThinking&&<div style={{position:"absolute",inset:0,zIndex:40,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(5,8,3,.6)",pointerEvents:"all"}}><div style={{background:"rgba(15,20,10,.95)",border:"2px solid rgba(100,140,50,.5)",borderRadius:12,padding:"24px 40px",textAlign:"center",boxShadow:"0 0 40px rgba(80,120,40,.2)"}}><div style={{fontSize:28,marginBottom:8,animation:"pulse 1.5s ease-in-out infinite"}}>🤖</div><div style={{color:"#c8d8a0",fontSize:16,fontWeight:600,letterSpacing:3}}>AI is thinking...</div><div style={{color:"#8a9a70",fontSize:12,marginTop:6}}>The enemy plots its next move</div></div></div>}
+
+      {/* Random event popup */}
+      <EventPopup event={eventPopup} onDismiss={() => setEventPopup(null)}/>
 
       {/* Turn-start popup queue */}
       <NotificationCircles turnPopups={turnPopups} setTurnPopups={setTurnPopups} setShowTech={setShowTech} setShowCity={setShowCity}/>
