@@ -155,7 +155,7 @@ export default function HexStrategyGame(){
       });
       if(interceptor){
         addLog(`✈ ${interceptor.unitType==="fighter"?"Fighter":"Unit"} intercepts nuke at (${tc},${tr})!`,g);
-        interceptor.hasAttacked=true;
+        interceptor.hasAttacked=true;interceptor.movementCurrent=0;
         const fl={};fl[`${tc},${tr}`]="combat";setFlashes(fl);
         SFX.combat();return g;
       }
@@ -220,6 +220,7 @@ export default function HexStrategyGame(){
         attUnit.hpCurrent = Math.max(0, attUnit.hpCurrent - preview.dDmg);
         defender.hpCurrent = Math.max(0, defender.hpCurrent - atkDmg);
         attUnit.hasAttacked = true;
+        attUnit.movementCurrent = 0;
 
         let msg = `${attDef.name}→${barbUnit ? "Barb " : ""}${defDef.name}: ${atkDmg}dmg${attDef.ability === "rapid_shot" ? " (x1.5)" : ""}`;
         if (preview.dDmg > 0) msg += ` took ${preview.dDmg}`;
@@ -265,7 +266,7 @@ export default function HexStrategyGame(){
         if (attDef.ability === "city_siege") cityDmg += 2; // Great Bombard bonus vs cities
         defCity.hp = (defCity.hp || 20) - cityDmg;
         attUnit.hasAttacked = true;
-        if (attDef.range === 0) attUnit.movementCurrent = 0;
+        attUnit.movementCurrent = 0;
 
         let msg = `${attDef.name}→${defCity.name} (${Math.max(0, defCity.hp)}HP)`;
         if (defCity.hp <= 0) {
@@ -284,7 +285,7 @@ export default function HexStrategyGame(){
         const rawPv=calcCombatPreview(attUnit,attDef,defender,UNIT_DEFS[defender.unitType],defHex?.terrainType,attPlayer,defUnit?defPlayer:{researchedTechs:[],civilization:"Barbarian"},!!defCity);
         const atkDmgShow=attDef.ability==="rapid_shot"?Math.ceil(rawPv.aDmg*1.5):rawPv.aDmg;
         anims.push({id:now,x:defPos.x,y:defPos.y,dmg:atkDmgShow,color:"#ff4040",t:now});
-        if(preview.dDmg>0){const attPos=hexCenter(attUnit.hexCol,attUnit.hexRow);anims.push({id:now+1,x:attPos.x,y:attPos.y,dmg:preview.dDmg,color:"#ff8040",t:now});}
+        if(rawPv.dDmg>0){const attPos=hexCenter(attUnit.hexCol,attUnit.hexRow);anims.push({id:now+1,x:attPos.x,y:attPos.y,dmg:rawPv.dDmg,color:"#ff8040",t:now});}
       }else if(defCity){
         let cd2=attDef.strength*2;if(attDef.ability==="city_siege")cd2+=2;
         anims.push({id:now,x:defPos.x,y:defPos.y,dmg:cd2,color:"#ff4040",t:now});
