@@ -38,7 +38,12 @@ export const processCityTurn = (city, player, g, sfxQ) => {
     city.productionProgress += yields.production;
     const isUnit = city.currentProduction.type === "unit";
     const def = isUnit ? UNIT_DEFS[city.currentProduction.itemId] : DISTRICT_DEFS[city.currentProduction.itemId];
-    const effCost = def ? (isUnit && player.civilization === "Germany" ? Math.max(1, def.cost - 3) : def.cost) : 0;
+    let effCost = def ? def.cost : 0;
+    if (def && isUnit) {
+      if (player.civilization === "Germany") effCost -= 3;
+      if (player.researchedTechs.includes("conscription")) effCost -= 2;
+      effCost = Math.max(1, effCost);
+    }
     if (def && city.productionProgress >= effCost) {
       if (isUnit) {
         const cityHex = g.hexes[city.hexId];
@@ -72,7 +77,9 @@ export const processCityTurn = (city, player, g, sfxQ) => {
     city.foodAccumulated -= growthThreshold;
     addLogMsg(`${city.name} grew to pop ${city.population}!`, g);
   }
-  if (city.hp < (city.hpMax || 20)) city.hp = Math.min(city.hpMax || 20, city.hp + 2);
+  const baseHpMax = city.hpMax || 20;
+  const hpMax = player.researchedTechs.includes("stone_working") ? Math.max(baseHpMax, 25) : baseHpMax;
+  if (city.hp < hpMax) city.hp = Math.min(hpMax, city.hp + 2);
 };
 
 // Expand territory around all of a player's cities
@@ -116,6 +123,7 @@ export const refreshUnits = (player, g) => {
     }
     let mv = def?.move || 2;
     if (player.civilization === "England" && def?.domain === "sea") mv += 1;
+    if (player.researchedTechs.includes("logistics") && (def?.domain === "land" || def?.domain === "amphibious")) mv += 1;
     unit.movementCurrent = mv;
     unit.hasAttacked = false;
     unit.healed = false;

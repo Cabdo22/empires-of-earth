@@ -13,7 +13,7 @@ export const checkVictoryState = (g) => {
 
   // Science: research both endgame techs
   for (const p of g.players) {
-    if (p.researchedTechs.includes("quantum_computing") && p.researchedTechs.includes("fusion_power")) {
+    if (p.researchedTechs.includes("quantum_computing") && p.researchedTechs.includes("fusion_power") && p.researchedTechs.includes("space_program")) {
       g.victoryStatus = { winner: p.id, type: "Science" };
       return;
     }

@@ -7,7 +7,7 @@ export function TechTreePanel({ cp, techPosRef, techCollapsed, setTechCollapsed,
   const posStyle = tPos.x != null ? { left: tPos.x, top: tPos.y } : { top: tPos.y, left: "50%", transform: "translateX(-50%)" };
 
   return (
-    <div data-panel="tech" style={{ ...panelStyle, ...posStyle, width: Math.min(720, window.innerWidth - 40), maxHeight: techCollapsed ? 40 : 320, overflowY: techCollapsed ? "hidden" : "auto", transition: "max-height .2s ease" }}>
+    <div data-panel="tech" style={{ ...panelStyle, ...posStyle, width: Math.min(820, window.innerWidth - 40), maxHeight: techCollapsed ? 40 : 400, overflowY: techCollapsed ? "hidden" : "auto", transition: "max-height .2s ease" }}>
       <div onMouseDown={e => onPanelDown(e, "tech")} style={{ display: "flex", justifyContent: "space-between", marginBottom: techCollapsed ? 0 : 8, cursor: "grab", userSelect: "none" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <button onClick={() => setTechCollapsed(!techCollapsed)} style={{ ...btnStyle(false), fontSize: 10, padding: "1px 5px" }}>{techCollapsed ? "▸" : "▾"}</button>

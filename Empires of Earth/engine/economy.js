@@ -37,7 +37,11 @@ export const calcCityYields = (city, player, hexes) => {
   if (player.researchedTechs.includes("mysticism")) science += 2;
   if (player.researchedTechs.includes("engineering")) prod += 2;
   if (player.researchedTechs.includes("guilds")) gold += 3;
+  if (player.researchedTechs.includes("pottery")) gold += 1;
+  if (player.researchedTechs.includes("currency")) gold += Math.floor(pop / 2);
+  if (player.researchedTechs.includes("telecommunications")) science += 3;
   if (player.researchedTechs.includes("fusion_power")) science += 5;
+  if (player.researchedTechs.includes("space_program")) science += 4;
 
   // District bonuses
   for (const districtId of city.districts) {

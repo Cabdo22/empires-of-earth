@@ -22,11 +22,11 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
         <button onClick={() => setShowCity(null)} style={{ ...btnStyle(false), fontSize: 10 }}>✕</button></div>
       {!cityCollapsed && <>
         <div style={{ fontSize: 9, marginBottom: 6, display: "flex", gap: 8 }}><span>Pop:{city.population}</span><span style={{ color: "#7db840" }}>🌾{y.food}</span><span style={{ color: "#b89040" }}>⚙{y.production}</span><span style={{ color: "#60a0d0" }}>🔬{y.science}</span><span style={{ color: "#d0c050" }}>💰{y.gold}</span></div>
-        <div style={{ fontSize: 8, color: "#6a7a50", marginBottom: 4 }}>Food:{city.foodAccumulated}/{city.population * 10} HP:{city.hp}/{city.hpMax || 20}</div>
+        <div style={{ fontSize: 8, color: "#6a7a50", marginBottom: 4 }}>Food:{city.foodAccumulated}/{city.population * 25} HP:{city.hp}/{city.hpMax || 20}</div>
         {city.districts.length > 0 && <div style={{ fontSize: 8, marginBottom: 6 }}><span style={{ color: "#6a7a50" }}>Districts: </span>{city.districts.map(d => <span key={d} style={{ color: "#a0b880", marginRight: 4 }}>{DISTRICT_DEFS[d]?.icon}{DISTRICT_DEFS[d]?.name}</span>)}</div>}
         {city.currentProduction ? <div style={{ fontSize: 9, padding: "4px 8px", background: "rgba(80,120,40,.3)", borderRadius: 4, marginBottom: 6 }}>
           Building: {city.currentProduction.type === "unit" ? UNIT_DEFS[city.currentProduction.itemId]?.name : DISTRICT_DEFS[city.currentProduction.itemId]?.name}
-          <span style={{ color: "#6a7a50" }}> ({city.productionProgress}/{(() => { const isU = city.currentProduction.type === "unit"; const c = isU ? UNIT_DEFS[city.currentProduction.itemId]?.cost : DISTRICT_DEFS[city.currentProduction.itemId]?.cost; return isU && cp.civilization === "Germany" ? Math.max(1, c - 1) : c; })()})</span>
+          <span style={{ color: "#6a7a50" }}> ({city.productionProgress}/{(() => { const isU = city.currentProduction.type === "unit"; let c = isU ? UNIT_DEFS[city.currentProduction.itemId]?.cost : DISTRICT_DEFS[city.currentProduction.itemId]?.cost; if (isU) { if (cp.civilization === "Germany") c -= 3; if (cp.researchedTechs.includes("conscription")) c -= 2; c = Math.max(1, c); } return c; })()})</span>
           <button onClick={() => cancelProduction(city.id)} style={{ ...btnStyle(false), fontSize: 7, marginLeft: 6, padding: "2px 4px" }}>✕</button>
         </div>
           : <div><div style={{ fontSize: 9, color: "#c8d8a0", marginBottom: 4 }}>Build:</div>

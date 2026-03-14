@@ -25,7 +25,11 @@ export const calcCombatPreview = (attUnit, attDef, defUnit, defDef, defTerrain, 
 
   // Terrain and city defense bonuses
   if (defTerrain && TERRAIN_INFO[defTerrain]) defStr += TERRAIN_INFO[defTerrain].defBonus;
-  if (inCity) defStr += CITY_DEF_BONUS;
+  if (inCity) {
+    defStr += CITY_DEF_BONUS;
+    // Masonry: +2 city defense
+    if (defPlayer.researchedTechs.includes("masonry")) defStr += 2;
+  }
 
   // Era advantage: +1 str for the more advanced player
   const attEra = getPlayerMaxEra(attPlayer);
@@ -36,6 +40,14 @@ export const calcCombatPreview = (attUnit, attDef, defUnit, defDef, defTerrain, 
   // Steelworking bonus for melee units
   if (attPlayer.researchedTechs.includes("steelworking") && attDef.range === 0) attStr += 1;
   if (defPlayer.researchedTechs.includes("steelworking") && defDef.range === 0) defStr += 1;
+
+  // Fortification bonus for ranged units
+  if (attPlayer.researchedTechs.includes("fortification") && attDef.range > 0) attStr += 1;
+  if (defPlayer.researchedTechs.includes("fortification") && defDef.range > 0) defStr += 1;
+
+  // Cybernetics bonus for all units
+  if (attPlayer.researchedTechs.includes("cybernetics")) attStr += 2;
+  if (defPlayer.researchedTechs.includes("cybernetics")) defStr += 2;
 
   // Aztec melee bonus
   if (attPlayer.civilization === "Aztec" && attDef.range === 0) attStr += 1;

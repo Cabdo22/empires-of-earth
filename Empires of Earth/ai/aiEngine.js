@@ -27,20 +27,21 @@ const aiPickResearch = (player, hexes, enemyPlayer) => {
   );
 
   const scored = available.map(tech => {
-    let score = 10 - tech.cost;
+    let score = Math.round(100 / tech.cost * 10); // prefer cheaper techs proportionally
     const isMilitary = tech.effects.some(e =>
-      /unlock.*warrior|unlock.*sword|unlock.*knight|unlock.*archer|unlock.*tank|unlock.*musket|unlock.*artillery|unlock.*catapult|strength/i.test(e)
+      /unlock.*warrior|unlock.*sword|unlock.*knight|unlock.*archer|unlock.*tank|unlock.*musket|unlock.*artillery|unlock.*catapult|strength|movement|unit cost/i.test(e)
     );
     if (isMilitary && enemyNearby) score += 8;
     if (isMilitary && !enemyNearby) score += 2;
 
-    const isEcon = tech.effects.some(e => /food|gold|prod/i.test(e));
+    const isEcon = tech.effects.some(e => /food|gold|prod|science/i.test(e));
     if (isEcon && maxEra <= 2) score += 5;
 
-    const isSciVictory = tech.id === "quantum_computing" || tech.id === "fusion_power";
+    const isSciVictory = tech.id === "quantum_computing" || tech.id === "fusion_power" || tech.id === "space_program";
     if (isSciVictory && maxEra >= 4) score += 10;
 
-    if (tech.effects.some(e => /settler|library/i.test(e))) score += 4;
+    if (tech.effects.some(e => /settler|library|market|bank/i.test(e))) score += 4;
+    if (tech.effects.some(e => /city defense|city.*HP/i.test(e))) score += 2;
 
     return { tech, score };
   });
@@ -79,7 +80,7 @@ const aiPickProduction = (city, player, hexes, enemyPlayer) => {
   }
 
   if (city.districts.length < 2 && availDistricts.length > 0) {
-    const distPriority = ["library", "farm", "workshop", "market", "military"];
+    const distPriority = ["library", "farm", "workshop", "market", "bank", "military"];
     for (const dId of distPriority) {
       if (availDistricts.some(d => d.id === dId)) return { type: "district", itemId: dId };
     }
