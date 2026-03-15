@@ -4,12 +4,8 @@ import { hexAt } from '../data/constants.js';
 export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, minimapRenderRef, zoomRef, panRef, sched }) {
   const minimapRef = useRef(null);
   const mmDragRef = useRef(false);
-  const minimapScaleX = MINIMAP_W / wW;
-  const minimapScaleY = MINIMAP_H / wH;
-  const mmHexR = Math.max(2, Math.min(5, MINIMAP_W / (MINIMAP_W / 160 * (wW / (1.5 * 30 + 30 * 2 + 100)) * 2.2)));
-
-  // Compute mmHexR from COLS if available, otherwise estimate
-  const COLS_EST = Math.round((wW - 100) / (1.5 * 30)); // estimate COLS from wW
+  // Store dynamic bounds so minimapNav can use them
+  const dynBoundsRef = useRef({ minX: 0, minY: 0, scaleX: MINIMAP_W / wW, scaleY: MINIMAP_H / wH });
 
   const drawMiniHex = (ctx, cx2, cy2, r) => {
     ctx.beginPath();
@@ -26,11 +22,46 @@ export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH
     const ctx = minimapRef.current.getContext("2d");
     const MTC = { grassland: "#5a9030", forest: "#1e6a38", mountain: "#6a6a5a", water: "#2a5a8a" };
     ctx.fillStyle = "#0a0e06"; ctx.fillRect(0, 0, MINIMAP_W, MINIMAP_H);
-    const r = Math.max(2, Math.min(5, MINIMAP_W / (COLS_EST * 2.2)));
+
+    // Compute bounding box of explored/visible hexes for dynamic zoom
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let hasAny = false;
     for (const h of hexes) {
-      const cx2 = h.x * minimapScaleX, cy2 = h.y * minimapScaleY;
-      const vis = fogVisible.has(`${h.col},${h.row}`), expl = fogExplored.has(`${h.col},${h.row}`);
+      const uk = `${h.col},${h.row}`;
+      if (fogVisible.has(uk) || fogExplored.has(uk)) {
+        if (h.x < minX) minX = h.x;
+        if (h.x > maxX) maxX = h.x;
+        if (h.y < minY) minY = h.y;
+        if (h.y > maxY) maxY = h.y;
+        hasAny = true;
+      }
+    }
+
+    // Fallback to full world if nothing explored
+    if (!hasAny) { minX = 0; maxX = wW; minY = 0; maxY = wH; }
+
+    // Add padding and clamp to world bounds
+    const pad = 80;
+    minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+    maxX = Math.min(wW, maxX + pad); maxY = Math.min(wH, maxY + pad);
+    const rangeW = maxX - minX, rangeH = maxY - minY;
+    const dynScaleX = MINIMAP_W / rangeW, dynScaleY = MINIMAP_H / rangeH;
+
+    // Store for minimapNav
+    dynBoundsRef.current = { minX, minY, scaleX: dynScaleX, scaleY: dynScaleY };
+
+    // Compute hex radius to fill gaps — scale relative to dynamic zoom
+    const COLS_EST = Math.round((wW - 100) / (1.5 * 30));
+    const baseR = MINIMAP_W / (COLS_EST * 1.6);
+    const zoomFactor = (wW / rangeW + wH / rangeH) / 2;
+    const r = Math.max(3, Math.min(10, baseR * zoomFactor));
+
+    // Draw terrain hexes
+    for (const h of hexes) {
+      const uk = `${h.col},${h.row}`;
+      const vis = fogVisible.has(uk), expl = fogExplored.has(uk);
       if (!vis && !expl) continue;
+      const cx2 = (h.x - minX) * dynScaleX, cy2 = (h.y - minY) * dynScaleY;
       ctx.globalAlpha = vis ? 1 : 0.35; ctx.fillStyle = MTC[h.terrainType] || "#444";
       drawMiniHex(ctx, cx2, cy2, r); ctx.fill();
       if (h.ownerPlayerId) {
@@ -38,43 +69,50 @@ export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH
         if (op2) { ctx.globalAlpha = vis ? 0.3 : 0.15; ctx.fillStyle = op2.color; drawMiniHex(ctx, cx2, cy2, r); ctx.fill(); }
       }
     }
+
+    // Draw cities
     for (const p of players) {
       ctx.fillStyle = p.color; ctx.globalAlpha = 1;
       for (const c of p.cities) {
         const ch = hexes[c.hexId]; if (!ch) continue;
         const vis2 = fogVisible.has(`${ch.col},${ch.row}`) || fogExplored.has(`${ch.col},${ch.row}`); if (!vis2) continue;
-        drawMiniHex(ctx, ch.x * minimapScaleX, ch.y * minimapScaleY, r + 1); ctx.fill();
+        drawMiniHex(ctx, (ch.x - minX) * dynScaleX, (ch.y - minY) * dynScaleY, r + 1); ctx.fill();
         ctx.strokeStyle = "#fff"; ctx.lineWidth = 0.5; ctx.stroke();
       }
     }
+
+    // Draw units
     for (const p of players) {
       ctx.fillStyle = p.colorLight || p.color; ctx.globalAlpha = 0.9;
       for (const u of p.units) {
         const vis2 = fogVisible.has(`${u.hexCol},${u.hexRow}`); if (!vis2) continue;
         const uh = hexAt(hexes, u.hexCol, u.hexRow); if (!uh) continue;
-        ctx.beginPath(); ctx.arc(uh.x * minimapScaleX, uh.y * minimapScaleY, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc((uh.x - minX) * dynScaleX, (uh.y - minY) * dynScaleY, Math.max(1.5, r * 0.35), 0, Math.PI * 2); ctx.fill();
       }
     }
+
+    // Draw viewport rectangle
     ctx.globalAlpha = 1;
     const z = zoomRef.current, pan = panRef.current;
     const vpCx = window.innerWidth / 2, vpCy = window.innerHeight / 2;
     const wl = ((wW * z) / 2 - pan.x - vpCx) / z, wt = ((wH * z) / 2 - pan.y - vpCy) / z;
     const vpW = window.innerWidth / z, vpH = window.innerHeight / z;
     ctx.strokeStyle = "rgba(255,220,100,.7)"; ctx.lineWidth = 1.5;
-    ctx.strokeRect(wl * minimapScaleX, wt * minimapScaleY, vpW * minimapScaleX, vpH * minimapScaleY);
-  }, [hexes, fogVisible, fogExplored, players, gs, minimapScaleX, minimapScaleY, wW, wH, COLS_EST, MINIMAP_W, MINIMAP_H, zoomRef, panRef]);
+    ctx.strokeRect((wl - minX) * dynScaleX, (wt - minY) * dynScaleY, vpW * dynScaleX, vpH * dynScaleY);
+  }, [hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, zoomRef, panRef]);
 
   useEffect(() => { minimapRenderRef.current = renderMinimap; renderMinimap(); }, [renderMinimap, minimapRenderRef]);
 
   const minimapNav = useCallback(e => {
     if (!minimapRef.current) return;
-    const r = minimapRef.current.getBoundingClientRect();
-    const mx = e.clientX - r.left, my = e.clientY - r.top;
-    const worldX = mx / minimapScaleX, worldY = my / minimapScaleY;
+    const rect = minimapRef.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const { minX, minY, scaleX, scaleY } = dynBoundsRef.current;
+    const worldX = mx / scaleX + minX, worldY = my / scaleY + minY;
     const z = zoomRef.current;
     panRef.current = { x: (wW * z) / 2 - worldX * z, y: (wH * z) / 2 - worldY * z };
     sched();
-  }, [minimapScaleX, minimapScaleY, wW, wH, sched, zoomRef, panRef]);
+  }, [wW, wH, sched, zoomRef, panRef]);
 
   const onMinimapDown = useCallback(e => { mmDragRef.current = true; minimapNav(e); }, [minimapNav]);
   const onMinimapMove = useCallback(e => { if (mmDragRef.current) minimapNav(e); }, [minimapNav]);
