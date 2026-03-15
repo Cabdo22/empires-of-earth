@@ -8,9 +8,6 @@ export const SQRT3 = Math.sqrt(3);
 // Map dimensions — set dynamically by setMapConfig before game starts
 export let COLS = 10;
 export let ROWS = 10;
-export let P1_START = { col: 2, row: 5 };
-export let P2_START = { col: 8, row: 3 };
-
 export const MAP_SIZES = {
   small:  { label: "Small",  desc: "~250 hexes · Quick game",  cols: 16, rows: 16 },
   medium: { label: "Medium", desc: "~500 hexes · Standard game", cols: 22, rows: 22 },
@@ -21,8 +18,6 @@ export const setMapConfig = (sizeKey) => {
   const cfg = MAP_SIZES[sizeKey] || MAP_SIZES.small;
   COLS = cfg.cols;
   ROWS = cfg.rows;
-  P1_START = { col: Math.floor(COLS * 0.2), row: Math.floor(ROWS * 0.5) };
-  P2_START = { col: Math.floor(COLS * 0.8), row: Math.floor(ROWS * 0.3) };
 };
 
 // Pre-compute the 6 vertices of a flat-top hexagon

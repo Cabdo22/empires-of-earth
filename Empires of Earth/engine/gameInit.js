@@ -2,7 +2,7 @@
 // GAME INITIALIZATION — create initial game state
 // ============================================================
 
-import { COLS, ROWS, P1_START, P2_START, hexCenter, hexAt } from '../data/constants.js';
+import { COLS, ROWS, hexCenter, hexAt } from '../data/constants.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { generateMap } from './mapGen.js';
@@ -26,7 +26,8 @@ export const mkUnit = (pid, type, col, row) => {
 
 export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
   uidCtr = 0;
-  const gridData = generateMap();
+  const seed = Date.now() % 2147483647;
+  const { grid: gridData, p1Start, p2Start } = generateMap(seed);
   const hexes = [];
   let id = 0;
 
@@ -47,13 +48,13 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
     }
   }
 
-  const p1H = hexAt(hexes, P1_START.col, P1_START.row);
-  const p2H = hexAt(hexes, P2_START.col, P2_START.row);
+  const p1H = hexAt(hexes, p1Start.col, p1Start.row);
+  const p2H = hexAt(hexes, p2Start.col, p2Start.row);
   const c1 = CIV_DEFS[civ1], c2 = CIV_DEFS[civ2];
 
   // Find adjacent hexes for scouts (no stacking on start hex)
-  const p1Scout = findOpenNeighbor(P1_START.col, P1_START.row, hexes, [], []);
-  const p2Scout = findOpenNeighbor(P2_START.col, P2_START.row, hexes, [], []);
+  const p1Scout = findOpenNeighbor(p1Start.col, p1Start.row, hexes, [], []);
+  const p2Scout = findOpenNeighbor(p2Start.col, p2Start.row, hexes, [], []);
 
   const players = [
     {
@@ -65,7 +66,7 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
         districts: [], currentProduction: null, productionProgress: 0, foodAccumulated: 0, hp: 20, hpMax: 20,
         workedTileIds: [], borderHexIds: [],
       }],
-      units: [mkUnit("p1", "warrior", P1_START.col, P1_START.row), mkUnit("p1", "scout", p1Scout?.col ?? P1_START.col, p1Scout?.row ?? P1_START.row)],
+      units: [mkUnit("p1", "warrior", p1Start.col, p1Start.row), mkUnit("p1", "scout", p1Scout?.col ?? p1Start.col, p1Scout?.row ?? p1Start.row)],
     },
     {
       id: "p2", civilization: civ2, name: c2.name,
@@ -76,7 +77,7 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
         districts: [], currentProduction: null, productionProgress: 0, foodAccumulated: 0, hp: 20, hpMax: 20,
         workedTileIds: [], borderHexIds: [],
       }],
-      units: [mkUnit("p2", "warrior", P2_START.col, P2_START.row), mkUnit("p2", "scout", p2Scout?.col ?? P2_START.col, p2Scout?.row ?? P2_START.row)],
+      units: [mkUnit("p2", "warrior", p2Start.col, p2Start.row), mkUnit("p2", "scout", p2Scout?.col ?? p2Start.col, p2Scout?.row ?? p2Start.row)],
     },
   ];
 
@@ -104,7 +105,7 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
     log: [`Game started. Turn 1 — ${c1.name}`],
     barbarians: [],
     eventMsg: null,
-    rngSeed: 42,
+    rngSeed: seed,
     rngCounter: 0,
     explored,
   };
