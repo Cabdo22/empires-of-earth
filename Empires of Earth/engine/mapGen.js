@@ -66,9 +66,11 @@ const placeResources = (grid, rng, protectedHexes) => {
     const roll = rng();
     if (grid[c][r].terrain === "mountain") {
       grid[c][r].resource = "uranium";
-    } else if (roll < 0.4) {
+    } else if (roll < 0.03) {
+      grid[c][r].resource = "uranium";
+    } else if (roll < 0.40) {
       grid[c][r].resource = grid[c][r].terrain === "grassland" ? "wheat" : "iron";
-    } else if (roll < 0.7) {
+    } else if (roll < 0.70) {
       grid[c][r].resource = "iron";
     } else {
       grid[c][r].resource = "oil";
@@ -76,10 +78,13 @@ const placeResources = (grid, rng, protectedHexes) => {
   }
 
   for (const [c, r] of water) {
-    if (grid[c][r].isCoastal && rng() < 0.12) {
-      grid[c][r].resource = "fish";
-    } else if (rng() < 0.15) {
-      grid[c][r].resource = "oil";
+    if (grid[c][r].isCoastal) {
+      const roll = rng();
+      if (roll < 0.35) {
+        grid[c][r].resource = "fish";
+      } else if (roll < 0.50) {
+        grid[c][r].resource = "oil";
+      }
     }
   }
 };

@@ -12,18 +12,19 @@ import { hexAt, getNeighbors } from '../data/constants.js';
 
 // Get yields for a single hex based on terrain + resource
 export const getHexYields = (hex) => {
-  if (!hex) return { food: 0, production: 0, gold: 0 };
+  if (!hex) return { food: 0, production: 0, gold: 0, science: 0 };
   const terrain = TERRAIN_INFO[hex.terrainType];
-  if (!terrain) return { food: 0, production: 0, gold: 0 };
+  if (!terrain) return { food: 0, production: 0, gold: 0, science: 0 };
 
   // Mountains are unworkable
-  if (hex.terrainType === "mountain") return { food: 0, production: 0, gold: 0 };
+  if (hex.terrainType === "mountain") return { food: 0, production: 0, gold: 0, science: 0 };
   // Deep water (non-coastal) is unworkable
-  if (hex.terrainType === "water" && !hex.isCoastal) return { food: 0, production: 0, gold: 0 };
+  if (hex.terrainType === "water" && !hex.isCoastal) return { food: 0, production: 0, gold: 0, science: 0 };
 
   let food = terrain.food || 0;
   let production = terrain.prod || 0;
   let gold = terrain.gold || 0;
+  let science = terrain.science || 0;
 
   // Resource bonuses
   if (hex.resource && RESOURCE_INFO[hex.resource]) {
@@ -31,9 +32,10 @@ export const getHexYields = (hex) => {
     food += (bonus.food || 0);
     production += (bonus.prod || 0);
     gold += (bonus.gold || 0);
+    science += (bonus.science || 0);
   }
 
-  return { food, production, gold };
+  return { food, production, gold, science };
 };
 
 // Whether a hex can be worked by a citizen
@@ -69,7 +71,7 @@ export const calcCityYields = (city, player, hexes) => {
   let food = centerY.food;
   let prod = centerY.production;
   let gold = centerY.gold;
-  let science = 1; // base 1 science per city
+  let science = 1 + centerY.science; // base 1 science per city + tile science
 
   // Base city infrastructure output
   prod += 2;
@@ -85,6 +87,7 @@ export const calcCityYields = (city, player, hexes) => {
     food += tileY.food;
     prod += tileY.production;
     gold += tileY.gold;
+    science += tileY.science;
   }
 
   // Coastal adjacency bonus: +1 food if city hex is adjacent to water
@@ -162,8 +165,26 @@ export const getAvailableTechs = (player) =>
     return met >= needed;
   });
 
+// Check if a city has access to a strategic resource
+export const cityHasResource = (city, hexes, resourceType) => {
+  if (resourceType === "uranium") {
+    // Uranium: just needs to be inside city borders (mountains are unworkable but count as territory)
+    for (const hid of (city.borderHexIds || [])) {
+      if (hexes[hid]?.resource === "uranium") return true;
+    }
+    return false;
+  }
+  // Iron/Oil: must be city center or actively worked tile
+  const centerHex = hexes[city.hexId];
+  if (centerHex?.resource === resourceType) return true;
+  for (const tileId of (city.workedTileIds || [])) {
+    if (hexes[tileId]?.resource === resourceType) return true;
+  }
+  return false;
+};
+
 // Units available for production in a city
-export const getAvailableUnits = (player, city) => {
+export const getAvailableUnits = (player, city, hexes) => {
   const hasNuclearDistrict = city ? city.districts.includes("nuclear") : false;
   const hasMilitaryDistrict = city ? city.districts.includes("military") : false;
 
@@ -175,6 +196,7 @@ export const getAvailableUnits = (player, city) => {
   return Object.entries(UNIT_DEFS)
     .filter(([id, u]) => {
       if (u.techReq && !player.researchedTechs.includes(u.techReq)) return false;
+      if (u.resourceReq && hexes && !cityHasResource(city, hexes, u.resourceReq)) return false;
       if (id === "nuke") return hasNuclearDistrict && player.gold >= 50;
       if (MILITARY_REQ_UNITS.has(id) && !hasMilitaryDistrict) return false;
       if (replacedByUnique.has(id)) return false;

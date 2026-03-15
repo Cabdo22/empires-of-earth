@@ -9,7 +9,7 @@ import { btnStyle, panelStyle } from '../styles.js';
 export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityCollapsed, setShowCity, onPanelDown, setProd, cancelProduction }) {
   if (!city) return null;
   const y = calcCityYields(city, cp, hexes);
-  const avU = getAvailableUnits(cp, city);
+  const avU = getAvailableUnits(cp, city, hexes);
   const avD = getAvailableDistricts(cp, city);
   const cPos = cityPosRef.current;
   const cStyle = cPos.x != null ? { left: cPos.x, top: cPos.y } : { top: cPos.y, right: 14 };
@@ -17,7 +17,7 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
   // Food surplus and growth
   const foodConsumed = city.population * 2;
   const surplus = y.food - foodConsumed;
-  const growthThreshold = 10 + city.population * 5;
+  const growthThreshold = 5 + city.population * city.population * 2;
 
   // Worked tiles info
   const centerHex = hexes[city.hexId];
@@ -43,12 +43,12 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
         <div style={{ fontSize: 10, color: "#c8d8a0", fontWeight: 600, marginBottom: 2 }}>Tiles ({(city.workedTileIds || []).length + 1} worked)</div>
         <div style={{ fontSize: 9, padding: "3px 5px", background: "rgba(80,120,40,.15)", borderRadius: 3, marginBottom: 1 }}>
           <span style={{ color: "#b0c890" }}>City Center ({TERRAIN_INFO[centerHex?.terrainType]?.label || "?"})</span>
-          <span style={{ float: "right" }}>🌾{centerY.food} ⚙{centerY.production} 💰{centerY.gold}</span>
+          <span style={{ float: "right" }}>🌾{centerY.food} ⚙{centerY.production}{centerY.science > 0 && <> 🔬{centerY.science}</>} 💰{centerY.gold}</span>
         </div>
         {workedTiles.map(({ hex: h, yields: ty }) => (
           <div key={h.id} style={{ fontSize: 9, padding: "3px 5px", background: "rgba(80,120,40,.1)", borderRadius: 3, marginBottom: 1 }}>
             <span style={{ color: "#9aaa7a" }}>{TERRAIN_INFO[h.terrainType]?.label}{h.resource ? ` ${RESOURCE_INFO[h.resource]?.icon}` : ''}</span>
-            <span style={{ float: "right" }}>🌾{ty.food} ⚙{ty.production} 💰{ty.gold}</span>
+            <span style={{ float: "right" }}>🌾{ty.food} ⚙{ty.production}{ty.science > 0 && <> 🔬{ty.science}</>} 💰{ty.gold}</span>
           </div>
         ))}
         <div style={{ marginBottom: 4 }} />

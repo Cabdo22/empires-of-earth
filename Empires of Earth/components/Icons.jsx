@@ -34,6 +34,13 @@ export const ResourceIcon = ({ type, x, y, s }) => {
       {[0, 120, 240].map(a => <line key={a} x1={0} y1={0} x2={sz * .3 * Math.cos(a * Math.PI / 180)} y2={sz * .3 * Math.sin(a * Math.PI / 180)} stroke="#40ff40" strokeWidth=".8" opacity=".6" />)}
     </g>
   );
+  if (type === "fish") return (
+    <g transform={`translate(${x},${y})`}>
+      <ellipse cx={0} cy={0} rx={sz * .4} ry={sz * .22} fill="#4a90c8" stroke="#2a6898" strokeWidth=".8" />
+      <polygon points={`${sz * .35},0 ${sz * .55},${-sz * .18} ${sz * .55},${sz * .18}`} fill="#4a90c8" stroke="#2a6898" strokeWidth=".6" />
+      <circle cx={-sz * .15} cy={-sz * .05} r={sz * .06} fill="#1a3a5a" />
+    </g>
+  );
   return null;
 };
 
