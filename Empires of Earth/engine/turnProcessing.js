@@ -163,7 +163,7 @@ export const refreshUnits = (player, g) => {
   for (const unit of player.units) {
     const def = UNIT_DEFS[unit.unitType];
     // Field healing: units that didn't move or attack heal +2 HP
-    if (unit.movementCurrent > 0 && !unit.hasAttacked && !unit.healed) {
+    if (!unit.hasMoved && !unit.hasAttacked && !unit.healed) {
       const maxHp = def?.hp || 10;
       if (unit.hpCurrent < maxHp) {
         unit.hpCurrent = Math.min(maxHp, unit.hpCurrent + 2);
@@ -175,6 +175,7 @@ export const refreshUnits = (player, g) => {
     if (player.researchedTechs.includes("logistics") && (def?.domain === "land" || def?.domain === "amphibious")) mv += 1;
     unit.movementCurrent = mv;
     unit.hasAttacked = false;
+    unit.hasMoved = false;
     unit.healed = false;
   }
   healGarrison(player, g.hexes);

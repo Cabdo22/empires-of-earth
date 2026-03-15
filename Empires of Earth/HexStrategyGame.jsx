@@ -87,9 +87,10 @@ export default function HexStrategyGame(){
   const fogExplored=useMemo(()=>{if(!gs)return new Set();return new Set(gs.explored?.[cpId]||[]);},[gs,cpId]);
   const sud=useMemo(()=>{if(!selU||!gs)return null;const u=cp.units.find(u2=>u2.id===selU);if(!u)return null;return{...u,def:UNIT_DEFS[u.unitType]};},[selU,cp,gs]);
 
-  const reach=useMemo(()=>{
-    if(!sud||phase!=="MOVEMENT"||sud.movementCurrent<=0)return new Set();
-    return getReachableHexes(sud.hexCol,sud.hexRow,sud.movementCurrent,hexes,sud.def?.domain||"land",cpId,players,sud.def?.ability,barbarians);
+  const{reach,moveCostMap}=useMemo(()=>{
+    if(!sud||phase!=="MOVEMENT"||sud.movementCurrent<=0)return{reach:new Set(),moveCostMap:{}};
+    const{reachable,costMap}=getReachableHexes(sud.hexCol,sud.hexRow,sud.movementCurrent,hexes,sud.def?.domain||"land",cpId,players,sud.def?.ability,barbarians);
+    return{reach:reachable,moveCostMap:costMap};
   },[sud,hexes,phase,cpId,players,barbarians]);
 
   const atkRange=useMemo(()=>{
@@ -470,7 +471,8 @@ export default function HexStrategyGame(){
     });
   }, []);
 
-  const moveU = useCallback((unitId, targetCol, targetRow) => {
+  const moveU = useCallback((unitId, targetCol, targetRow, cost) => {
+    let remaining = 0;
     setGs(prev => {
       const g = JSON.parse(JSON.stringify(prev));
       const unit = g.players.find(p => p.id === g.currentPlayerId).units.find(u => u.id === unitId);
@@ -478,10 +480,12 @@ export default function HexStrategyGame(){
       if (isHexOccupied(targetCol, targetRow, g.players, g.barbarians, unit.id)) return prev;
       unit.hexCol = targetCol;
       unit.hexRow = targetRow;
-      unit.movementCurrent = 0;
+      unit.movementCurrent = Math.max(0, unit.movementCurrent - (cost || unit.movementCurrent));
+      unit.hasMoved = true;
+      remaining = unit.movementCurrent;
       return g;
     });
-    setSelU(null);
+    if (remaining <= 0) setSelU(null);
     SFX.move();
   }, []);
 
@@ -575,7 +579,7 @@ export default function HexStrategyGame(){
       const inMelee=sud&&sud.def?.range===0&&!sud.hasAttacked&&hexDist(sud.hexCol,sud.hexRow,hex.col,hex.row)<=1&&hasTgt;
       const inRng=sud&&sud.def?.range>0&&!sud.hasAttacked&&atkRange.has(uk)&&hasTgt;
       if(inMelee||inRng){doCombat(selU,hex.col,hex.row);return;}
-      if(inMv){moveU(selU,hex.col,hex.row);return;}
+      if(inMv){moveU(selU,hex.col,hex.row,moveCostMap[uk]);return;}
     }
     if(cE&&cE.player.id===cpId){
       // City hex with our units: first click selects unit, second click opens city panel
@@ -589,7 +593,7 @@ export default function HexStrategyGame(){
       if(myU.length>1){const ci=myU.findIndex(u=>u.id===selU);setSelU(myU[(ci+1)%myU.length].id);}
       else{const su=myU[0];if(su.unitType==="settler"){setSettlerM(su.id);return;}if(su.unitType==="nuke"){setNukeM(su.id);return;}setSelU(null);setSelH(hex.id);}
     }else{setSelU(null);setSelH(selH===hex.id?null:hex.id);}
-  },[findHexFromEvent,fogVisible,unitMap,cityMap,cpId,selU,nukeM,nukeR,settlerM,phase,selH,launchNuke,foundCity,doCombat,moveU]);
+  },[findHexFromEvent,fogVisible,unitMap,cityMap,cpId,selU,nukeM,nukeR,settlerM,phase,selH,reach,moveCostMap,sud,launchNuke,foundCity,doCombat,moveU]);
 
   const onHexCtx=useCallback(e=>{
     e.preventDefault();e.stopPropagation();if(isPanRef.current||phase!=="MOVEMENT")return;
@@ -602,10 +606,10 @@ export default function HexStrategyGame(){
     const inMelee=selU&&sud&&sud.def?.range===0&&!sud.hasAttacked&&hexDist(sud.hexCol,sud.hexRow,hex.col,hex.row)<=1&&!uSel2&&hasTgt;
     const inRng=selU&&sud&&sud.def?.range>0&&!sud.hasAttacked&&atkRange.has(uk)&&!uSel2&&hasTgt;
     if(selU&&(inMelee||inRng)){doCombat(selU,hex.col,hex.row);return;}
-    if(selU&&inMv){moveU(selU,hex.col,hex.row);return;}
+    if(selU&&inMv){moveU(selU,hex.col,hex.row,moveCostMap[uk]);return;}
     if(selU&&!uSel2){const blk=getMoveBlockReason(hex,sud,sud?.def,reach,atkRange,phase,cpId,players);
       if(blk){setMoveMsg(blk);setFlashes(prev=>({...prev,[uk]:"blocked"}));}}
-  },[findHexFromEvent,phase,unitMap,cityMap,cpId,selU,sud,reach,atkRange,doCombat,moveU,players]);
+  },[findHexFromEvent,phase,unitMap,cityMap,cpId,selU,sud,reach,atkRange,moveCostMap,doCombat,moveU,players]);
 
   const renderAll=useCallback(()=>hexes.map((hex,i)=>{
     const uk=hex.uk;

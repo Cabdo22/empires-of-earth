@@ -105,8 +105,8 @@ const aiFindCityLocation = (settler, player, hexes) => {
     player.cities.map(c => `${hexes[c.hexId].col},${hexes[c.hexId].row}`)
   );
 
-  const reachable = getReachableHexes(settler.hexCol, settler.hexRow, settler.movementCurrent, hexes, "land");
-  let bestHex = null, bestScore = -Infinity;
+  const { reachable, costMap } = getReachableHexes(settler.hexCol, settler.hexRow, settler.movementCurrent, hexes, "land");
+  let bestHex = null, bestScore = -Infinity, bestCost = 0;
 
   for (const key of reachable) {
     const [col, row] = key.split(",").map(Number);
@@ -129,10 +129,10 @@ const aiFindCityLocation = (settler, player, hexes) => {
       if (dist >= 3 && dist <= 5) score += 2;
     }
 
-    if (score > bestScore) { bestScore = score; bestHex = hex; }
+    if (score > bestScore) { bestScore = score; bestHex = hex; bestCost = costMap[key] || 0; }
   }
 
-  return bestHex;
+  return bestHex ? { hex: bestHex, cost: bestCost } : null;
 };
 
 // ---- Unit movement and combat ----
@@ -140,7 +140,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
   for (const unit of aiPlayer.units) {
     const def = UNIT_DEFS[unit.unitType];
     // Field healing: units that didn't move or attack last turn heal +2 HP
-    if (unit.movementCurrent > 0 && !unit.hasAttacked) {
+    if (!unit.hasMoved && !unit.hasAttacked) {
       const maxHp = def?.hp || 10;
       if (unit.hpCurrent < maxHp) {
         unit.hpCurrent = Math.min(maxHp, unit.hpCurrent + 2);
@@ -150,6 +150,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
     if (aiPlayer.civilization === "England" && def?.domain === "sea") mv += 1;
     unit.movementCurrent = mv;
     unit.hasAttacked = false;
+    unit.hasMoved = false;
   }
 
   const processedUnits = new Set();
@@ -160,8 +161,10 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
     if (unit.unitType !== "settler" || processedUnits.has(unit.id)) continue;
     processedUnits.add(unit.id);
 
-    const bestLoc = aiFindCityLocation(unit, aiPlayer, g.hexes);
-    if (bestLoc) {
+    const bestLocResult = aiFindCityLocation(unit, aiPlayer, g.hexes);
+    if (bestLocResult) {
+      const bestLoc = bestLocResult.hex;
+      const bestLocCost = bestLocResult.cost;
       const hex = hexAt(g.hexes, unit.hexCol, unit.hexRow);
       const standingGood = hex && hex.terrainType === "grassland" && !hex.cityId;
       const tooClose = aiPlayer.cities.some(c => {
@@ -194,7 +197,8 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
         occupiedHexes.delete(`${unit.hexCol},${unit.hexRow}`);
         unit.hexCol = bestLoc.col;
         unit.hexRow = bestLoc.row;
-        unit.movementCurrent = 0;
+        unit.movementCurrent = Math.max(0, unit.movementCurrent - (bestLocCost || unit.movementCurrent));
+        unit.hasMoved = true;
         occupiedHexes.add(`${bestLoc.col},${bestLoc.row}`);
       }
     }
@@ -382,7 +386,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
     // Movement phase
     if (unit.movementCurrent > 0 && aiPlayer.units.includes(unit)) {
       const domain = unitDef.domain || "land";
-      const reachable = getReachableHexes(unit.hexCol, unit.hexRow, unit.movementCurrent, g.hexes, domain, aiPlayer.id, g.players, unitDef.ability, g.barbarians);
+      const { reachable, costMap } = getReachableHexes(unit.hexCol, unit.hexRow, unit.movementCurrent, g.hexes, domain, aiPlayer.id, g.players, unitDef.ability, g.barbarians);
       if (reachable.size > 0) {
         let goalCol = null, goalRow = null, goalDist = Infinity;
 
@@ -407,7 +411,8 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
             occupiedHexes.delete(`${unit.hexCol},${unit.hexRow}`);
             unit.hexCol = mc;
             unit.hexRow = mr;
-            unit.movementCurrent = 0;
+            unit.movementCurrent = Math.max(0, unit.movementCurrent - (costMap[rk] || unit.movementCurrent));
+            unit.hasMoved = true;
             occupiedHexes.add(`${mc},${mr}`);
           }
         } else if (goalCol !== null) {
@@ -419,11 +424,13 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
             if (dist < bestMoveDist) { bestMoveDist = dist; bestMove = { col: mc, row: mr }; }
           }
           if (bestMove) {
+            const moveKey = `${bestMove.col},${bestMove.row}`;
             occupiedHexes.delete(`${unit.hexCol},${unit.hexRow}`);
             unit.hexCol = bestMove.col;
             unit.hexRow = bestMove.row;
-            unit.movementCurrent = 0;
-            occupiedHexes.add(`${bestMove.col},${bestMove.row}`);
+            unit.movementCurrent = Math.max(0, unit.movementCurrent - (costMap[moveKey] || unit.movementCurrent));
+            unit.hasMoved = true;
+            occupiedHexes.add(moveKey);
           }
         }
       }

@@ -128,6 +128,10 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
   // Remove friendly-occupied hexes from destinations (no stacking)
   for (const fk of friendlyOccupied) reachable.delete(fk);
 
+  // Build costMap for reachable hexes
+  const costMap = {};
+  for (const k of reachable) costMap[k] = costTo[k];
+
   // Air units can only land on friendly cities
   if (domain === "air" && playerId && allPlayers) {
     const myPlayer = allPlayers.find(p => p.id === playerId);
@@ -136,10 +140,13 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
       const h = hexes[c.hexId];
       myCityHexes.add(`${h.col},${h.row}`);
     });
-    return new Set([...reachable].filter(k => myCityHexes.has(k)));
+    const filtered = new Set([...reachable].filter(k => myCityHexes.has(k)));
+    const filteredCostMap = {};
+    for (const k of filtered) filteredCostMap[k] = costTo[k];
+    return { reachable: filtered, costMap: filteredCostMap };
   }
 
-  return reachable;
+  return { reachable, costMap };
 };
 
 // Check if a hex is occupied by any unit (player or barbarian)
