@@ -71,6 +71,14 @@ export const calcCityYields = (city, player, hexes) => {
   let gold = centerY.gold;
   let science = 1; // base 1 science per city
 
+  // Base city infrastructure output
+  prod += 2;
+  science += 3;
+
+  // Population scaling — citizens contribute labor and knowledge
+  prod += (city.population || 1);
+  science += Math.floor((city.population || 1) / 2);
+
   // Add worked tile yields
   for (const tileId of (city.workedTileIds || [])) {
     const tileY = getHexYields(hexes[tileId]);

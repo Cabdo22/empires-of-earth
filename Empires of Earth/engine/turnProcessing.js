@@ -267,7 +267,9 @@ export const processBarbarians = (g) => {
 // Roll for a random event
 export const rollRandomEvent = (g) => {
   if (gameRng(g) < 0.20) {
-    const evt = RANDOM_EVENTS[Math.floor(gameRng(g) * RANDOM_EVENTS.length)];
+    const available = RANDOM_EVENTS.filter(e => !e.condition || e.condition(g));
+    if (available.length === 0) { g.eventMsg = null; return; }
+    const evt = available[Math.floor(gameRng(g) * available.length)];
     evt.effect(g, addLogMsg);
     g.eventMsg = { id: evt.id, name: evt.name, desc: evt.desc };
     addLogMsg(`🎲 Event: ${evt.name} — ${evt.desc}`, g);
