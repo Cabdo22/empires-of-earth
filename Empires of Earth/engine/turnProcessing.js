@@ -75,7 +75,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
   const surplus = yields.food - foodConsumed;
   if (surplus > 0) city.foodAccumulated += surplus;
 
-  const growthThreshold = 10 + city.population * 5;
+  const growthThreshold = 5 + city.population * city.population * 2;
   if (city.foodAccumulated >= growthThreshold) {
     city.population++;
     city.foodAccumulated -= growthThreshold;
