@@ -8,16 +8,10 @@ import { UNIT_DEFS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
 import { ResourceIcon, UnitIcon } from './Icons.jsx';
 
-// Pre-compute hex edge vertices for border rendering (flat-top hex)
-const HEX_VERTICES = Array.from({ length: 6 }, (_, i) => {
-  const angle = (Math.PI / 180) * 60 * i;
-  return { x: HEX_SIZE * Math.cos(angle), y: HEX_SIZE * Math.sin(angle) };
-});
-
 const MemoHex = memo(function MemoHex({
   hex, vis, isHovered, isSelected, inMoveRange, inAttackRange, inNukeRange,
   units, unitCount, city, player, unitSelected, settlerMode, canAct, flash,
-  isFogged, isExplored, blockReason, borderEdges, borderColor
+  isFogged, isExplored, blockReason
 }) {
   const t = hex.terrainType;
 
@@ -97,12 +91,6 @@ const MemoHex = memo(function MemoHex({
       {/* Territory tint */}
       {hex.ownerPlayerId && player && <polygon points={HEX_POINTS} fill={player.color} opacity=".08"/>}
 
-      {/* City border lines */}
-      {borderEdges && borderColor && borderEdges.map((draw, i) => {
-        if (!draw) return null;
-        const v1 = HEX_VERTICES[i], v2 = HEX_VERTICES[(i + 1) % 6];
-        return <line key={`b${i}`} x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke={borderColor} strokeWidth={2.5} opacity={0.7} />;
-      })}
       {hex.resource && !city && <g style={{pointerEvents:"none"}}><ResourceIcon type={hex.resource} x={0} y={0} s={16}/></g>}
 
       {/* City */}
@@ -162,8 +150,8 @@ const MemoHex = memo(function MemoHex({
       {inAttackRange && <polygon points={HEX_POINTS} fill="rgba(255,60,60,.12)" stroke="#ff4040" strokeWidth="2" opacity=".7"/>}
       {inNukeRange && <polygon points={HEX_POINTS} fill="rgba(255,200,0,.15)" stroke="#ffa000" strokeWidth="2.5" opacity=".8" strokeDasharray="4 2"/>}
       {settlerMode && t !== "water" && t !== "mountain" && !city && <polygon points={HEX_POINTS} fill="rgba(80,255,80,.12)" stroke="#40e040" strokeWidth="2" opacity=".6"/>}
-      {isHovered && !isSelected && <polygon points={HEX_POINTS} fill="rgba(255,255,200,.12)" stroke="#e8d860" strokeWidth="2"/>}
-      {isSelected && <polygon points={HEX_POINTS} fill="rgba(255,255,200,.08)" stroke="#f0e068" strokeWidth="2.5" strokeDasharray="6 3"/>}
+      {isHovered && !isSelected && <polygon points={HEX_POINTS} fill="rgba(255,255,200,.12)" stroke="#e8d860" strokeWidth="2" strokeLinejoin="round"/>}
+      {isSelected && <polygon points={HEX_POINTS} fill="rgba(255,255,200,.08)" stroke="#f0e068" strokeWidth="2.5" strokeDasharray="6 3" strokeLinejoin="round"/>}
       {flash && <polygon points={HEX_POINTS} fill={flash === "nuke" ? "rgba(255,200,0,.5)" : flash === "blocked" ? "rgba(255,160,40,.25)" : "rgba(255,80,80,.35)"} stroke={flash === "nuke" ? "#ff8000" : flash === "blocked" ? "#ffa030" : "#ff2020"} strokeWidth={flash === "blocked" ? 2 : 3}>
         <animate attributeName="opacity" from="1" to="0" dur={flash === "blocked" ? "0.6s" : "0.8s"} fill="freeze"/>
       </polygon>}

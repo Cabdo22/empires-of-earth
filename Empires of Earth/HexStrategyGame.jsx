@@ -624,25 +624,56 @@ export default function HexStrategyGame(){
     const ownerP=hex.ownerPlayerId?players.find(p=>p.id===hex.ownerPlayerId):null;
     const blkReason=selU&&phase==="MOVEMENT"&&sud&&!uSel&&!fogged?getMoveBlockReason(hex,sud,sud.def,reach,atkRange,phase,cpId,players):null;
 
-    // Compute city border edges for this hex
-    let bEdges = null, bColor = null;
-    if (hex.cityBorderId && ownerP) {
-      const deltas = hex.col % 2 === 0 ? EVEN_COL_NEIGHBORS : ODD_COL_NEIGHBORS;
-      bEdges = deltas.map(([dc, dr]) => {
-        const nc = hex.col + dc, nr = hex.row + dr;
-        if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) return true;
-        const nh = hexAt(hexes, nc, nr);
-        return !nh || nh.cityBorderId !== hex.cityBorderId;
-      });
-      bColor = ownerP.color;
-    }
-
     return <MemoHex key={hex.id} hex={hex} vis={visData[i]}
       isHovered={hovH===hex.id} isSelected={selH===hex.id} inMoveRange={inMv} inAttackRange={!!(inMelee||inRng)} inNukeRange={!!inNk}
       unitSelected={!!uSel} units={fogged?null:uH} unitCount={fogged?0:uH.length}
-      city={fogged?null:(cE?.city||null)} player={cE?.player||ownerP} settlerMode={!!settlerM} canAct={!!canA} flash={flashes[uk]||null} isFogged={fogged} isExplored={isExplored2} blockReason={blkReason}
-      borderEdges={bEdges} borderColor={bColor}/>;
+      city={fogged?null:(cE?.city||null)} player={cE?.player||ownerP} settlerMode={!!settlerM} canAct={!!canA} flash={flashes[uk]||null} isFogged={fogged} isExplored={isExplored2} blockReason={blkReason}/>;
   }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,actable,nukeM,nukeR,flashes,fogVisible,fogExplored]);
+
+  // City border overlay (rendered above all hexes so no hex can cover borders)
+  const borderOverlay=useMemo(()=>{
+    const HEX_VERTS=Array.from({length:6},(_,i)=>{const a=(Math.PI/180)*60*i;return{x:HEX_SIZE*Math.cos(a),y:HEX_SIZE*Math.sin(a)};});
+    // For each hex edge (0-5), determine which neighbor direction it faces.
+    // Edge i goes from vertex at angle i*60° to (i+1)*60°. The edge faces outward
+    // at angle (i*60+30)°. We need to find which neighbor sits in that direction.
+    // Neighbor order for EVEN: [1,-1]=NE, [1,0]=E, [0,1]=SE, [-1,0]=SW, [-1,-1]=NW, [0,-1]=N
+    // Neighbor order for ODD:  [1,0]=NE, [1,1]=E, [0,1]=SE, [-1,1]=SW, [-1,0]=NW, [0,-1]=N
+    // Edge directions: edge0=E(30°), edge1=SE(90°), edge2=SW(150°), edge3=W(210°), edge4=NW(270°), edge5=NE(330°)
+    // Mapping: edge 0→neighbor E(idx1), edge 1→neighbor SE(idx2), edge 2→neighbor SW(idx3),
+    //          edge 3→neighbor NW(idx4), edge 4→neighbor N(idx5), edge 5→neighbor NE(idx0)
+    const EDGE_TO_NEIGHBOR = [1, 2, 3, 4, 5, 0];
+    const result=[];
+    for(const hex of hexes){
+      if(!hex.cityBorderId)continue;
+      const ownerP=hex.ownerPlayerId?players.find(p=>p.id===hex.ownerPlayerId):null;
+      if(!ownerP)continue;
+      const uk=`${hex.col},${hex.row}`;
+      // Only show borders for hexes the current player can see (fix fog leak)
+      if(!fogVisible.has(uk)&&!fogExplored.has(uk))continue;
+      const deltas=hex.col%2===0?EVEN_COL_NEIGHBORS:ODD_COL_NEIGHBORS;
+      // For each edge, check the neighbor in the direction that edge faces
+      const edges=Array.from({length:6},(_,edgeIdx)=>{
+        const ni=EDGE_TO_NEIGHBOR[edgeIdx];
+        const [dc,dr]=deltas[ni];
+        const nc=hex.col+dc,nr=hex.row+dr;
+        if(nc<0||nc>=COLS||nr<0||nr>=ROWS)return true;
+        const nh=hexAt(hexes,nc,nr);
+        return !nh||nh.cityBorderId!==hex.cityBorderId;
+      });
+      if(!edges.some(Boolean))continue;
+      // Group consecutive edges into polylines
+      const segments=[];let cur=null;
+      for(let i=0;i<6;i++){
+        if(edges[i]){if(!cur)cur=[HEX_VERTS[i]];cur.push(HEX_VERTS[(i+1)%6]);}
+        else{if(cur){segments.push(cur);cur=null;}}
+      }
+      if(cur){if(segments.length>0&&edges[0]){segments[0]=[...cur,...segments[0].slice(1)];}else{segments.push(cur);}}
+      for(let si=0;si<segments.length;si++){
+        result.push({key:`${hex.id}-${si}`,x:hex.x,y:hex.y,pts:segments[si],color:ownerP.color});
+      }
+    }
+    return result;
+  },[hexes,players,fogVisible,fogExplored]);
 
   // Tooltip overlay data (rendered above all hexes)
   const tooltipData=useMemo(()=>{
@@ -704,6 +735,8 @@ export default function HexStrategyGame(){
           <radialGradient id="gradWater" cx="40%" cy="35%" r="70%"><stop offset="0%" stopColor="#3578aa"/><stop offset="30%" stopColor="#2a6a9a"/><stop offset="60%" stopColor="#1e5580"/><stop offset="100%" stopColor="#0e3050"/></radialGradient>
         </defs>
         <g ref={gRef} style={{willChange:"transform"}} onMouseMove={onHexHover} onMouseLeave={onHexLeave} onClick={onHexClick} onContextMenu={onHexCtx}>{renderAll()}
+          {/* City border overlay — rendered after all hexes so borders are never covered */}
+          {borderOverlay.map(b=><g key={b.key} transform={`translate(${b.x},${b.y})`} style={{pointerEvents:"none"}}><polyline points={b.pts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke={b.color} strokeWidth={4} strokeLinejoin="round" strokeLinecap="round" opacity={0.8}/></g>)}
           {combatAnims.map(a=><g key={a.id} transform={`translate(${a.x},${a.y})`} style={{pointerEvents:"none"}}>
             <text x={0} y={-20} textAnchor="middle" fill={a.color} fontSize={18} fontWeight="bold" fontFamily="'Palatino Linotype',serif" stroke="#000" strokeWidth="2" paintOrder="stroke">
               -{a.dmg}<animate attributeName="y" from="-20" to="-65" dur="1.1s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="1.1s" fill="freeze"/>
