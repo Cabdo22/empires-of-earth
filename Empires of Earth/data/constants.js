@@ -9,15 +9,21 @@ export const SQRT3 = Math.sqrt(3);
 export let COLS = 10;
 export let ROWS = 10;
 export const MAP_SIZES = {
-  small:  { label: "Small",  desc: "~250 hexes · Quick game",  cols: 16, rows: 16 },
-  medium: { label: "Medium", desc: "~500 hexes · Standard game", cols: 22, rows: 22 },
-  large:  { label: "Large",  desc: "~1000 hexes · Epic game",  cols: 32, rows: 32 },
+  small:  { label: "Small",  desc: "~250 hexes · Quick game",  cols: 16, rows: 16, maxPlayers: 2 },
+  medium: { label: "Medium", desc: "~500 hexes · Standard game", cols: 22, rows: 22, maxPlayers: 4 },
+  large:  { label: "Large",  desc: "~1000 hexes · Epic game",  cols: 32, rows: 32, maxPlayers: 6 },
 };
+
+export const MAX_PLAYERS = 6;
+
+// Current map size key (set by setMapConfig)
+export let currentMapSizeKey = "small";
 
 export const setMapConfig = (sizeKey) => {
   const cfg = MAP_SIZES[sizeKey] || MAP_SIZES.small;
   COLS = cfg.cols;
   ROWS = cfg.rows;
+  currentMapSizeKey = sizeKey;
 };
 
 // Pre-compute the 6 vertices of a flat-top hexagon

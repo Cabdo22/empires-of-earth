@@ -24,10 +24,22 @@ export const mkUnit = (pid, type, col, row) => {
   };
 };
 
-export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
+// AI difficulty bonuses: { goldBonus, prodBonus, sciBonus, smarter }
+export const AI_DIFFICULTY = {
+  easy:   { goldBonus: -0.25, prodBonus: -0.25, sciBonus: -0.25, smarter: false, label: "Easy" },
+  normal: { goldBonus: 0,     prodBonus: 0,     sciBonus: 0,     smarter: false, label: "Normal" },
+  hard:   { goldBonus: 0.5,   prodBonus: 0.5,   sciBonus: 0.5,   smarter: true,  label: "Hard" },
+};
+
+/**
+ * Create initial game state for N players.
+ * @param {Array} playerConfigs - Array of { civ, type: "human"|"ai", difficulty?: "easy"|"normal"|"hard" }
+ */
+export const createInitialState = (playerConfigs) => {
   uidCtr = 0;
+  const numPlayers = playerConfigs.length;
   const seed = Date.now() % 2147483647;
-  const { grid: gridData, p1Start, p2Start } = generateMap(seed);
+  const { grid: gridData, spawns } = generateMap(seed, numPlayers);
   const hexes = [];
   let id = 0;
 
@@ -48,48 +60,59 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
     }
   }
 
-  const p1H = hexAt(hexes, p1Start.col, p1Start.row);
-  const p2H = hexAt(hexes, p2Start.col, p2Start.row);
-  const c1 = CIV_DEFS[civ1], c2 = CIV_DEFS[civ2];
-
-  // Find adjacent hexes for scouts (no stacking on start hex)
-  const p1Scout = findOpenNeighbor(p1Start.col, p1Start.row, hexes, [], []);
-  const p2Scout = findOpenNeighbor(p2Start.col, p2Start.row, hexes, [], []);
-
-  const players = [
-    {
-      id: "p1", civilization: civ1, name: c1.name,
-      color: c1.color, colorBg: c1.colorBg, colorLight: c1.colorLight,
-      gold: 20, researchedTechs: ["basic_tools"], currentResearch: null,
-      cities: [{
-        id: c1.capital.toLowerCase(), name: c1.capital, hexId: p1H.id, population: 1,
-        districts: [], currentProduction: null, productionProgress: 0, foodAccumulated: 0, hp: 20, hpMax: 20,
-        workedTileIds: [], borderHexIds: [],
-      }],
-      units: [mkUnit("p1", "warrior", p1Start.col, p1Start.row), mkUnit("p1", "scout", p1Scout?.col ?? p1Start.col, p1Scout?.row ?? p1Start.row)],
-    },
-    {
-      id: "p2", civilization: civ2, name: c2.name,
-      color: c2.color, colorBg: c2.colorBg, colorLight: c2.colorLight,
-      gold: 20, researchedTechs: ["basic_tools"], currentResearch: null,
-      cities: [{
-        id: c2.capital.toLowerCase(), name: c2.capital, hexId: p2H.id, population: 1,
-        districts: [], currentProduction: null, productionProgress: 0, foodAccumulated: 0, hp: 20, hpMax: 20,
-        workedTileIds: [], borderHexIds: [],
-      }],
-      units: [mkUnit("p2", "warrior", p2Start.col, p2Start.row), mkUnit("p2", "scout", p2Scout?.col ?? p2Start.col, p2Scout?.row ?? p2Start.row)],
-    },
-  ];
-
-  p1H.cityId = c1.capital.toLowerCase();
-  p2H.cityId = c2.capital.toLowerCase();
-
-  // Initialize city borders and tile assignments
-  initCityBorders(players[0].cities[0], players[0], hexes);
-  initCityBorders(players[1].cities[0], players[1], hexes);
-
-  // Compute initial explored hexes
+  const players = [];
   const explored = {};
+
+  for (let i = 0; i < numPlayers; i++) {
+    const cfg = playerConfigs[i];
+    const pid = `p${i + 1}`;
+    const civDef = CIV_DEFS[cfg.civ];
+    const spawn = spawns[i];
+    const spawnHex = hexAt(hexes, spawn.col, spawn.row);
+    const scoutSpawn = findOpenNeighbor(spawn.col, spawn.row, hexes, [], []);
+
+    const player = {
+      id: pid,
+      civilization: cfg.civ,
+      name: civDef.name,
+      color: civDef.color,
+      colorBg: civDef.colorBg,
+      colorLight: civDef.colorLight,
+      gold: 20,
+      researchedTechs: ["basic_tools"],
+      currentResearch: null,
+      type: cfg.type || "human",        // "human" or "ai"
+      difficulty: cfg.difficulty || "normal",  // "easy", "normal", "hard"
+      cities: [{
+        id: civDef.capital.toLowerCase(),
+        name: civDef.capital,
+        hexId: spawnHex.id,
+        population: 1,
+        districts: [],
+        currentProduction: null,
+        productionProgress: 0,
+        foodAccumulated: 0,
+        hp: 20,
+        hpMax: 20,
+        workedTileIds: [],
+        borderHexIds: [],
+      }],
+      units: [
+        mkUnit(pid, "warrior", spawn.col, spawn.row),
+        mkUnit(pid, "scout", scoutSpawn?.col ?? spawn.col, scoutSpawn?.row ?? spawn.row),
+      ],
+    };
+
+    spawnHex.cityId = civDef.capital.toLowerCase();
+    players.push(player);
+  }
+
+  // Initialize city borders for all players
+  for (const p of players) {
+    initCityBorders(p.cities[0], p, hexes);
+  }
+
+  // Compute initial explored hexes for all players
   for (const p of players) {
     explored[p.id] = [...getVisibleHexes(p, hexes)];
   }
@@ -102,7 +125,7 @@ export const createInitialState = (civ1 = "Rome", civ2 = "China") => {
     hexes,
     victoryStatus: null,
     nextUnitId: uidCtr,
-    log: [`Game started. Turn 1 — ${c1.name}`],
+    log: [`Game started. Turn 1 — ${players[0].name}`],
     barbarians: [],
     eventMsg: null,
     rngSeed: seed,

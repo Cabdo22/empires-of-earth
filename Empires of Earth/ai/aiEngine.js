@@ -1,5 +1,5 @@
 // ============================================================
-// AI DECISION ENGINE
+// AI DECISION ENGINE — supports multiple opponents
 // ============================================================
 
 import { UNIT_DEFS, SIEGE_UNITS } from '../data/units.js';
@@ -12,15 +12,24 @@ import { getReachableHexes, getVisibleHexes, isHexOccupied } from '../engine/mov
 import { addLogMsg, processResearchAndIncome, processCityTurn, expandTerritory, healGarrison, initCityBorders } from '../engine/turnProcessing.js';
 import { autoAssignTiles } from '../engine/economy.js';
 import { getHexesInRadius } from '../data/constants.js';
+import { AI_DIFFICULTY } from '../engine/gameInit.js';
+
+// Aggregate all enemy units and cities across all opponents
+const getAllEnemyUnits = (enemies) => enemies.flatMap(e => e.units);
+const getAllEnemyCities = (enemies) => enemies.flatMap(e => e.cities);
+const getEnemyOwner = (unitOrCity, enemies) => enemies.find(e =>
+  e.units.some(u => u.id === unitOrCity.id) || e.cities.some(c => c.id === unitOrCity.id)
+);
 
 // ---- Research selection ----
-const aiPickResearch = (player, hexes, enemyPlayer) => {
+const aiPickResearch = (player, hexes, enemies, smarter) => {
   if (player.currentResearch) return null;
   const available = getAvailableTechs(player);
   if (available.length === 0) return null;
 
   const maxEra = getPlayerMaxEra(player);
-  const enemyNearby = enemyPlayer.units.some(eu =>
+  const allEnemyUnits = getAllEnemyUnits(enemies);
+  const enemyNearby = allEnemyUnits.some(eu =>
     player.cities.some(c => {
       const ch = hexes[c.hexId];
       return hexDist(eu.hexCol, eu.hexRow, ch.col, ch.row) <= 4;
@@ -28,18 +37,18 @@ const aiPickResearch = (player, hexes, enemyPlayer) => {
   );
 
   const scored = available.map(tech => {
-    let score = Math.round(100 / tech.cost * 10); // prefer cheaper techs proportionally
+    let score = Math.round(100 / tech.cost * 10);
     const isMilitary = tech.effects.some(e =>
       /unlock.*warrior|unlock.*sword|unlock.*knight|unlock.*archer|unlock.*tank|unlock.*musket|unlock.*artillery|unlock.*catapult|strength|movement|unit cost/i.test(e)
     );
-    if (isMilitary && enemyNearby) score += 8;
+    if (isMilitary && enemyNearby) score += smarter ? 12 : 8;
     if (isMilitary && !enemyNearby) score += 2;
 
     const isEcon = tech.effects.some(e => /food|gold|prod|science/i.test(e));
-    if (isEcon && maxEra <= 2) score += 5;
+    if (isEcon && maxEra <= 2) score += smarter ? 7 : 5;
 
     const isSciVictory = tech.id === "quantum_computing" || tech.id === "fusion_power" || tech.id === "space_program";
-    if (isSciVictory && maxEra >= 4) score += 10;
+    if (isSciVictory && maxEra >= 4) score += smarter ? 15 : 10;
 
     if (tech.effects.some(e => /settler|library|market|bank/i.test(e))) score += 4;
     if (tech.effects.some(e => /city defense|city.*HP/i.test(e))) score += 2;
@@ -52,7 +61,7 @@ const aiPickResearch = (player, hexes, enemyPlayer) => {
 };
 
 // ---- Production selection ----
-const aiPickProduction = (city, player, hexes, enemyPlayer) => {
+const aiPickProduction = (city, player, hexes, enemies, smarter) => {
   if (city.currentProduction) return null;
 
   const availUnits = getAvailableUnits(player, city);
@@ -60,7 +69,7 @@ const aiPickProduction = (city, player, hexes, enemyPlayer) => {
   const militaryCount = player.units.filter(u =>
     u.unitType !== "scout" && u.unitType !== "settler" && u.unitType !== "nuke"
   ).length;
-  const enemyMilitary = enemyPlayer.units.length;
+  const totalEnemyMilitary = getAllEnemyUnits(enemies).length;
   const settlerCount = player.units.filter(u => u.unitType === "settler").length;
 
   const maxCities = Math.max(3, Math.floor(COLS * ROWS / 80));
@@ -68,12 +77,15 @@ const aiPickProduction = (city, player, hexes, enemyPlayer) => {
     return { type: "unit", itemId: "settler" };
   }
 
-  const enemyNearby = enemyPlayer.units.some(eu => {
+  const allEnemyUnits = getAllEnemyUnits(enemies);
+  const enemyNearby = allEnemyUnits.some(eu => {
     const ch = hexes[city.hexId];
     return hexDist(eu.hexCol, eu.hexRow, ch.col, ch.row) <= 5;
   });
 
-  if ((militaryCount < enemyMilitary + 1) || enemyNearby) {
+  // Smart AI is more aggressive about military buildup
+  const militaryThreshold = smarter ? totalEnemyMilitary + 2 : totalEnemyMilitary + 1;
+  if ((militaryCount < militaryThreshold) || enemyNearby) {
     const military = availUnits
       .filter(u => u.id !== "settler" && u.id !== "scout" && u.id !== "nuke")
       .sort((a, b) => b.strength - a.strength);
@@ -136,10 +148,12 @@ const aiFindCityLocation = (settler, player, hexes) => {
 };
 
 // ---- Unit movement and combat ----
-const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
+const aiPlanAndExecuteMoves = (g, aiPlayer, enemies, addLogFn, smarter) => {
+  const allEnemyUnits = getAllEnemyUnits(enemies);
+  const allEnemyCities = getAllEnemyCities(enemies);
+
   for (const unit of aiPlayer.units) {
     const def = UNIT_DEFS[unit.unitType];
-    // Field healing: units that didn't move or attack last turn heal +2 HP
     if (!unit.hasMoved && !unit.hasAttacked) {
       const maxHp = def?.hp || 10;
       if (unit.hpCurrent < maxHp) {
@@ -209,34 +223,41 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
     if (unit.unitType !== "nuke" || processedUnits.has(unit.id)) continue;
     processedUnits.add(unit.id);
 
-    for (const eCity of enemyPlayer.cities) {
+    for (const eCity of allEnemyCities) {
+      const enemyOwner = enemies.find(e => e.cities.some(c => c.id === eCity.id));
+      if (!enemyOwner) continue;
       const eCityHex = g.hexes[eCity.hexId];
       const dist = hexDist(unit.hexCol, unit.hexRow, eCityHex.col, eCityHex.row);
       if (dist <= 3) {
-        // Fighter interception check (same as player nukes)
-        const interceptor = enemyPlayer.units.find(u =>
+        const interceptor = allEnemyUnits.find(u =>
           u.unitType === "fighter" && !u.hasAttacked &&
           hexDist(u.hexCol, u.hexRow, eCityHex.col, eCityHex.row) <= 2
         );
         if (interceptor) {
           aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id);
           interceptor.hasAttacked = true;
-          addLogFn(`✈ Fighter intercepts AI nuke!`, g);
+          addLogFn(`\u2708 Fighter intercepts AI nuke!`, g);
           break;
         }
         const blast = getHexesInRadius(eCityHex.col, eCityHex.row, 1, g.hexes);
         for (const bh of blast) {
-          enemyPlayer.units = enemyPlayer.units.filter(u => !(u.hexCol === bh.col && u.hexRow === bh.row));
+          // Remove units of ALL enemies in blast
+          for (const enemy of enemies) {
+            enemy.units = enemy.units.filter(u => !(u.hexCol === bh.col && u.hexRow === bh.row));
+          }
           aiPlayer.units = aiPlayer.units.filter(u => !(u.hexCol === bh.col && u.hexRow === bh.row && u.id !== unit.id));
           g.barbarians = (g.barbarians || []).filter(b => !(b.hexCol === bh.col && b.hexRow === bh.row));
-          const dc = enemyPlayer.cities.find(c => { const h = g.hexes[c.hexId]; return h.col === bh.col && h.row === bh.row; });
-          if (dc) {
-            dc.hp = Math.max(1, (dc.hp || 20) - 10);
-            addLogFn(`☢ ${dc.name} hit! (${dc.hp}HP)`, g);
+          // Damage enemy cities in blast
+          for (const enemy of enemies) {
+            const dc = enemy.cities.find(c => { const h = g.hexes[c.hexId]; return h.col === bh.col && h.row === bh.row; });
+            if (dc) {
+              dc.hp = Math.max(1, (dc.hp || 20) - 10);
+              addLogFn(`\u2622 ${dc.name} hit! (${dc.hp}HP)`, g);
+            }
           }
         }
         aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id);
-        addLogFn(`☢ AI NUCLEAR STRIKE!`, g);
+        addLogFn(`\u2622 AI NUCLEAR STRIKE!`, g);
         break;
       }
     }
@@ -256,15 +277,19 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
       const range = unitDef.range || 1;
       let bestTarget = null, bestTargetScore = -Infinity;
 
-      for (const eu of enemyPlayer.units) {
+      // Check all enemy units across all opponents
+      for (const eu of allEnemyUnits) {
         const dist = hexDist(unit.hexCol, unit.hexRow, eu.hexCol, eu.hexRow);
         if (dist > range) continue;
         const euDef = UNIT_DEFS[eu.unitType];
+        const euOwner = getEnemyOwner(eu, enemies) || { researchedTechs: [], civilization: "Unknown" };
         const preview = calcCombatPreview(unit, unitDef, eu, euDef,
-          hexAt(g.hexes, eu.hexCol, eu.hexRow)?.terrainType, aiPlayer, enemyPlayer, false);
+          hexAt(g.hexes, eu.hexCol, eu.hexRow)?.terrainType, aiPlayer, euOwner, false);
         let score = preview.aDmg;
         if (preview.defDies) score += 20;
         if (preview.atkDies) score -= 30;
+        // Smart AI prefers killing low-HP targets
+        if (smarter && eu.hpCurrent <= preview.aDmg) score += 10;
         if (score > bestTargetScore) {
           bestTargetScore = score;
           bestTarget = { col: eu.hexCol, row: eu.hexRow, isUnit: true, unit: eu };
@@ -286,17 +311,17 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
         }
       }
 
-      for (const eCity of enemyPlayer.cities) {
+      // Check all enemy cities
+      for (const eCity of allEnemyCities) {
         const eCH = g.hexes[eCity.hexId];
         const dist = hexDist(unit.hexCol, unit.hexRow, eCH.col, eCH.row);
         if (dist > range) continue;
-        const garrison = enemyPlayer.units.find(u => u.hexCol === eCH.col && u.hexRow === eCH.row);
+        const garrison = allEnemyUnits.find(u => u.hexCol === eCH.col && u.hexRow === eCH.row);
         if (!garrison) {
           const isSiege = SIEGE_UNITS.has(unit.unitType);
           const cityDmg = isSiege ? unitDef.strength * 3 : Math.max(1, Math.floor(unitDef.strength * 0.5));
           let score = cityDmg;
           if (eCity.hp - cityDmg <= 0) score += 30;
-          // Non-siege melee units should avoid attacking cities (they take 5 counter-damage)
           if (!isSiege && unitDef.range === 0) score -= 10;
           if (score > bestTargetScore) {
             bestTargetScore = score;
@@ -311,63 +336,66 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
 
         if (defender) {
           const defDef = UNIT_DEFS[defender.unitType];
-          const defOwner = bestTarget.isBarb ? { researchedTechs: [], civilization: "Barbarian" } : enemyPlayer;
+          const defOwner = bestTarget.isBarb ? { researchedTechs: [], civilization: "Barbarian" } : (getEnemyOwner(defender, enemies) || enemies[0]);
           const defHex = hexAt(g.hexes, tc, tr);
-          const defCity = enemyPlayer.cities.find(c => { const h = g.hexes[c.hexId]; return h.col === tc && h.row === tr; });
+          const defCity = allEnemyCities.find(c => { const h = g.hexes[c.hexId]; return h.col === tc && h.row === tr; });
           const pv = calcCombatPreview(unit, unitDef, defender, defDef, defHex?.terrainType, aiPlayer, defOwner, !!defCity);
 
           unit.hpCurrent = Math.max(0, unit.hpCurrent - pv.dDmg);
           defender.hpCurrent = Math.max(0, defender.hpCurrent - pv.aDmg);
           unit.hasAttacked = true;
 
-          let msg = `AI ${unitDef.name}→${bestTarget.isBarb ? "Barb " : ""}${defDef.name}: ${pv.aDmg}dmg`;
+          let msg = `AI ${unitDef.name}\u2192${bestTarget.isBarb ? "Barb " : ""}${defDef.name}: ${pv.aDmg}dmg`;
           if (pv.dDmg > 0) msg += ` took ${pv.dDmg}`;
 
           if (pv.defDies) {
-            if (bestTarget.isUnit) enemyPlayer.units = enemyPlayer.units.filter(u => u.id !== defender.id);
+            if (bestTarget.isUnit) {
+              const owner = getEnemyOwner(defender, enemies);
+              if (owner) owner.units = owner.units.filter(u => u.id !== defender.id);
+            }
             if (bestTarget.isBarb) { g.barbarians = g.barbarians.filter(b => b.id !== defender.id); aiPlayer.gold += 15; }
-            msg += ` ☠${defDef.name}`;
+            msg += ` \u2620${defDef.name}`;
 
             if (unitDef.range === 0 && !pv.atkDies && !isHexOccupied(tc, tr, g.players, g.barbarians, unit.id)) {
               unit.hexCol = tc; unit.hexRow = tr; unit.movementCurrent = 0;
               if (defCity && bestTarget.isUnit) {
+                const cityOwner = enemies.find(e => e.cities.some(c => c.id === defCity.id));
                 defCity.hp = (defCity.hp || 20) - 3;
-                if (defCity.hp <= 0) {
-                  enemyPlayer.cities = enemyPlayer.cities.filter(c => c.id !== defCity.id);
+                if (defCity.hp <= 0 && cityOwner) {
+                  cityOwner.cities = cityOwner.cities.filter(c => c.id !== defCity.id);
                   defCity.hp = 10; defCity.hpMax = 20; defCity.captured = true; aiPlayer.cities.push(defCity);
                   if (defHex) defHex.ownerPlayerId = aiPlayer.id;
-                  // Update border ownership and reassign tiles
                   for (const hid of (defCity.borderHexIds || [])) {
                     const bh = g.hexes[hid];
                     if (bh) { bh.ownerPlayerId = aiPlayer.id; bh.cityBorderId = defCity.id; }
                   }
                   autoAssignTiles(defCity, g.hexes);
-                  msg += ` 🏛${defCity.name} captured!`;
+                  msg += ` \uD83C\uDFDB${defCity.name} captured!`;
                 }
               }
               if (bestTarget.isBarb && defHex && !defHex.ownerPlayerId) defHex.ownerPlayerId = aiPlayer.id;
             }
           }
-          if (pv.atkDies) { aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id); msg += ` ☠${unitDef.name}`; }
+          if (pv.atkDies) { aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id); msg += ` \u2620${unitDef.name}`; }
           addLogFn(msg, g);
         } else if (bestTarget.isCity) {
           const defCity = bestTarget.city;
+          const cityOwner = enemies.find(e => e.cities.some(c => c.id === defCity.id));
           const isSiege = SIEGE_UNITS.has(unit.unitType);
           let cityDmg = isSiege ? unitDef.strength * 3 : Math.max(1, Math.floor(unitDef.strength * 0.5));
           if (unitDef.ability === "city_siege") cityDmg += 3;
           defCity.hp = (defCity.hp || 20) - cityDmg;
           unit.hasAttacked = true;
           if (unitDef.range === 0) unit.movementCurrent = 0;
-          // City counter-damage for melee non-siege
           if (unitDef.range === 0 && !isSiege) {
             unit.hpCurrent -= 5;
           }
 
-          let msg = `AI ${unitDef.name}→${defCity.name}: ${cityDmg}dmg (${Math.max(0, defCity.hp)}HP)`;
-          if (unit.hpCurrent <= 0) { aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id); msg += ` ☠${unitDef.name}`; }
-          if (defCity.hp <= 0) {
+          let msg = `AI ${unitDef.name}\u2192${defCity.name}: ${cityDmg}dmg (${Math.max(0, defCity.hp)}HP)`;
+          if (unit.hpCurrent <= 0) { aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id); msg += ` \u2620${unitDef.name}`; }
+          if (defCity.hp <= 0 && cityOwner) {
             const defHex = hexAt(g.hexes, tc, tr);
-            enemyPlayer.cities = enemyPlayer.cities.filter(c => c.id !== defCity.id);
+            cityOwner.cities = cityOwner.cities.filter(c => c.id !== defCity.id);
             defCity.hp = 10; defCity.hpMax = 20; defCity.captured = true; aiPlayer.cities.push(defCity);
             if (defHex) defHex.ownerPlayerId = aiPlayer.id;
             for (const hid of (defCity.borderHexIds || [])) {
@@ -376,28 +404,27 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
             }
             autoAssignTiles(defCity, g.hexes);
             if (unitDef.range === 0 && !isHexOccupied(tc, tr, g.players, g.barbarians, unit.id)) { unit.hexCol = tc; unit.hexRow = tr; }
-            msg = `AI ${unitDef.name} 🏛captured ${defCity.name}!`;
+            msg = `AI ${unitDef.name} \uD83C\uDFDBcaptured ${defCity.name}!`;
           }
           addLogFn(msg, g);
         }
       }
     }
 
-    // Movement phase
+    // Movement phase — move toward nearest enemy city
     if (unit.movementCurrent > 0 && aiPlayer.units.includes(unit)) {
       const domain = unitDef.domain || "land";
       const { reachable, costMap } = getReachableHexes(unit.hexCol, unit.hexRow, unit.movementCurrent, g.hexes, domain, aiPlayer.id, g.players, unitDef.ability, g.barbarians);
       if (reachable.size > 0) {
         let goalCol = null, goalRow = null, goalDist = Infinity;
 
-        for (const eCity of enemyPlayer.cities) {
+        for (const eCity of allEnemyCities) {
           const eCH = g.hexes[eCity.hexId];
           const dist = hexDist(unit.hexCol, unit.hexRow, eCH.col, eCH.row);
           if (dist < goalDist) { goalDist = dist; goalCol = eCH.col; goalRow = eCH.row; }
         }
 
         if (unit.unitType === "scout") {
-          // Scouts explore: prefer unowned hexes they haven't visited
           const keys = [...reachable].filter(k => !occupiedHexes.has(k));
           if (keys.length > 0) {
             const unowned = keys.filter(k => {
@@ -442,10 +469,12 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemyPlayer, addLogFn) => {
 export const aiExecuteTurn = (gameState) => {
   const g = JSON.parse(JSON.stringify(gameState));
   const aiPlayer = g.players.find(p => p.id === g.currentPlayerId);
-  const enemyPlayer = g.players.find(p => p.id !== g.currentPlayerId);
+  const enemies = g.players.filter(p => p.id !== g.currentPlayerId);
+  const diff = AI_DIFFICULTY[aiPlayer.difficulty] || AI_DIFFICULTY.normal;
+  const smarter = diff.smarter;
 
   // Research
-  const techPick = aiPickResearch(aiPlayer, g.hexes, enemyPlayer);
+  const techPick = aiPickResearch(aiPlayer, g.hexes, enemies, smarter);
   if (techPick) {
     aiPlayer.currentResearch = { techId: techPick, progress: 0 };
     addLogMsg(`${aiPlayer.name} researching ${TECH_TREE[techPick].name}`, g);
@@ -454,12 +483,20 @@ export const aiExecuteTurn = (gameState) => {
   // City production
   for (const city of aiPlayer.cities) {
     if (!city.currentProduction) {
-      const prod = aiPickProduction(city, aiPlayer, g.hexes, enemyPlayer);
+      const prod = aiPickProduction(city, aiPlayer, g.hexes, enemies, smarter);
       if (prod) { city.currentProduction = prod; city.productionProgress = 0; }
     }
   }
 
   processResearchAndIncome(aiPlayer, g);
+
+  // Apply difficulty bonuses to income
+  if (diff.goldBonus !== 0) {
+    const bonus = Math.round(aiPlayer.gold * Math.abs(diff.goldBonus));
+    aiPlayer.gold += diff.goldBonus > 0 ? bonus : -bonus;
+    aiPlayer.gold = Math.max(0, aiPlayer.gold);
+  }
+
   for (const city of aiPlayer.cities) processCityTurn(city, aiPlayer, g);
   expandTerritory(aiPlayer, g);
 
@@ -475,7 +512,7 @@ export const aiExecuteTurn = (gameState) => {
   }
 
   // Movement & combat
-  aiPlanAndExecuteMoves(g, aiPlayer, enemyPlayer, addLogMsg);
+  aiPlanAndExecuteMoves(g, aiPlayer, enemies, addLogMsg, smarter);
   healGarrison(aiPlayer, g.hexes);
 
   return g;

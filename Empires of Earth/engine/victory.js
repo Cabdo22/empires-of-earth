@@ -3,11 +3,12 @@
 // ============================================================
 
 export const checkVictoryState = (g) => {
-  const p1 = g.players[0], p2 = g.players[1];
-
-  // Domination: enemy has no cities
-  if (p1.cities.length === 0) { g.victoryStatus = { winner: "p2", type: "Domination" }; return; }
-  if (p2.cities.length === 0) { g.victoryStatus = { winner: "p1", type: "Domination" }; return; }
+  // Domination: last player standing with cities wins
+  const playersWithCities = g.players.filter(p => p.cities.length > 0);
+  if (playersWithCities.length === 1) {
+    g.victoryStatus = { winner: playersWithCities[0].id, type: "Domination" };
+    return;
+  }
 
   // Science: research all three endgame techs
   for (const p of g.players) {

@@ -18,7 +18,8 @@ import { usePanelDrag } from './hooks/usePanelDrag.js';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
 import { usePanZoom } from './hooks/usePanZoom.js';
 import { useMinimap } from './hooks/useMinimap.js';
-import { ModeSelectScreen, MapSizeScreen, CivSelectScreen, TurnTransitionScreen, VictoryScreen } from './components/GameScreens.jsx';
+import { ModeSelectScreen, MapSizeScreen, LobbyScreen, CivSelectScreen, TurnTransitionScreen, VictoryScreen } from './components/GameScreens.jsx';
+import { MAX_PLAYERS } from './data/constants.js';
 import { TechTreePanel } from './components/TechTreePanel.jsx';
 import { CityPanel } from './components/CityPanel.jsx';
 import { CombatPreview } from './components/CombatPreview.jsx';
@@ -37,8 +38,10 @@ let uidCtr = 0;
 export default function HexStrategyGame(){
   const[gameMode,setGameMode]=useState(null); // null | "local" | "ai"
   const[mapSizePick,setMapSizePick]=useState(null); // null | "small" | "medium" | "large"
-  const[civPick,setCivPick]=useState({p1:"Rome",p2:"China"});
-  const[civPickStep,setCivPickStep]=useState(1); // 1 = P1 picking, 2 = P2 picking
+  const[playerSlots,setPlayerSlots]=useState(()=>Array.from({length:MAX_PLAYERS-1},()=>({type:"ai",difficulty:"normal"})));
+  const[lobbyDone,setLobbyDone]=useState(false);
+  const[civPicks,setCivPicks]=useState({p1:"Rome"});
+  const[civPickStep,setCivPickStep]=useState(1); // which human picker is choosing
   const[gameStarted,setGameStarted]=useState(false);
   const[gs,setGs]=useState(null);
   const[hovH,setHovH]=useState(null);
@@ -75,7 +78,8 @@ export default function HexStrategyGame(){
   const log=gs?.log||[];
   const barbarians=gs?.barbarians||[];
   const cp=players.find(p=>p.id===cpId)||{units:[],cities:[],researchedTechs:[],civilization:"Rome",name:"",color:"#888",colorBg:"#444",colorLight:"#aaa",gold:0,science:0};
-  const op=players.find(p=>p.id!==cpId);
+  const enemies=players.filter(p=>p.id!==cpId);
+  const op=enemies[0]; // legacy compat — prefer enemies array
   const inc=useMemo(()=>gs?calcPlayerIncome(cp,hexes):{food:0,production:0,science:0,gold:0},[cp,hexes,gs]);
   const visData=useMemo(()=>hexes.map(h=>{const grass=genGrass(h.id);return{blades:grass.blades,flowers:grass.flowers,rocks:grass.rocks,detail:genDetail(h.id),trees:h.terrainType==="forest"?genTrees(h.id):{trunks:"",canopy:"",undergrowth:""},mtns:h.terrainType==="mountain"?genMtns(h.id):{peaks:"",snow:"",shadow:"",rocks:""},waves:h.terrainType==="water"?genWaves(h.id):{waves:"",foam:"",shimmer:""},coast:genCoast(h,hexes),waterCoast:genWaterCoast(h,hexes)};}),[hexes]);
   const cityMap=useMemo(()=>{const m={};players.forEach(p=>p.cities.forEach(c=>{m[c.hexId]={city:c,player:p};}));return m;},[players]);
@@ -146,30 +150,32 @@ export default function HexStrategyGame(){
 
   // === NUKE ===
   const launchNuke=useCallback((nuId,tc,tr)=>{
-    setGs(prev=>{const g=JSON.parse(JSON.stringify(prev));const aP=g.players.find(p=>p.id===g.currentPlayerId);const dP=g.players.find(p=>p.id!==g.currentPlayerId);
+    setGs(prev=>{const g=JSON.parse(JSON.stringify(prev));const aP=g.players.find(p=>p.id===g.currentPlayerId);
       const ni=aP.units.findIndex(u=>u.id===nuId);if(ni===-1)return prev;aP.units.splice(ni,1);
-      // Fighter interception: defender's fighters within 2 hexes of target can intercept
-      const interceptor=dP.units.find(u=>{
+      // Fighter interception: any enemy fighter within 2 hexes of target can intercept
+      const allEnemyUnits=g.players.filter(p=>p.id!==g.currentPlayerId).flatMap(p=>p.units);
+      const interceptor=allEnemyUnits.find(u=>{
         if(u.unitType!=="fighter")return false;
         const dist=hexDist(u.hexCol,u.hexRow,tc,tr);
         return dist<=2;
       });
       if(interceptor){
-        addLog(`✈ ${interceptor.unitType==="fighter"?"Fighter":"Unit"} intercepts nuke at (${tc},${tr})!`,g);
+        addLog(`\u2708 ${interceptor.unitType==="fighter"?"Fighter":"Unit"} intercepts nuke at (${tc},${tr})!`,g);
         interceptor.hasAttacked=true;interceptor.movementCurrent=0;
         const fl={};fl[`${tc},${tr}`]="combat";setFlashes(fl);
         SFX.combat();return g;
       }
       const blast=getHexesInRadius(tc,tr,1,g.hexes);const fl={};
       for(const bh of blast){const k=`${bh.col},${bh.row}`;fl[k]="nuke";
-        // Kill all units in blast (both sides — friendly fire)
-        dP.units=dP.units.filter(u=>!(u.hexCol===bh.col&&u.hexRow===bh.row));
-        aP.units=aP.units.filter(u=>!(u.hexCol===bh.col&&u.hexRow===bh.row));
+        // Kill all units in blast (all players — friendly fire)
+        for(const p of g.players){p.units=p.units.filter(u=>!(u.hexCol===bh.col&&u.hexRow===bh.row));}
         g.barbarians=(g.barbarians||[]).filter(b=>!(b.hexCol===bh.col&&b.hexRow===bh.row));
-        // Damage cities but do NOT auto-capture — need ground troops for that
-        const dc=dP.cities.find(c=>{const h=g.hexes[c.hexId];return h&&h.col===bh.col&&h.row===bh.row;});
-        if(dc){dc.hp=Math.max(1,(dc.hp||20)-10);addLog(`☢ ${dc.name} hit! (${dc.hp}HP)`,g);}}
-      addLog(`☢ NUCLEAR STRIKE at (${tc},${tr})!`,g);setFlashes(fl);checkVictory(g);return g;});
+        // Damage cities of any enemy player
+        for(const p of g.players.filter(pp=>pp.id!==g.currentPlayerId)){
+          const dc=p.cities.find(c=>{const h=g.hexes[c.hexId];return h&&h.col===bh.col&&h.row===bh.row;});
+          if(dc){dc.hp=Math.max(1,(dc.hp||20)-10);addLog(`\u2622 ${dc.name} hit! (${dc.hp}HP)`,g);}
+        }}
+      addLog(`\u2622 NUCLEAR STRIKE at (${tc},${tr})!`,g);setFlashes(fl);checkVictory(g);return g;});
     setNukeM(null);setSelU(null);SFX.nuke();
   },[]);
 
@@ -189,20 +195,31 @@ export default function HexStrategyGame(){
     setGs(prev => {
       const g = JSON.parse(JSON.stringify(prev));
       const attPlayer = g.players.find(p => p.id === g.currentPlayerId);
-      const defPlayer = g.players.find(p => p.id !== g.currentPlayerId);
+      const allEnemies = g.players.filter(p => p.id !== g.currentPlayerId);
 
       const attUnit = attPlayer.units.find(u => u.id === attackerId);
       if (!attUnit) return prev;
       const attDef = UNIT_DEFS[attUnit.unitType];
 
-      // Find what we're attacking: enemy unit, barbarian, or undefended city
-      const defUnit = defPlayer.units.find(u => u.hexCol === defCol && u.hexRow === defRow);
+      // Find what we're attacking across ALL enemies: enemy unit, barbarian, or undefended city
+      let defUnit = null, defPlayer = null;
+      for (const ep of allEnemies) {
+        const found = ep.units.find(u => u.hexCol === defCol && u.hexRow === defRow);
+        if (found) { defUnit = found; defPlayer = ep; break; }
+      }
       if (!g.barbarians) g.barbarians = [];
       const barbUnit = g.barbarians.find(b => b.hexCol === defCol && b.hexRow === defRow);
-      const defCity = defPlayer.cities.find(c => {
-        const h = g.hexes[c.hexId];
-        return h.col === defCol && h.row === defRow;
-      });
+      let defCity = null;
+      if (!defPlayer) {
+        // Find city owner
+        for (const ep of allEnemies) {
+          const found = ep.cities.find(c => { const h = g.hexes[c.hexId]; return h.col === defCol && h.row === defRow; });
+          if (found) { defCity = found; defPlayer = ep; break; }
+        }
+      } else {
+        defCity = defPlayer.cities.find(c => { const h = g.hexes[c.hexId]; return h.col === defCol && h.row === defRow; });
+      }
+      if (!defPlayer) defPlayer = allEnemies[0]; // fallback for barbarian combat
       const defHex = hexAt(g.hexes, defCol, defRow);
       const flashKey = `${defCol},${defRow}`;
 
@@ -316,11 +333,13 @@ export default function HexStrategyGame(){
       // 3. Expand territory
       expandTerritory(currentPlayer, g);
 
-      // 4. Swap to other player
-      g.currentPlayerId = g.currentPlayerId === "p1" ? "p2" : "p1";
+      // 4. Advance to next player in sequence
+      const curIdx = g.players.findIndex(p => p.id === g.currentPlayerId);
+      const nextIdx = (curIdx + 1) % g.players.length;
+      g.currentPlayerId = g.players[nextIdx].id;
 
       // 5. If we've looped back to p1, a full round is complete
-      if (g.currentPlayerId === "p1") {
+      if (nextIdx === 0) {
         g.turnNumber++;
         spawnBarbarians(g);
         processBarbarians(g);
@@ -329,7 +348,7 @@ export default function HexStrategyGame(){
 
       // 6. Refresh next player's units and stay in MOVEMENT phase
       g.phase = "MOVEMENT";
-      const nextPlayer = g.players.find(p => p.id === g.currentPlayerId);
+      const nextPlayer = g.players[nextIdx];
       refreshUnits(nextPlayer, g);
       addLog(`Turn ${g.turnNumber} — ${nextPlayer.name}`, g);
       checkVictory(g);
@@ -348,59 +367,75 @@ export default function HexStrategyGame(){
   // Keyboard shortcuts (must be after endTurn is defined)
   useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity });
 
-  // --- AI auto-play: when it's p2's turn in AI mode, execute AI after a short delay ---
+  // --- AI auto-play: when it's an AI player's turn, execute AI and chain through consecutive AI turns ---
   useEffect(() => {
-    if (gameMode !== "ai" || !gs || gs.victoryStatus) return;
-    if (gs.currentPlayerId !== "p2") return;
+    if (!gs || gs.victoryStatus) return;
+    const currentP = gs.players.find(p => p.id === gs.currentPlayerId);
+    if (!currentP || currentP.type !== "ai") return;
 
     setAiThinking(true);
 
     const timer = setTimeout(() => {
       setGs(prev => {
-        if (!prev || prev.currentPlayerId !== "p2") return prev;
+        if (!prev) return prev;
+        let state = prev;
+        const curP = state.players.find(p => p.id === state.currentPlayerId);
+        if (!curP || curP.type !== "ai") return prev;
 
-        const afterAi = aiExecuteTurn(prev);
+        // Execute this AI's turn
+        state = aiExecuteTurn(state);
 
-        // End AI's turn: swap to p1, barbarians/events, refresh
-        afterAi.currentPlayerId = "p1";
-        afterAi.turnNumber++;
-        spawnBarbarians(afterAi);
-        processBarbarians(afterAi);
-        rollRandomEvent(afterAi);
-        afterAi.phase = "MOVEMENT";
-        const p1 = afterAi.players.find(p => p.id === "p1");
-        refreshUnits(p1, afterAi);
-        addLogMsg(`Turn ${afterAi.turnNumber} — ${p1.name}`, afterAi);
-        checkVictoryState(afterAi);
+        // Update explored hexes for this AI player
+        const aiP = state.players.find(p => p.id === state.currentPlayerId);
+        if (aiP) {
+          const aiVis = getVisibleHexes(aiP, state.hexes);
+          const aiEx = new Set(state.explored?.[aiP.id] || []);
+          for (const k of aiVis) aiEx.add(k);
+          state.explored = { ...state.explored, [aiP.id]: [...aiEx] };
+        }
 
-        // Update explored hexes for AI player
-        const aiP = afterAi.players.find(p => p.id === "p2");
-        const aiVis = getVisibleHexes(aiP, afterAi.hexes);
-        const aiEx = new Set(afterAi.explored?.["p2"] || []);
-        for (const k of aiVis) aiEx.add(k);
-        afterAi.explored = { ...afterAi.explored, "p2": [...aiEx] };
+        // End AI's turn: advance to next player (research/income/cities already processed in aiExecuteTurn)
+        const curIdx = state.players.findIndex(p => p.id === state.currentPlayerId);
+        const nextIdx = (curIdx + 1) % state.players.length;
+        state.currentPlayerId = state.players[nextIdx].id;
 
-        return afterAi;
+        if (nextIdx === 0) {
+          state.turnNumber++;
+          spawnBarbarians(state);
+          processBarbarians(state);
+          rollRandomEvent(state);
+        }
+
+        state.phase = "MOVEMENT";
+        const nextPlayer = state.players[nextIdx];
+        refreshUnits(nextPlayer, state);
+        addLogMsg(`Turn ${state.turnNumber} — ${nextPlayer.name}`, state);
+        checkVictoryState(state);
+
+        return state;
       });
 
       setAiThinking(false);
-      // Reset popup tracker so turn-start popups fire for p1's new turn
       turnPopupShownRef.current=null;
-    }, 800);
+    }, 600);
 
     return () => clearTimeout(timer);
-  }, [gs?.currentPlayerId, gs?.turnNumber, gameMode, gs?.victoryStatus]);
+  }, [gs?.currentPlayerId, gs?.turnNumber, gs?.victoryStatus]);
 
-  // --- Turn transition screen for local hotseat ---
+  // --- Turn transition screen for human players in games with multiple humans ---
   useEffect(() => {
-    if (!gs || gameMode !== "local") { prevCpId.current = gs?.currentPlayerId || null; return; }
+    if (!gs || gs.victoryStatus) { prevCpId.current = gs?.currentPlayerId || null; return; }
+    const currentP = gs.players.find(p => p.id === gs.currentPlayerId);
+    if (!currentP || currentP.type !== "human") { prevCpId.current = gs?.currentPlayerId || null; return; }
+    // Count human players — only show transition if more than 1 human
+    const humanCount = gs.players.filter(p => p.type === "human").length;
+    if (humanCount <= 1) { prevCpId.current = gs?.currentPlayerId || null; return; }
     // Show transition on first turn (prevCpId null) OR when player changes
     if ((!prevCpId.current || prevCpId.current !== gs.currentPlayerId) && !gs.victoryStatus) {
-      const nextP = gs.players.find(p => p.id === gs.currentPlayerId);
-      if (nextP) setTurnTransition({ playerName: nextP.name, playerColor: nextP.color, playerColorLight: nextP.colorLight });
+      setTurnTransition({ playerName: currentP.name, playerColor: currentP.color, playerColorLight: currentP.colorLight });
     }
     prevCpId.current = gs.currentPlayerId;
-  }, [gs?.currentPlayerId, gameMode, gs?.victoryStatus, gs?.players]);
+  }, [gs?.currentPlayerId, gs?.victoryStatus, gs?.players]);
 
   // --- Turn-start popups: show prompts for idle tech, idle city production, events ---
   useEffect(()=>{
@@ -409,7 +444,8 @@ export default function HexStrategyGame(){
     if(turnPopupShownRef.current===key)return;
     // Don't show popups during turn transition or if AI is playing
     if(turnTransition)return;
-    if(gameMode==="ai"&&gs.currentPlayerId==="p2")return;
+    const cpForPopup=gs.players.find(p=>p.id===gs.currentPlayerId);
+    if(cpForPopup&&cpForPopup.type==="ai")return;
     turnPopupShownRef.current=key;
     const popups=[];let pid=0;
     const cp2=gs.players.find(p=>p.id===gs.currentPlayerId);
@@ -705,9 +741,14 @@ export default function HexStrategyGame(){
     return <MapSizeScreen setMapSizePick={setMapSizePick} setGameMode={setGameMode}/>;
   }
 
+  // === LOBBY SCREEN (configure player slots) ===
+  if(mapSizePick&&!lobbyDone){
+    return <LobbyScreen gameMode={gameMode} mapSizePick={mapSizePick} playerSlots={playerSlots} setPlayerSlots={setPlayerSlots} onStart={()=>{SFX.click();setLobbyDone(true);}} onBack={()=>{setMapSizePick(null);}}/>;
+  }
+
   // === CIV SELECTION SCREEN ===
   if(!gameStarted||!gs){
-    return <CivSelectScreen gameMode={gameMode} civPick={civPick} setCivPick={setCivPick} civPickStep={civPickStep} setCivPickStep={setCivPickStep} setGs={setGs} setGameStarted={setGameStarted} setMapSizePick={setMapSizePick}/>;
+    return <CivSelectScreen gameMode={gameMode} playerSlots={playerSlots} civPicks={civPicks} setCivPicks={setCivPicks} civPickStep={civPickStep} setCivPickStep={setCivPickStep} setGs={setGs} setGameStarted={setGameStarted} onBack={()=>{setLobbyDone(false);setCivPickStep(1);}}/>;
   }
 
   // Turn transition screen (hotseat: hide board between turns)
@@ -717,7 +758,7 @@ export default function HexStrategyGame(){
 
   // Victory
   if(gs.victoryStatus){if(!victoryPlayed.current){victoryPlayed.current=true;SFX.victory();}
-    const onNewGame=()=>{uidCtr=0;setGs(null);setGameStarted(false);setGameMode(null);setMapSizePick(null);setSelU(null);setSelH(null);setAiThinking(false);setTutorialOn(true);setTutorialDismissed({});victoryPlayed.current=false;techPosRef.current={x:null,y:95};cityPosRef.current={x:null,y:95};setTechCollapsed(false);setCityCollapsed(false);setCivPickStep(1);setTurnTransition(null);setTurnPopups([]);turnPopupShownRef.current=null;prevCpId.current=null;};
+    const onNewGame=()=>{uidCtr=0;setGs(null);setGameStarted(false);setGameMode(null);setMapSizePick(null);setLobbyDone(false);setPlayerSlots(Array.from({length:MAX_PLAYERS-1},()=>({type:"ai",difficulty:"normal"})));setCivPicks({p1:"Rome"});setSelU(null);setSelH(null);setAiThinking(false);setTutorialOn(true);setTutorialDismissed({});victoryPlayed.current=false;techPosRef.current={x:null,y:95};cityPosRef.current={x:null,y:95};setTechCollapsed(false);setCityCollapsed(false);setCivPickStep(1);setTurnTransition(null);setTurnPopups([]);turnPopupShownRef.current=null;prevCpId.current=null;gameCenteredRef.current=false;};
     return <VictoryScreen gs={gs} players={players} turnNumber={turnNumber} onNewGame={onNewGame}/>;}
 
   return(
@@ -825,7 +866,7 @@ export default function HexStrategyGame(){
       <BottomInfo selH={selH} hexes={hexes} unitMap={unitMap} players={players} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} moveMsg={moveMsg}/>
 
       {/* AI thinking overlay */}
-      {aiThinking&&<div style={{position:"absolute",inset:0,zIndex:40,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(5,8,3,.6)",pointerEvents:"all"}}><div style={{background:"rgba(15,20,10,.95)",border:"2px solid rgba(100,140,50,.5)",borderRadius:12,padding:"24px 40px",textAlign:"center",boxShadow:"0 0 40px rgba(80,120,40,.2)"}}><div style={{fontSize:28,marginBottom:8,animation:"pulse 1.5s ease-in-out infinite"}}>🤖</div><div style={{color:"#c8d8a0",fontSize:16,fontWeight:600,letterSpacing:3}}>AI is thinking...</div><div style={{color:"#8a9a70",fontSize:12,marginTop:6}}>The enemy plots its next move</div></div></div>}
+      {aiThinking&&<div style={{position:"absolute",inset:0,zIndex:40,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(5,8,3,.6)",pointerEvents:"all"}}><div style={{background:"rgba(15,20,10,.95)",border:"2px solid rgba(100,140,50,.5)",borderRadius:12,padding:"24px 40px",textAlign:"center",boxShadow:"0 0 40px rgba(80,120,40,.2)"}}><div style={{fontSize:28,marginBottom:8,animation:"pulse 1.5s ease-in-out infinite"}}>🤖</div><div style={{color:"#c8d8a0",fontSize:16,fontWeight:600,letterSpacing:3}}>AI is thinking...</div><div style={{color:"#8a9a70",fontSize:12,marginTop:6}}>The AI plots its next move</div></div></div>}
 
       {/* Random event popup */}
       <EventPopup event={eventPopup} onDismiss={() => setEventPopup(null)}/>

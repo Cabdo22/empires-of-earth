@@ -84,8 +84,8 @@ const placeResources = (grid, rng, protectedHexes) => {
   }
 };
 
-// Find two valid spawn positions on the completed terrain map
-const findSpawnPositions = (grid, rng) => {
+// Find N valid spawn positions on the completed terrain map, well-spaced apart
+const findSpawnPositions = (grid, rng, numPlayers = 2) => {
   const candidates = [];
   for (let c = 0; c < COLS; c++) {
     for (let r = 0; r < ROWS; r++) {
@@ -102,30 +102,41 @@ const findSpawnPositions = (grid, rng) => {
     [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
   }
 
-  const minDist = Math.max(Math.floor(Math.min(COLS, ROWS) * 0.4), 6);
-  const p1 = candidates[0];
+  const spawns = [candidates[0]];
+  const minDist = Math.max(Math.floor(Math.min(COLS, ROWS) * (numPlayers <= 2 ? 0.4 : 0.25)), numPlayers <= 2 ? 6 : 4);
 
-  // Find P2: filter by minimum distance, pick randomly from the top 5 farthest
-  const farCandidates = candidates
-    .filter(c => hexDist(c.col, c.row, p1.col, p1.row) >= minDist)
-    .sort((a, b) => hexDist(b.col, b.row, p1.col, p1.row) - hexDist(a.col, a.row, p1.col, p1.row));
+  for (let n = 1; n < numPlayers; n++) {
+    // Score each candidate by minimum distance to all existing spawns (maximize it)
+    let bestCandidate = null;
+    let bestMinDist = -1;
 
-  let p2;
-  if (farCandidates.length > 0) {
-    const topN = farCandidates.slice(0, 5);
-    p2 = topN[Math.floor(rng() * topN.length)];
-  } else {
-    // Fallback: pick the farthest grassland hex from p1
-    p2 = candidates
-      .slice(1)
-      .sort((a, b) => hexDist(b.col, b.row, p1.col, p1.row) - hexDist(a.col, a.row, p1.col, p1.row))[0];
+    for (const c of candidates) {
+      const minDistToExisting = Math.min(...spawns.map(s => hexDist(c.col, c.row, s.col, s.row)));
+      if (minDistToExisting >= minDist && minDistToExisting > bestMinDist) {
+        bestMinDist = minDistToExisting;
+        bestCandidate = c;
+      }
+    }
+
+    // Fallback: if nothing meets minDist, just pick the farthest from existing spawns
+    if (!bestCandidate) {
+      bestCandidate = candidates
+        .filter(c => !spawns.some(s => s.col === c.col && s.row === c.row))
+        .sort((a, b) => {
+          const aMin = Math.min(...spawns.map(s => hexDist(a.col, a.row, s.col, s.row)));
+          const bMin = Math.min(...spawns.map(s => hexDist(b.col, b.row, s.col, s.row)));
+          return bMin - aMin;
+        })[0];
+    }
+
+    if (bestCandidate) spawns.push(bestCandidate);
   }
 
-  return { p1Start: { col: p1.col, row: p1.row }, p2Start: { col: p2.col, row: p2.row } };
+  return spawns.map(s => ({ col: s.col, row: s.row }));
 };
 
 // Generate the full map grid
-export const generateMap = (seed) => {
+export const generateMap = (seed, numPlayers = 2) => {
   const rng = mulberry32(seed);
   const emptyProtected = new Set();
 
@@ -157,18 +168,19 @@ export const generateMap = (seed) => {
   }
 
   // Find spawn positions on the completed terrain
-  const { p1Start, p2Start } = findSpawnPositions(grid, rng);
+  const spawns = findSpawnPositions(grid, rng, numPlayers);
 
   // Force spawn hexes to grassland and clear resources
-  grid[p1Start.col][p1Start.row].terrain = "grassland";
-  grid[p1Start.col][p1Start.row].resource = null;
-  grid[p2Start.col][p2Start.row].terrain = "grassland";
-  grid[p2Start.col][p2Start.row].resource = null;
+  const key = (c, r) => `${c},${r}`;
+  const protectedHexes = new Set();
+  for (const sp of spawns) {
+    grid[sp.col][sp.row].terrain = "grassland";
+    grid[sp.col][sp.row].resource = null;
+    protectedHexes.add(key(sp.col, sp.row));
+  }
 
   // Place resources, protecting spawn hexes
-  const key = (c, r) => `${c},${r}`;
-  const protectedHexes = new Set([key(p1Start.col, p1Start.row), key(p2Start.col, p2Start.row)]);
   placeResources(grid, rng, protectedHexes);
 
-  return { grid, p1Start, p2Start };
+  return { grid, spawns };
 };
