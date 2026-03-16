@@ -22,7 +22,7 @@ export function CombatPreview({ preview }) {
   const dAfter = Math.max(0, dhp - aDmg);
 
   return (
-    <div style={{ ...panelStyle, position: "fixed", top: window.innerHeight / 2 - 100, left: window.innerWidth / 2 - 150, width: 300, padding: 12, zIndex: 30, border: "1px solid rgba(200,100,80,.6)", pointerEvents: "auto" }}>
+    <div style={{ ...panelStyle, position: "fixed", top: window.innerHeight / 2 - 100, left: window.innerWidth / 2 - 150, width: 300, padding: 12, zIndex: 30, border: "1px solid rgba(200,100,80,.6)", pointerEvents: "none" }}>
       <div style={{ fontSize: 13, color: "#ffa0a0", marginBottom: 8, textAlign: "center", fontWeight: 700, letterSpacing: 1 }}>⚔ Combat Preview</div>
 
       <div style={{ display: "flex", gap: 10 }}>

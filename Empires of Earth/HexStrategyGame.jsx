@@ -580,13 +580,12 @@ export default function HexStrategyGame(){
     const h=findHexFromEvent(e);if(!h||isPanRef.current)return;
     const{hex,uk}=h;const fogged=!fogVisible.has(uk);if(fogged){if(hovH!=null){setHovH(null);setPreview(null);}return;}
     if(hovH!==hex.id)setHovH(hex.id);
-    // Combat preview on hover
+    // Combat preview on hover (shows even if unit already attacked)
     if(selU&&phase==="MOVEMENT"&&sud){
       const uH=unitMap[uk]||[];const eU=uH.filter(u=>u.pid!==cpId);const cE=cityMap[hex.id];
-      const hasTgt=eU.length>0||(cE&&cE.player.id!==cpId);
-      const inMelee2=sud.def?.range===0&&!sud.hasAttacked&&hexDist(sud.hexCol,sud.hexRow,hex.col,hex.row)<=1&&hasTgt;
-      const inRng2=sud.def?.range>0&&!sud.hasAttacked&&atkRange.has(uk)&&hasTgt;
-      if((inMelee2||inRng2)&&eU.length>0){const eu=eU[0];
+      const dist=hexDist(sud.hexCol,sud.hexRow,hex.col,hex.row);
+      const inRange=sud.def?.range>0?dist<=sud.def.range:dist<=1;
+      if(inRange&&eU.length>0){const eu=eU[0];
         const dP=eu.pid==="barb"?{researchedTechs:[],civilization:"Barbarian"}:players.find(p=>p.id===eu.pid);
         const pv=calcCombatPreview(sud,sud.def,eu,UNIT_DEFS[eu.unitType],hex.terrainType,cp,dP,!!(cE&&cE.player.id!==cpId));
         const effADmg=sud.def.ability==="rapid_shot"?Math.ceil(pv.aDmg*1.5):pv.aDmg;
