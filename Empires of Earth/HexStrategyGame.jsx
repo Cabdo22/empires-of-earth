@@ -38,7 +38,7 @@ let uidCtr = 0;
 export default function HexStrategyGame(){
   const[gameMode,setGameMode]=useState(null); // null | "local" | "ai"
   const[mapSizePick,setMapSizePick]=useState(null); // null | "small" | "medium" | "large"
-  const[playerSlots,setPlayerSlots]=useState(()=>Array.from({length:MAX_PLAYERS-1},()=>({type:"ai",difficulty:"normal"})));
+  const[playerSlots,setPlayerSlots]=useState(()=>Array.from({length:MAX_PLAYERS-1},(_,i)=>({type:i===0?"ai":"closed",difficulty:"normal"})));
   const[lobbyDone,setLobbyDone]=useState(false);
   const[civPicks,setCivPicks]=useState({p1:"Rome"});
   const[civPickStep,setCivPickStep]=useState(1); // which human picker is choosing
@@ -747,7 +747,7 @@ export default function HexStrategyGame(){
 
   // === CIV SELECTION SCREEN ===
   if(!gameStarted||!gs){
-    return <CivSelectScreen gameMode={gameMode} playerSlots={playerSlots} civPicks={civPicks} setCivPicks={setCivPicks} civPickStep={civPickStep} setCivPickStep={setCivPickStep} setGs={setGs} setGameStarted={setGameStarted} onBack={()=>{setLobbyDone(false);setCivPickStep(1);}}/>;
+    return <CivSelectScreen gameMode={gameMode} mapSizePick={mapSizePick} playerSlots={playerSlots} civPicks={civPicks} setCivPicks={setCivPicks} civPickStep={civPickStep} setCivPickStep={setCivPickStep} setGs={setGs} setGameStarted={setGameStarted} onBack={()=>{setLobbyDone(false);setCivPickStep(1);}}/>;
   }
 
   // Turn transition screen (hotseat: hide board between turns)

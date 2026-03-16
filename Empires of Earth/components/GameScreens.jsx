@@ -153,12 +153,14 @@ export function LobbyScreen({ gameMode, mapSizePick, playerSlots, setPlayerSlots
 }
 
 // === CIV SELECTION SCREEN — multi-player step-through ===
-export function CivSelectScreen({ gameMode, playerSlots, civPicks, setCivPicks, civPickStep, setCivPickStep, setGs, setGameStarted, onBack }) {
+export function CivSelectScreen({ gameMode, mapSizePick, playerSlots, civPicks, setCivPicks, civPickStep, setCivPickStep, setGs, setGameStarted, onBack }) {
   const civKeys = Object.keys(CIV_DEFS);
 
   // Build ordered list of players who need to pick: Player 1 (human) + active slots
+  const maxPlayersForPick = MAP_SIZES[mapSizePick]?.maxPlayers || 2;
+  const activeSlots = playerSlots.slice(0, maxPlayersForPick - 1);
   const humanPickers = [{ idx: 0, type: "human" }];
-  playerSlots.forEach((slot, i) => {
+  activeSlots.forEach((slot, i) => {
     if (slot.type === "human") humanPickers.push({ idx: i + 1, type: "human" });
   });
 
@@ -201,7 +203,8 @@ export function CivSelectScreen({ gameMode, playerSlots, civPicks, setCivPicks, 
         if (civPicks[pid]) usedCivs.add(civPicks[pid]);
       });
 
-      playerSlots.forEach((slot, i) => {
+      const maxPlayers = MAP_SIZES[mapSizePick]?.maxPlayers || 2;
+      playerSlots.slice(0, maxPlayers - 1).forEach((slot, i) => {
         if (slot.type === "closed") return;
         const pid = `p${i + 2}`;
         if (slot.type === "human") {
