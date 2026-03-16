@@ -92,8 +92,9 @@ const placeResources = (grid, rng, protectedHexes) => {
 // Find N valid spawn positions on the completed terrain map, well-spaced apart
 const findSpawnPositions = (grid, rng, numPlayers = 2) => {
   const candidates = [];
-  for (let c = 0; c < COLS; c++) {
-    for (let r = 0; r < ROWS; r++) {
+  const edgeBuffer = 3; // keep spawns away from map edges so cities have full tile access
+  for (let c = edgeBuffer; c < COLS - edgeBuffer; c++) {
+    for (let r = edgeBuffer; r < ROWS - edgeBuffer; r++) {
       if (grid[c][r].terrain !== "grassland") continue;
       const neighbors = getNeighbors(c, r);
       const grassCount = neighbors.filter(([nc, nr]) => grid[nc][nr].terrain === "grassland").length;
