@@ -9,9 +9,9 @@ export const SQRT3 = Math.sqrt(3);
 export let COLS = 10;
 export let ROWS = 10;
 export const MAP_SIZES = {
-  small:  { label: "Small",  desc: "~250 hexes · Quick game",  cols: 16, rows: 16, maxPlayers: 2 },
-  medium: { label: "Medium", desc: "~500 hexes · Standard game", cols: 22, rows: 22, maxPlayers: 4 },
-  large:  { label: "Large",  desc: "~1000 hexes · Epic game",  cols: 32, rows: 32, maxPlayers: 6 },
+  small:  { label: "Small",  desc: "~290 hexes · Quick game",   cols: 18, rows: 16, maxPlayers: 2 },
+  medium: { label: "Medium", desc: "~550 hexes · Standard game", cols: 25, rows: 22, maxPlayers: 4 },
+  large:  { label: "Large",  desc: "~1200 hexes · Epic game",   cols: 37, rows: 32, maxPlayers: 6 },
 };
 
 export const MAX_PLAYERS = 6;
