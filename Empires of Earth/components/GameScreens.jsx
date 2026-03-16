@@ -30,6 +30,7 @@ export function ModeSelectScreen({ setGameMode }) {
       <div style={{ display: "flex", gap: 24 }}>
         {modeBtn("vs AI", "Play against the computer", "\u{1F916}", "ai")}
         {modeBtn("Local", "Play with friends on one screen", "\u{1F465}", "local")}
+        {modeBtn("Online", "Play with a friend online", "\u{1F310}", "online")}
       </div>
       <div style={{ color: "#3a4a2a", fontSize: 9, marginTop: 8 }}>Fog of War \u00B7 Barbarians \u00B7 Random Events</div>
     </div>

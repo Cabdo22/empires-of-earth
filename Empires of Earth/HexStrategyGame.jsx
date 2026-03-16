@@ -20,6 +20,8 @@ import { usePanZoom } from './hooks/usePanZoom.js';
 import { useMinimap } from './hooks/useMinimap.js';
 import { ModeSelectScreen, MapSizeScreen, LobbyScreen, CivSelectScreen, TurnTransitionScreen, VictoryScreen } from './components/GameScreens.jsx';
 import { MAX_PLAYERS } from './data/constants.js';
+import Lobby from './components/Lobby.jsx';
+import OnlineGame from './components/OnlineGame.jsx';
 import { TechTreePanel } from './components/TechTreePanel.jsx';
 import { CityPanel } from './components/CityPanel.jsx';
 import { CombatPreview } from './components/CombatPreview.jsx';
@@ -35,8 +37,9 @@ import { EventPopup } from './components/EventPopup.jsx';
 
 let uidCtr = 0;
 
-export default function HexStrategyGame(){
-  const[gameMode,setGameMode]=useState(null); // null | "local" | "ai"
+export default function HexStrategyGame({ onlineMode } = {}){
+  const[gameMode,setGameMode]=useState(null); // null | "local" | "ai" | "online"
+  const[onlineRoomId,setOnlineRoomId]=useState(null); // room ID for online mode
   const[mapSizePick,setMapSizePick]=useState(null); // null | "small" | "medium" | "large"
   const[playerSlots,setPlayerSlots]=useState(()=>Array.from({length:MAX_PLAYERS-1},(_,i)=>({type:i===0?"ai":"closed",difficulty:"normal"})));
   const[lobbyDone,setLobbyDone]=useState(false);
@@ -73,7 +76,7 @@ export default function HexStrategyGame(){
   const hexes=gs?.hexes||[];
   const players=gs?.players||[];
   const turnNumber=gs?.turnNumber||1;
-  const cpId=gs?.currentPlayerId||"p1";
+  const cpId=onlineMode?onlineMode.myPlayerId:(gs?.currentPlayerId||"p1");
   const phase=gs?.phase||"MOVEMENT";
   const log=gs?.log||[];
   const barbarians=gs?.barbarians||[];
@@ -144,12 +147,49 @@ export default function HexStrategyGame(){
       if(!changed)return prev;return{...prev,explored:{...ex,[cpId]:[...s]}};});
   },[fogVisible,cpId]);
 
+  // === ONLINE MODE: sync server state to local state ===
+  useEffect(() => {
+    if (!onlineMode?.gameState) return;
+    setGs(onlineMode.gameState);
+  }, [onlineMode?.gameState]);
+
+  // === ONLINE MODE: process server events (SFX, flashes, combat anims) ===
+  useEffect(() => {
+    if (!onlineMode?.events?.length) return;
+    const evts = onlineMode.events;
+    const flashMap = {};
+    const anims = [];
+    const now = Date.now();
+
+    for (const evt of evts) {
+      if (evt.type === "sfx" && SFX[evt.name]) {
+        SFX[evt.name]();
+      } else if (evt.type === "flash") {
+        flashMap[evt.key] = evt.kind || "combat";
+      } else if (evt.type === "combat_anim") {
+        if (evt.defender) {
+          const defPos = hexCenter(evt.defender.col, evt.defender.row);
+          anims.push({ id: now + anims.length, x: defPos.x, y: defPos.y, dmg: evt.aDmg, color: "#ff4040", t: now });
+        }
+        if (evt.dDmg > 0 && evt.attacker) {
+          const attPos = hexCenter(evt.attacker.col, evt.attacker.row);
+          anims.push({ id: now + anims.length, x: attPos.x, y: attPos.y, dmg: evt.dDmg, color: "#ff8040", t: now });
+        }
+      }
+    }
+
+    if (Object.keys(flashMap).length > 0) setFlashes(flashMap);
+    if (anims.length > 0) setCombatAnims(prev => [...prev, ...anims]);
+    onlineMode.clearEvents();
+  }, [onlineMode?.events]);
+
   // addLog and checkVictory delegate to module-level pure functions
   const addLog=addLogMsg;
   const checkVictory=checkVictoryState;
 
   // === NUKE ===
   const launchNuke=useCallback((nuId,tc,tr)=>{
+    if(onlineMode){onlineMode.sendAction({type:"LAUNCH_NUKE",nukeId:nuId,col:tc,row:tr});setNukeM(null);setSelU(null);return;}
     setGs(prev=>{const g=JSON.parse(JSON.stringify(prev));const aP=g.players.find(p=>p.id===g.currentPlayerId);
       const ni=aP.units.findIndex(u=>u.id===nuId);if(ni===-1)return prev;aP.units.splice(ni,1);
       // Fighter interception: any enemy fighter within 2 hexes of target can intercept
@@ -192,6 +232,7 @@ export default function HexStrategyGame(){
   };
 
   const doCombat = useCallback((attackerId, defCol, defRow) => {
+    if(onlineMode){onlineMode.sendAction({type:"ATTACK",attackerId,col:defCol,row:defRow});setSelU(null);setPreview(null);return;}
     setGs(prev => {
       const g = JSON.parse(JSON.stringify(prev));
       const attPlayer = g.players.find(p => p.id === g.currentPlayerId);
@@ -320,6 +361,7 @@ export default function HexStrategyGame(){
 
   // === END TURN (replaces old phase system) ===
   const endTurn = useCallback(() => {
+    if(onlineMode){onlineMode.sendAction({type:"END_TURN"});setSelU(null);setSelH(null);setSettlerM(null);setNukeM(null);setPreview(null);return;}
     let sfxQ = [];
 
     setGs(prev => {
@@ -369,6 +411,7 @@ export default function HexStrategyGame(){
 
   // --- AI auto-play: when it's an AI player's turn, execute AI and chain through consecutive AI turns ---
   useEffect(() => {
+    if (onlineMode) return; // Skip AI processing in online mode
     if (!gs || gs.victoryStatus) return;
     const currentP = gs.players.find(p => p.id === gs.currentPlayerId);
     if (!currentP || currentP.type !== "ai") return;
@@ -424,6 +467,7 @@ export default function HexStrategyGame(){
 
   // --- Turn transition screen for human players in games with multiple humans ---
   useEffect(() => {
+    if (onlineMode) return; // Skip turn transition in online mode
     if (!gs || gs.victoryStatus) { prevCpId.current = gs?.currentPlayerId || null; return; }
     const currentP = gs.players.find(p => p.id === gs.currentPlayerId);
     if (!currentP || currentP.type !== "human") { prevCpId.current = gs?.currentPlayerId || null; return; }
@@ -464,6 +508,7 @@ export default function HexStrategyGame(){
   // --- Player action callbacks ---
 
   const selResearch = useCallback((techId) => {
+    if(onlineMode){onlineMode.sendAction({type:"SELECT_RESEARCH",techId});SFX.click();return;}
     SFX.click();
     setGs(prev => {
       const g = JSON.parse(JSON.stringify(prev));
@@ -472,9 +517,10 @@ export default function HexStrategyGame(){
       addLog(`${player.name} researching ${TECH_TREE[techId].name}`, g);
       return g;
     });
-  }, []);
+  }, [onlineMode]);
 
   const upgradeUnit=useCallback((unitId)=>{
+    if(onlineMode){onlineMode.sendAction({type:"UPGRADE_UNIT",unitId});SFX.click();return;}
     setGs(prev=>{
       const g=JSON.parse(JSON.stringify(prev));
       const player=g.players.find(p=>p.id===g.currentPlayerId);
@@ -489,13 +535,14 @@ export default function HexStrategyGame(){
       // Scale HP proportionally
       unit.hpCurrent=Math.ceil((unit.hpCurrent/oldDef.hp)*newDef.hp);
       unit.movementCurrent=0;unit.hasAttacked=true; // uses the turn
-      addLog(`⬆ ${oldDef.name} upgraded to ${newDef.name} (-${info.cost}💰)`,g);
+      addLog(`\u2B06 ${oldDef.name} upgraded to ${newDef.name} (-${info.cost}\u{1F4B0})`,g);
       return g;
     });
     SFX.click();
-  },[]);
+  },[onlineMode]);
 
   const setProd = useCallback((cityId, type, itemId) => {
+    if(onlineMode){onlineMode.sendAction({type:"SET_PRODUCTION",cityId,prodType:type,itemId});return;}
     setGs(prev => {
       const g = JSON.parse(JSON.stringify(prev));
       const city = g.players.find(p => p.id === g.currentPlayerId).cities.find(c => c.id === cityId);
@@ -505,9 +552,10 @@ export default function HexStrategyGame(){
       }
       return g;
     });
-  }, []);
+  }, [onlineMode]);
 
   const moveU = useCallback((unitId, targetCol, targetRow, cost) => {
+    if(onlineMode){onlineMode.sendAction({type:"MOVE_UNIT",unitId,col:targetCol,row:targetRow});setSelU(null);SFX.move();return;}
     let remaining = 0;
     setGs(prev => {
       const g = JSON.parse(JSON.stringify(prev));
@@ -526,6 +574,7 @@ export default function HexStrategyGame(){
   }, []);
 
   const foundCity = useCallback((unitId, col, row) => {
+    if(onlineMode){onlineMode.sendAction({type:"FOUND_CITY",unitId,col,row});setSettlerM(null);setSelU(null);SFX.found();return;}
     setGs(prev => {
       const g = JSON.parse(JSON.stringify(prev));
       const player = g.players.find(p => p.id === g.currentPlayerId);
@@ -736,6 +785,14 @@ export default function HexStrategyGame(){
   const landOwned=useMemo(()=>{const o={};players.forEach(p=>{o[p.id]=hexes.filter(h=>h.ownerPlayerId===p.id).length;});return o;},[hexes,players]);
   const totalLand=useMemo(()=>hexes.filter(h=>h.terrainType!=="water").length,[hexes]);
 
+  // === ONLINE MODE ROUTING ===
+  if(gameMode==="online"&&!onlineRoomId){
+    return <Lobby onJoinRoom={(code)=>setOnlineRoomId(code)} onBack={()=>{setGameMode(null);setOnlineRoomId(null);}}/>;
+  }
+  if(gameMode==="online"&&onlineRoomId){
+    return <OnlineGame roomId={onlineRoomId} onBack={()=>{setOnlineRoomId(null);setGameMode(null);}}/>;
+  }
+
   // === MODE SELECTION SCREEN ===
   if(!gameMode){
     return <ModeSelectScreen setGameMode={setGameMode}/>;
@@ -858,7 +915,7 @@ export default function HexStrategyGame(){
 
       {/* City panel */}
       {showCity&&(()=>{const city=cp.cities.find(c=>c.id===showCity);if(!city)return null;
-        const cancelProduction=(cityId)=>{setGs(prev=>{const g=JSON.parse(JSON.stringify(prev));const c=g.players.find(p=>p.id===g.currentPlayerId).cities.find(c2=>c2.id===cityId);if(c){c.currentProduction=null;c.productionProgress=0;}return g;});};
+        const cancelProduction=(cityId)=>{if(onlineMode){onlineMode.sendAction({type:"CANCEL_PRODUCTION",cityId});return;}setGs(prev=>{const g=JSON.parse(JSON.stringify(prev));const c=g.players.find(p=>p.id===g.currentPlayerId).cities.find(c2=>c2.id===cityId);if(c){c.currentProduction=null;c.productionProgress=0;}return g;});};
         return <CityPanel city={city} cp={cp} hexes={hexes} cityPosRef={cityPosRef} cityCollapsed={cityCollapsed} setCityCollapsed={setCityCollapsed} setShowCity={setShowCity} onPanelDown={onPanelDown} setProd={setProd} cancelProduction={cancelProduction}/>;})()}
 
       {/* Legend */}
@@ -872,6 +929,15 @@ export default function HexStrategyGame(){
 
       {/* AI thinking overlay */}
       {aiThinking&&<div style={{position:"absolute",inset:0,zIndex:40,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(5,8,3,.6)",pointerEvents:"all"}}><div style={{background:"rgba(15,20,10,.95)",border:"2px solid rgba(100,140,50,.5)",borderRadius:12,padding:"24px 40px",textAlign:"center",boxShadow:"0 0 40px rgba(80,120,40,.2)"}}><div style={{fontSize:28,marginBottom:8,animation:"pulse 1.5s ease-in-out infinite"}}>🤖</div><div style={{color:"#c8d8a0",fontSize:16,fontWeight:600,letterSpacing:3}}>AI is thinking...</div><div style={{color:"#8a9a70",fontSize:12,marginTop:6}}>The AI plots its next move</div></div></div>}
+
+      {/* Online mode: Opponent's Turn overlay */}
+      {onlineMode&&!onlineMode.isMyTurn&&!gs?.victoryStatus&&<div style={{position:"absolute",inset:0,zIndex:35,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(5,8,3,.4)",pointerEvents:"all"}}><div style={{background:"rgba(15,20,10,.95)",border:"2px solid rgba(100,140,50,.5)",borderRadius:12,padding:"24px 40px",textAlign:"center",boxShadow:"0 0 40px rgba(80,120,40,.2)"}}><div style={{fontSize:28,marginBottom:8}}>{"\u{1F551}"}</div><div style={{color:"#c8d8a0",fontSize:16,fontWeight:600,letterSpacing:3}}>Opponent's Turn</div><div style={{color:"#8a9a70",fontSize:12,marginTop:6}}>Waiting for your opponent to play...</div></div></div>}
+
+      {/* Online mode: Disconnect warning */}
+      {onlineMode?.opponentDisconnected&&<div style={{position:"absolute",top:80,left:"50%",transform:"translateX(-50%)",zIndex:50,background:"rgba(120,40,20,.95)",border:"1px solid rgba(200,80,40,.6)",borderRadius:8,padding:"8px 20px",pointerEvents:"auto"}}><div style={{color:"#ffb090",fontSize:12,fontWeight:600,letterSpacing:1}}>Opponent Disconnected</div><div style={{color:"#ff9070",fontSize:9,marginTop:2}}>They may reconnect...</div></div>}
+
+      {/* Online mode: Error banner */}
+      {onlineMode?.error&&<div style={{position:"absolute",top:onlineMode.opponentDisconnected?130:80,left:"50%",transform:"translateX(-50%)",zIndex:50,background:"rgba(120,20,20,.95)",border:"1px solid rgba(200,40,40,.6)",borderRadius:8,padding:"6px 16px",pointerEvents:"auto"}}><div style={{color:"#ff6060",fontSize:11}}>{onlineMode.error}</div></div>}
 
       {/* Random event popup */}
       <EventPopup event={eventPopup} onDismiss={() => setEventPopup(null)}/>
