@@ -795,34 +795,40 @@ export default function HexStrategyGame({ onlineMode } = {}){
   const landOwned=useMemo(()=>{const o={};players.forEach(p=>{o[p.id]=hexes.filter(h=>h.ownerPlayerId===p.id).length;});return o;},[hexes,players]);
   const totalLand=useMemo(()=>hexes.filter(h=>h.terrainType!=="water").length,[hexes]);
 
+  // === ONLINE MODE: when rendered by OnlineGame with onlineMode prop, skip all menu screens ===
+  // Wait for server game state to arrive before rendering the board
+  if(onlineMode){
+    if(!gs) return <div style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Palatino Linotype',serif"}}><div style={{color:"#6a7a50",fontSize:14,letterSpacing:3}}>Loading game...</div></div>;
+    // Fall through to game board rendering below
+  } else {
   // === ONLINE MODE ROUTING (top-level: user clicked "Online" from menu) ===
-  if(!onlineMode && gameMode==="online"&&!onlineRoomId){
+  if(gameMode==="online"&&!onlineRoomId){
     return <Lobby onJoinRoom={(code)=>setOnlineRoomId(code)} onBack={()=>{setGameMode(null);setOnlineRoomId(null);}}/>;
   }
-  if(!onlineMode && gameMode==="online"&&onlineRoomId){
+  if(gameMode==="online"&&onlineRoomId){
     return <OnlineGame roomId={onlineRoomId} onBack={()=>{setOnlineRoomId(null);setGameMode(null);}}/>;
   }
 
-  // === OFFLINE MENU SCREENS (skip all when onlineMode prop is provided) ===
-  if(!onlineMode){
-    if(!gameMode){
-      return <ModeSelectScreen setGameMode={setGameMode}/>;
-    }
-    if(gameMode&&!mapSizePick){
-      return <MapSizeScreen setMapSizePick={setMapSizePick} setGameMode={setGameMode}/>;
-    }
-    if(mapSizePick&&!lobbyDone){
-      return <LobbyScreen gameMode={gameMode} mapSizePick={mapSizePick} playerSlots={playerSlots} setPlayerSlots={setPlayerSlots} onStart={()=>{SFX.click();setLobbyDone(true);}} onBack={()=>{setMapSizePick(null);}}/>;
-    }
-    if(!gameStarted||!gs){
-      return <CivSelectScreen gameMode={gameMode} mapSizePick={mapSizePick} playerSlots={playerSlots} civPicks={civPicks} setCivPicks={setCivPicks} civPickStep={civPickStep} setCivPickStep={setCivPickStep} setGs={setGs} setGameStarted={setGameStarted} onBack={()=>{setLobbyDone(false);setCivPickStep(1);}}/>;
-    }
+  // === MODE SELECTION SCREEN ===
+  if(!gameMode){
+    return <ModeSelectScreen setGameMode={setGameMode}/>;
   }
 
-  // === ONLINE MODE: wait for server state before rendering board ===
-  if(onlineMode && !gs){
-    return <div style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Palatino Linotype',serif"}}><div style={{color:"#6a7a50",fontSize:14,letterSpacing:3}}>Loading game...</div></div>;
+  // === MAP SIZE SELECTION SCREEN ===
+  if(gameMode&&!mapSizePick){
+    return <MapSizeScreen setMapSizePick={setMapSizePick} setGameMode={setGameMode}/>;
   }
+
+  // === LOBBY SCREEN (configure player slots) ===
+  if(mapSizePick&&!lobbyDone){
+    return <LobbyScreen gameMode={gameMode} mapSizePick={mapSizePick} playerSlots={playerSlots} setPlayerSlots={setPlayerSlots} onStart={()=>{SFX.click();setLobbyDone(true);}} onBack={()=>{setMapSizePick(null);}}/>;
+  }
+
+  // === CIV SELECTION SCREEN ===
+  if(!gameStarted||!gs){
+    return <CivSelectScreen gameMode={gameMode} mapSizePick={mapSizePick} playerSlots={playerSlots} civPicks={civPicks} setCivPicks={setCivPicks} civPickStep={civPickStep} setCivPickStep={setCivPickStep} setGs={setGs} setGameStarted={setGameStarted} onBack={()=>{setLobbyDone(false);setCivPickStep(1);}}/>;
+  }
+  } // end else (non-online routing)
 
   // Turn transition screen (hotseat: hide board between turns)
   if(turnTransition){
