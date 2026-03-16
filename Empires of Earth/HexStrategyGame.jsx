@@ -19,7 +19,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
 import { usePanZoom } from './hooks/usePanZoom.js';
 import { useMinimap } from './hooks/useMinimap.js';
 import { ModeSelectScreen, MapSizeScreen, LobbyScreen, CivSelectScreen, TurnTransitionScreen, VictoryScreen } from './components/GameScreens.jsx';
-import { MAX_PLAYERS } from './data/constants.js';
+import { MAX_PLAYERS, MAP_SIZES, setMapConfig } from './data/constants.js';
 import Lobby from './components/Lobby.jsx';
 import OnlineGame from './components/OnlineGame.jsx';
 import { TechTreePanel } from './components/TechTreePanel.jsx';
@@ -148,8 +148,18 @@ export default function HexStrategyGame({ onlineMode } = {}){
   },[fogVisible,cpId]);
 
   // === ONLINE MODE: sync server state to local state ===
+  const onlineMapConfigured = useRef(false);
   useEffect(() => {
     if (!onlineMode?.gameState) return;
+    // Configure map dimensions from the server state on first receive
+    if (!onlineMapConfigured.current && onlineMode.gameState.hexes?.length > 0) {
+      const maxCol = onlineMode.gameState.hexes.reduce((m, h) => Math.max(m, h.col), 0);
+      const maxRow = onlineMode.gameState.hexes.reduce((m, h) => Math.max(m, h.row), 0);
+      // Find matching map size config
+      const matchKey = Object.entries(MAP_SIZES).find(([, v]) => v.cols === maxCol + 1 && v.rows === maxRow + 1);
+      if (matchKey) setMapConfig(matchKey[0]);
+      onlineMapConfigured.current = true;
+    }
     setGs(onlineMode.gameState);
   }, [onlineMode?.gameState]);
 
@@ -785,7 +795,13 @@ export default function HexStrategyGame({ onlineMode } = {}){
   const landOwned=useMemo(()=>{const o={};players.forEach(p=>{o[p.id]=hexes.filter(h=>h.ownerPlayerId===p.id).length;});return o;},[hexes,players]);
   const totalLand=useMemo(()=>hexes.filter(h=>h.terrainType!=="water").length,[hexes]);
 
-  // === ONLINE MODE ROUTING ===
+  // === ONLINE MODE: when rendered by OnlineGame with onlineMode prop, skip all menu screens ===
+  // Wait for server game state to arrive before rendering the board
+  if(onlineMode){
+    if(!gs) return <div style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Palatino Linotype',serif"}}><div style={{color:"#6a7a50",fontSize:14,letterSpacing:3}}>Loading game...</div></div>;
+    // Fall through to game board rendering below
+  } else {
+  // === ONLINE MODE ROUTING (top-level: user clicked "Online" from menu) ===
   if(gameMode==="online"&&!onlineRoomId){
     return <Lobby onJoinRoom={(code)=>setOnlineRoomId(code)} onBack={()=>{setGameMode(null);setOnlineRoomId(null);}}/>;
   }
@@ -812,6 +828,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
   if(!gameStarted||!gs){
     return <CivSelectScreen gameMode={gameMode} mapSizePick={mapSizePick} playerSlots={playerSlots} civPicks={civPicks} setCivPicks={setCivPicks} civPickStep={civPickStep} setCivPickStep={setCivPickStep} setGs={setGs} setGameStarted={setGameStarted} onBack={()=>{setLobbyDone(false);setCivPickStep(1);}}/>;
   }
+  } // end else (non-online routing)
 
   // Turn transition screen (hotseat: hide board between turns)
   if(turnTransition){
