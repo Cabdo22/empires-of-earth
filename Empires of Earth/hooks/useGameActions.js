@@ -241,6 +241,12 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
       if (unitIdx === -1) return prev;
       const hex = hexAt(g.hexes, col, row);
       if (!hex || hex.terrainType === "water" || hex.terrainType === "mountain" || hex.cityId) return prev;
+      // Must be at least 2 hexes from any existing city
+      const tooClose = g.players.some(p => p.cities.some(c => {
+        const ch = g.hexes[c.hexId];
+        return ch && hexDist(col, row, ch.col, ch.row) < 2;
+      }));
+      if (tooClose) return prev;
       player.units.splice(unitIdx, 1);
       g.nextCityId = (g.nextCityId || 0) + 1;
       const civNames = CIV_DEFS[player.civilization]?.cityNames || ["Colony"];

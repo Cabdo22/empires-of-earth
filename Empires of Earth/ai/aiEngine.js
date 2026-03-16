@@ -73,7 +73,7 @@ const aiPickProduction = (city, player, hexes, enemies, smarter) => {
   const settlerCount = player.units.filter(u => u.unitType === "settler").length;
 
   const maxCities = Math.max(3, Math.floor(COLS * ROWS / 80));
-  if (player.cities.length < maxCities && settlerCount === 0 && availUnits.some(u => u.id === "settler")) {
+  if (player.cities.length < maxCities && settlerCount === 0 && (city.population || 1) >= 2 && availUnits.some(u => u.id === "settler")) {
     return { type: "unit", itemId: "settler" };
   }
 
@@ -112,9 +112,13 @@ const aiPickProduction = (city, player, hexes, enemies, smarter) => {
 };
 
 // ---- City founding location ----
-const aiFindCityLocation = (settler, player, hexes) => {
+const aiFindCityLocation = (settler, player, hexes, allPlayers) => {
   const existingCityHexes = new Set(
     player.cities.map(c => `${hexes[c.hexId].col},${hexes[c.hexId].row}`)
+  );
+  // All cities from all players for minimum distance check
+  const allCityCoords = (allPlayers || [player]).flatMap(p =>
+    p.cities.map(c => { const h = hexes[c.hexId]; return h ? [h.col, h.row] : null; }).filter(Boolean)
   );
 
   const { reachable, costMap } = getReachableHexes(settler.hexCol, settler.hexRow, settler.movementCurrent, hexes, "land");
@@ -124,6 +128,8 @@ const aiFindCityLocation = (settler, player, hexes) => {
     const [col, row] = key.split(",").map(Number);
     const hex = hexAt(hexes, col, row);
     if (!hex || hex.terrainType === "water" || hex.terrainType === "mountain" || hex.cityId) continue;
+    // Skip if too close to any city
+    if (allCityCoords.some(([cc, cr]) => hexDist(col, row, cc, cr) < 2)) continue;
 
     let score = 0;
     if (hex.terrainType === "grassland") score += 3;
@@ -175,16 +181,16 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemies, addLogFn, smarter) => {
     if (unit.unitType !== "settler" || processedUnits.has(unit.id)) continue;
     processedUnits.add(unit.id);
 
-    const bestLocResult = aiFindCityLocation(unit, aiPlayer, g.hexes);
+    const bestLocResult = aiFindCityLocation(unit, aiPlayer, g.hexes, g.players);
     if (bestLocResult) {
       const bestLoc = bestLocResult.hex;
       const bestLocCost = bestLocResult.cost;
       const hex = hexAt(g.hexes, unit.hexCol, unit.hexRow);
       const standingGood = hex && hex.terrainType === "grassland" && !hex.cityId;
-      const tooClose = aiPlayer.cities.some(c => {
+      const tooClose = g.players.some(p => p.cities.some(c => {
         const ch = g.hexes[c.hexId];
-        return hexDist(unit.hexCol, unit.hexRow, ch.col, ch.row) < 3;
-      });
+        return ch && hexDist(unit.hexCol, unit.hexRow, ch.col, ch.row) < 2;
+      }));
 
       const maxFoundCities = Math.max(3, Math.floor(COLS * ROWS / 80));
       if (standingGood && !tooClose && aiPlayer.cities.length < maxFoundCities) {
