@@ -60,7 +60,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
           hexCol: spawnCol, hexRow: spawnRow,
           movementCurrent: def.move, hpCurrent: def.hp, hasAttacked: false,
         });
-        if (city.currentProduction.itemId === "nuke") player.gold -= 50;
+        if (city.currentProduction.itemId === "nuke" || city.currentProduction.itemId === "icbm") player.gold -= 50;
       } else {
         city.districts.push(city.currentProduction.itemId);
       }

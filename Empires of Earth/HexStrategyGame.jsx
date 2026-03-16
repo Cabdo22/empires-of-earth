@@ -104,7 +104,7 @@ export default function HexStrategyGame(){
 
   const nukeR=useMemo(()=>{
     if(!nukeM)return new Set();const nu=cp.units.find(u=>u.id===nukeM);
-    if(!nu)return new Set();return getRangedTargets(nu.hexCol,nu.hexRow,3);
+    if(!nu)return new Set();const nukeDef=UNIT_DEFS[nu.unitType];return getRangedTargets(nu.hexCol,nu.hexRow,nukeDef?.range||12);
   },[nukeM,cp]);
 
   const actable=useMemo(()=>{
@@ -155,12 +155,12 @@ export default function HexStrategyGame(){
       // Fighter interception: any enemy fighter within 2 hexes of target can intercept
       const allEnemyUnits=g.players.filter(p=>p.id!==g.currentPlayerId).flatMap(p=>p.units);
       const interceptor=allEnemyUnits.find(u=>{
-        if(u.unitType!=="fighter")return false;
+        if(u.unitType!=="fighter"&&u.unitType!=="jet_fighter")return false;
         const dist=hexDist(u.hexCol,u.hexRow,tc,tr);
         return dist<=2;
       });
       if(interceptor){
-        addLog(`\u2708 ${interceptor.unitType==="fighter"?"Fighter":"Unit"} intercepts nuke at (${tc},${tr})!`,g);
+        addLog(`\u2708 ${UNIT_DEFS[interceptor.unitType]?.name||"Fighter"} intercepts nuke at (${tc},${tr})!`,g);
         interceptor.hasAttacked=true;interceptor.movementCurrent=0;
         const fl={};fl[`${tc},${tr}`]="combat";setFlashes(fl);
         SFX.combat();return g;
@@ -173,7 +173,7 @@ export default function HexStrategyGame(){
         // Damage cities of any enemy player
         for(const p of g.players.filter(pp=>pp.id!==g.currentPlayerId)){
           const dc=p.cities.find(c=>{const h=g.hexes[c.hexId];return h&&h.col===bh.col&&h.row===bh.row;});
-          if(dc){dc.hp=Math.max(1,(dc.hp||20)-10);addLog(`\u2622 ${dc.name} hit! (${dc.hp}HP)`,g);}
+          if(dc){dc.hp=1;addLog(`\u2622 ${dc.name} hit! (${dc.hp}HP)`,g);}
         }}
       addLog(`\u2622 NUCLEAR STRIKE at (${tc},${tr})!`,g);setFlashes(fl);checkVictory(g);return g;});
     setNukeM(null);setSelU(null);SFX.nuke();
@@ -627,7 +627,7 @@ export default function HexStrategyGame(){
     if(isMy&&!uSel2&&phase==="MOVEMENT"){setSelU(myU[0].id);setSelH(null);}
     else if(isMy&&uSel2){
       if(myU.length>1){const ci=myU.findIndex(u=>u.id===selU);setSelU(myU[(ci+1)%myU.length].id);}
-      else{const su=myU[0];if(su.unitType==="settler"){setSettlerM(su.id);return;}if(su.unitType==="nuke"){setNukeM(su.id);return;}setSelU(null);setSelH(hex.id);}
+      else{const su=myU[0];if(su.unitType==="settler"){setSettlerM(su.id);return;}if(su.unitType==="nuke"||su.unitType==="icbm"){setNukeM(su.id);return;}setSelU(null);setSelH(hex.id);}
     }else{setSelU(null);setSelH(selH===hex.id?null:hex.id);}
   },[findHexFromEvent,fogVisible,unitMap,cityMap,cpId,selU,nukeM,nukeR,settlerM,phase,selH,reach,moveCostMap,sud,launchNuke,foundCity,doCombat,moveU]);
 

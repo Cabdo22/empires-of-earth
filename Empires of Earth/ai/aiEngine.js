@@ -39,7 +39,7 @@ const aiPickResearch = (player, hexes, enemies, smarter) => {
   const scored = available.map(tech => {
     let score = Math.round(100 / tech.cost * 10);
     const isMilitary = tech.effects.some(e =>
-      /unlock.*warrior|unlock.*sword|unlock.*knight|unlock.*archer|unlock.*tank|unlock.*musket|unlock.*artillery|unlock.*catapult|strength|movement|unit cost/i.test(e)
+      /unlock.*warrior|unlock.*sword|unlock.*knight|unlock.*horseman|unlock.*archer|unlock.*crossbow|unlock.*tank|unlock.*musket|unlock.*artillery|unlock.*catapult|unlock.*cannon|unlock.*trebuchet|unlock.*cavalier|unlock.*frigate|unlock.*machine|unlock.*infantry|unlock.*mech|unlock.*fighter|unlock.*bomber|unlock.*missile|strength|movement|unit cost/i.test(e)
     );
     if (isMilitary && enemyNearby) score += smarter ? 12 : 8;
     if (isMilitary && !enemyNearby) score += 2;
@@ -67,7 +67,7 @@ const aiPickProduction = (city, player, hexes, enemies, smarter) => {
   const availUnits = getAvailableUnits(player, city, hexes);
   const availDistricts = getAvailableDistricts(player, city);
   const militaryCount = player.units.filter(u =>
-    u.unitType !== "scout" && u.unitType !== "settler" && u.unitType !== "nuke"
+    u.unitType !== "scout" && u.unitType !== "settler" && u.unitType !== "nuke" && u.unitType !== "icbm"
   ).length;
   const totalEnemyMilitary = getAllEnemyUnits(enemies).length;
   const settlerCount = player.units.filter(u => u.unitType === "settler").length;
@@ -87,7 +87,7 @@ const aiPickProduction = (city, player, hexes, enemies, smarter) => {
   const militaryThreshold = smarter ? totalEnemyMilitary + 2 : totalEnemyMilitary + 1;
   if ((militaryCount < militaryThreshold) || enemyNearby) {
     const military = availUnits
-      .filter(u => u.id !== "settler" && u.id !== "scout" && u.id !== "nuke")
+      .filter(u => u.id !== "settler" && u.id !== "scout" && u.id !== "nuke" && u.id !== "icbm")
       .sort((a, b) => b.strength - a.strength);
     if (military.length > 0) return { type: "unit", itemId: military[0].id };
   }
@@ -104,7 +104,7 @@ const aiPickProduction = (city, player, hexes, enemies, smarter) => {
   }
 
   const fallback = availUnits
-    .filter(u => u.id !== "settler" && u.id !== "nuke")
+    .filter(u => u.id !== "settler" && u.id !== "nuke" && u.id !== "icbm")
     .sort((a, b) => b.strength - a.strength);
   if (fallback.length > 0) return { type: "unit", itemId: fallback[0].id };
 
@@ -218,40 +218,40 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemies, addLogFn, smarter) => {
     }
   }
 
-  // Nukes
+  // Nukes & ICBMs
   for (const unit of [...aiPlayer.units]) {
-    if (unit.unitType !== "nuke" || processedUnits.has(unit.id)) continue;
+    if ((unit.unitType !== "nuke" && unit.unitType !== "icbm") || processedUnits.has(unit.id)) continue;
     processedUnits.add(unit.id);
+    const nukeDef = UNIT_DEFS[unit.unitType];
+    const nukeRange = nukeDef?.range || 12;
 
     for (const eCity of allEnemyCities) {
       const enemyOwner = enemies.find(e => e.cities.some(c => c.id === eCity.id));
       if (!enemyOwner) continue;
       const eCityHex = g.hexes[eCity.hexId];
       const dist = hexDist(unit.hexCol, unit.hexRow, eCityHex.col, eCityHex.row);
-      if (dist <= 3) {
+      if (dist <= nukeRange) {
         const interceptor = allEnemyUnits.find(u =>
-          u.unitType === "fighter" && !u.hasAttacked &&
+          (u.unitType === "fighter" || u.unitType === "jet_fighter") && !u.hasAttacked &&
           hexDist(u.hexCol, u.hexRow, eCityHex.col, eCityHex.row) <= 2
         );
         if (interceptor) {
           aiPlayer.units = aiPlayer.units.filter(u => u.id !== unit.id);
           interceptor.hasAttacked = true;
-          addLogFn(`\u2708 Fighter intercepts AI nuke!`, g);
+          addLogFn(`\u2708 ${UNIT_DEFS[interceptor.unitType]?.name || "Fighter"} intercepts AI nuke!`, g);
           break;
         }
         const blast = getHexesInRadius(eCityHex.col, eCityHex.row, 1, g.hexes);
         for (const bh of blast) {
-          // Remove units of ALL enemies in blast
           for (const enemy of enemies) {
             enemy.units = enemy.units.filter(u => !(u.hexCol === bh.col && u.hexRow === bh.row));
           }
           aiPlayer.units = aiPlayer.units.filter(u => !(u.hexCol === bh.col && u.hexRow === bh.row && u.id !== unit.id));
           g.barbarians = (g.barbarians || []).filter(b => !(b.hexCol === bh.col && b.hexRow === bh.row));
-          // Damage enemy cities in blast
           for (const enemy of enemies) {
             const dc = enemy.cities.find(c => { const h = g.hexes[c.hexId]; return h.col === bh.col && h.row === bh.row; });
             if (dc) {
-              dc.hp = Math.max(1, (dc.hp || 20) - 10);
+              dc.hp = 1;
               addLogFn(`\u2622 ${dc.name} hit! (${dc.hp}HP)`, g);
             }
           }

@@ -197,7 +197,7 @@ export const getAvailableUnits = (player, city, hexes) => {
     .filter(([id, u]) => {
       if (u.techReq && !player.researchedTechs.includes(u.techReq)) return false;
       if (u.resourceReq && hexes && !cityHasResource(city, hexes, u.resourceReq)) return false;
-      if (id === "nuke") return hasNuclearDistrict && player.gold >= 50;
+      if (id === "nuke" || id === "icbm") return hasNuclearDistrict && player.gold >= 50;
       if (MILITARY_REQ_UNITS.has(id) && !hasMilitaryDistrict) return false;
       if (replacedByUnique.has(id)) return false;
       if (u.civReq && u.civReq !== player.civilization) return false;

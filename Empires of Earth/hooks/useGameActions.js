@@ -39,11 +39,11 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
       aP.units.splice(ni, 1);
       // Fighter interception
       const interceptor = dP.units.find(u => {
-        if (u.unitType !== "fighter") return false;
+        if (u.unitType !== "fighter" && u.unitType !== "jet_fighter") return false;
         return hexDist(u.hexCol, u.hexRow, tc, tr) <= 2;
       });
       if (interceptor) {
-        addLogMsg(`\u2708 ${interceptor.unitType === "fighter" ? "Fighter" : "Unit"} intercepts nuke at (${tc},${tr})!`, g);
+        addLogMsg(`\u2708 ${UNIT_DEFS[interceptor.unitType]?.name || "Fighter"} intercepts nuke at (${tc},${tr})!`, g);
         interceptor.hasAttacked = true;
         const fl = {}; fl[`${tc},${tr}`] = "combat"; setFlashes(fl);
         SFX.combat(); return g;
@@ -55,7 +55,7 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
         aP.units = aP.units.filter(u => !(u.hexCol === bh.col && u.hexRow === bh.row));
         g.barbarians = (g.barbarians || []).filter(b => !(b.hexCol === bh.col && b.hexRow === bh.row));
         const dc = dP.cities.find(c => { const h = g.hexes[c.hexId]; return h && h.col === bh.col && h.row === bh.row; });
-        if (dc) { dc.hp = Math.max(1, (dc.hp || 20) - 10); addLogMsg(`\u2622 ${dc.name} hit! (${dc.hp}HP)`, g); }
+        if (dc) { dc.hp = 1; addLogMsg(`\u2622 ${dc.name} hit! (${dc.hp}HP)`, g); }
       }
       addLogMsg(`\u2622 NUCLEAR STRIKE at (${tc},${tr})!`, g); setFlashes(fl); checkVictoryState(g); return g;
     });

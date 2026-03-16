@@ -9,5 +9,5 @@ export const DISTRICT_DEFS = {
   market:   { name: "Market",   icon: "💰", cost: 17,  effects: { gold: 4 },       techReq: "trade" },
   bank:     { name: "Bank",     icon: "🏦", cost: 19,  effects: { gold: 5 },       techReq: "economics" },
   military: { name: "Military", icon: "⚔",  cost: 22, effects: {},                techReq: "bronze_working" },
-  nuclear:  { name: "Nuclear",  icon: "☢",  cost: 30, effects: {},                techReq: "quantum_computing" },
+  nuclear:  { name: "Nuclear",  icon: "☢",  cost: 30, effects: {},                techReq: "combustion" },
 };

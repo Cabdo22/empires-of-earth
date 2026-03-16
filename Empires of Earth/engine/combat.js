@@ -3,7 +3,7 @@
 // ============================================================
 
 import { TERRAIN_INFO } from '../data/terrain.js';
-import { UNIT_DEFS } from '../data/units.js';
+import { UNIT_DEFS, SIEGE_UNITS } from '../data/units.js';
 import { TECH_TREE } from '../data/techs.js';
 import { ERA_IDX } from '../data/techs.js';
 import { CITY_DEF_BONUS } from '../data/constants.js';
@@ -65,9 +65,8 @@ export const calcCombatPreview = (attUnit, attDef, defUnit, defDef, defTerrain, 
   if (defPlayer.civilization === "Aztec" && defDef.range === 0) { defStr += 1; dMods.push({ label: "Aztec melee", value: 1 }); }
 
   // Ottoman siege bonus
-  const siegeTypes = ["catapult", "great_bombard", "battleship"];
-  if (attPlayer.civilization === "Ottoman" && siegeTypes.includes(attUnit.unitType)) { attStr += 1; aMods.push({ label: "Ottoman siege", value: 1 }); }
-  if (defPlayer.civilization === "Ottoman" && siegeTypes.includes(defUnit.unitType)) { defStr += 1; dMods.push({ label: "Ottoman siege", value: 1 }); }
+  if (attPlayer.civilization === "Ottoman" && SIEGE_UNITS.has(attUnit.unitType)) { attStr += 1; aMods.push({ label: "Ottoman siege", value: 1 }); }
+  if (defPlayer.civilization === "Ottoman" && SIEGE_UNITS.has(defUnit.unitType)) { defStr += 1; dMods.push({ label: "Ottoman siege", value: 1 }); }
 
   // Damage formula: attacker deals (str*3 - enemy str), ranged units take no counter-damage
   let attackDmg = Math.max(1, Math.round(attStr * 3 - defStr));
