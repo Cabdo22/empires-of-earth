@@ -28,8 +28,7 @@ export function ModeSelectScreen({ setGameMode }) {
       <h1 style={{ color: "#c8d8a0", fontSize: 32, fontWeight: 400, letterSpacing: 8, textTransform: "uppercase", margin: 0 }}>Empires of Earth</h1>
       <div style={{ color: "#6a7a50", fontSize: 12, letterSpacing: 3 }}>Select Game Mode</div>
       <div style={{ display: "flex", gap: 24 }}>
-        {modeBtn("vs AI", "Play against the computer", "\u{1F916}", "ai")}
-        {modeBtn("Local", "Play with friends on one screen", "\u{1F465}", "local")}
+        {modeBtn("Offline", "Play solo or with friends", "\u{1F3AE}", "offline")}
       </div>
       <div style={{ color: "#3a4a2a", fontSize: 9, marginTop: 8 }}>Fog of War \u00B7 Barbarians \u00B7 Random Events</div>
     </div>
@@ -68,7 +67,7 @@ const SLOT_LABELS = { closed: "Closed", ai: "AI", human: "Human" };
 const SLOT_COLORS = { closed: "#4a4a4a", ai: "#d8a030", human: "#60b060" };
 const DIFF_KEYS = ["easy", "normal", "hard"];
 
-export function LobbyScreen({ gameMode, mapSizePick, playerSlots, setPlayerSlots, onStart, onBack }) {
+export function LobbyScreen({ mapSizePick, playerSlots, setPlayerSlots, onStart, onBack }) {
   const maxPlayers = MAP_SIZES[mapSizePick]?.maxPlayers || 2;
 
   const cycleSlot = (idx) => {
@@ -153,7 +152,7 @@ export function LobbyScreen({ gameMode, mapSizePick, playerSlots, setPlayerSlots
 }
 
 // === CIV SELECTION SCREEN — multi-player step-through ===
-export function CivSelectScreen({ gameMode, mapSizePick, playerSlots, civPicks, setCivPicks, civPickStep, setCivPickStep, setGs, setGameStarted, onBack }) {
+export function CivSelectScreen({ mapSizePick, playerSlots, civPicks, setCivPicks, civPickStep, setCivPickStep, setGs, setGameStarted, onBack }) {
   const civKeys = Object.keys(CIV_DEFS);
 
   // Build ordered list of players who need to pick: Player 1 (human) + active slots

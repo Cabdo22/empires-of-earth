@@ -36,7 +36,7 @@ import { EventPopup } from './components/EventPopup.jsx';
 let uidCtr = 0;
 
 export default function HexStrategyGame(){
-  const[gameMode,setGameMode]=useState(null); // null | "local" | "ai"
+  const[gameMode,setGameMode]=useState(null); // null | "offline"
   const[mapSizePick,setMapSizePick]=useState(null); // null | "small" | "medium" | "large"
   const[playerSlots,setPlayerSlots]=useState(()=>Array.from({length:MAX_PLAYERS-1},(_,i)=>({type:i===0?"ai":"closed",difficulty:"normal"})));
   const[lobbyDone,setLobbyDone]=useState(false);
@@ -748,12 +748,12 @@ export default function HexStrategyGame(){
 
   // === LOBBY SCREEN (configure player slots) ===
   if(mapSizePick&&!lobbyDone){
-    return <LobbyScreen gameMode={gameMode} mapSizePick={mapSizePick} playerSlots={playerSlots} setPlayerSlots={setPlayerSlots} onStart={()=>{SFX.click();setLobbyDone(true);}} onBack={()=>{setMapSizePick(null);}}/>;
+    return <LobbyScreen mapSizePick={mapSizePick} playerSlots={playerSlots} setPlayerSlots={setPlayerSlots} onStart={()=>{SFX.click();setLobbyDone(true);}} onBack={()=>{setMapSizePick(null);}}/>;
   }
 
   // === CIV SELECTION SCREEN ===
   if(!gameStarted||!gs){
-    return <CivSelectScreen gameMode={gameMode} mapSizePick={mapSizePick} playerSlots={playerSlots} civPicks={civPicks} setCivPicks={setCivPicks} civPickStep={civPickStep} setCivPickStep={setCivPickStep} setGs={setGs} setGameStarted={setGameStarted} onBack={()=>{setLobbyDone(false);setCivPickStep(1);}}/>;
+    return <CivSelectScreen mapSizePick={mapSizePick} playerSlots={playerSlots} civPicks={civPicks} setCivPicks={setCivPicks} civPickStep={civPickStep} setCivPickStep={setCivPickStep} setGs={setGs} setGameStarted={setGameStarted} onBack={()=>{setLobbyDone(false);setCivPickStep(1);}}/>;
   }
 
   // Turn transition screen (hotseat: hide board between turns)
