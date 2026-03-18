@@ -5,10 +5,26 @@
 import React from "react";
 import { UNIT_DEFS } from '../data/units.js';
 
+const RESOURCE_BADGE = {
+  wheat:   { bg: "#3a2e10", border: "#daa520" },
+  iron:    { bg: "#2a2a30", border: "#8a9aaa" },
+  oil:     { bg: "#1a1a20", border: "#4a4a4a" },
+  uranium: { bg: "#0a2a0a", border: "#40ff40" },
+  fish:    { bg: "#0a2030", border: "#4ac0e8" },
+};
+
 export const ResourceIcon = ({ type, x, y, s }) => {
   const sz = s || 14;
+  const badge = RESOURCE_BADGE[type];
+  const badgeSize = sz * .85;
+  const badgeBg = badge ? (
+    <rect x={-badgeSize} y={-badgeSize} width={badgeSize * 2} height={badgeSize * 2}
+      rx={4} ry={4} fill={badge.bg} fillOpacity=".88"
+      stroke={badge.border} strokeWidth="1.5" strokeOpacity=".75" />
+  ) : null;
   if (type === "wheat") return (
     <g transform={`translate(${x},${y})`}>
+      {badgeBg}
       <ellipse cx={0} cy={-2} rx={sz * .3} ry={sz * .55} fill="#daa520" stroke="#b8860b" strokeWidth=".7" />
       <line x1={0} y1={sz * .4} x2={0} y2={-sz * .1} stroke="#8b7a40" strokeWidth="1.2" />
       {[-2, 0, 2].map(i => <line key={i} x1={i * 2} y1={-sz * .15 + i} x2={i * 2 + 1} y2={-sz * .35 + i} stroke="#daa520" strokeWidth=".8" />)}
@@ -16,12 +32,14 @@ export const ResourceIcon = ({ type, x, y, s }) => {
   );
   if (type === "iron") return (
     <g transform={`translate(${x},${y})`}>
+      {badgeBg}
       <polygon points={`0,${-sz * .5} ${sz * .35},${sz * .15} ${-sz * .35},${sz * .15}`} fill="#8a8a8a" stroke="#5a5a5a" strokeWidth=".8" />
       <rect x={-1} y={sz * .1} width={2} height={sz * .4} fill="#6a5a3a" rx=".5" />
     </g>
   );
   if (type === "oil") return (
     <g transform={`translate(${x},${y})`}>
+      {badgeBg}
       <rect x={-sz * .25} y={-sz * .35} width={sz * .5} height={sz * .6} rx={sz * .12} fill="#2a2a2a" stroke="#1a1a1a" strokeWidth=".6" />
       <ellipse cx={0} cy={-sz * .35} rx={sz * .25} ry={sz * .08} fill="#3a3a3a" />
       <circle cx={0} cy={sz * .4} r={sz * .25} fill="#1a1a2a" opacity=".6" />
@@ -29,6 +47,7 @@ export const ResourceIcon = ({ type, x, y, s }) => {
   );
   if (type === "uranium") return (
     <g transform={`translate(${x},${y})`}>
+      {badgeBg}
       <circle cx={0} cy={0} r={sz * .35} fill="#2a4a2a" stroke="#40ff40" strokeWidth=".8" opacity=".9" />
       <circle cx={0} cy={0} r={sz * .15} fill="#40ff40" opacity=".7" />
       {[0, 120, 240].map(a => <line key={a} x1={0} y1={0} x2={sz * .3 * Math.cos(a * Math.PI / 180)} y2={sz * .3 * Math.sin(a * Math.PI / 180)} stroke="#40ff40" strokeWidth=".8" opacity=".6" />)}
@@ -36,6 +55,7 @@ export const ResourceIcon = ({ type, x, y, s }) => {
   );
   if (type === "fish") return (
     <g transform={`translate(${x},${y})`}>
+      {badgeBg}
       <ellipse cx={0} cy={0} rx={sz * .4} ry={sz * .22} fill="#4a90c8" stroke="#2a6898" strokeWidth=".8" />
       <polygon points={`${sz * .35},0 ${sz * .55},${-sz * .18} ${sz * .55},${sz * .18}`} fill="#4a90c8" stroke="#2a6898" strokeWidth=".6" />
       <circle cx={-sz * .15} cy={-sz * .05} r={sz * .06} fill="#1a3a5a" />
