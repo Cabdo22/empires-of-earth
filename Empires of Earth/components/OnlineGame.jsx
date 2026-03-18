@@ -2,8 +2,8 @@
 // ONLINE GAME — wrapper for online multiplayer via PartyKit
 // Manages: lobby -> civ select -> gameplay with server-authoritative state
 // ============================================================
-import React, { useState } from "react";
-import { MAP_SIZES } from '../data/constants.js';
+import React, { useState, useEffect, useRef } from "react";
+import { MAP_SIZES, setMapConfig } from '../data/constants.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { SFX } from '../sfx.js';
@@ -167,9 +167,19 @@ export default function OnlineGame({ roomId, onBack }) {
     );
   }
 
-  // Playing
+  // Playing — configure map dimensions before mounting HexStrategyGame
+  const mapConfigured = useRef(false);
+  useEffect(() => {
+    if (!gameState?.hexes?.length || mapConfigured.current) return;
+    const maxCol = gameState.hexes.reduce((m, h) => Math.max(m, h.col), 0);
+    const maxRow = gameState.hexes.reduce((m, h) => Math.max(m, h.row), 0);
+    const match = Object.entries(MAP_SIZES).find(([, v]) => v.cols === maxCol + 1 && v.rows === maxRow + 1);
+    if (match) setMapConfig(match[0]);
+    mapConfigured.current = true;
+  }, [gameState]);
+
   if (roomPhase === "PLAYING" || roomPhase === "FINISHED") {
-    if (!gameState) {
+    if (!gameState || !mapConfigured.current) {
       return (
         <div style={{
           width: "100vw", height: "100vh",

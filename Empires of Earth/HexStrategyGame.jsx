@@ -19,7 +19,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
 import { usePanZoom } from './hooks/usePanZoom.js';
 import { useMinimap } from './hooks/useMinimap.js';
 import { ModeSelectScreen, MapSizeScreen, LobbyScreen, CivSelectScreen, TurnTransitionScreen, VictoryScreen } from './components/GameScreens.jsx';
-import { MAX_PLAYERS, MAP_SIZES, setMapConfig } from './data/constants.js';
+import { MAX_PLAYERS } from './data/constants.js';
 import Lobby from './components/Lobby.jsx';
 import OnlineGame from './components/OnlineGame.jsx';
 import { TechTreePanel } from './components/TechTreePanel.jsx';
@@ -148,18 +148,9 @@ export default function HexStrategyGame({ onlineMode } = {}){
   },[fogVisible,cpId]);
 
   // === ONLINE MODE: sync server state to local state ===
-  const onlineMapConfigured = useRef(false);
+  // Note: setMapConfig is called in OnlineGame.jsx BEFORE this component mounts
   useEffect(() => {
     if (!onlineMode?.gameState) return;
-    // Configure map dimensions from the server state on first receive
-    if (!onlineMapConfigured.current && onlineMode.gameState.hexes?.length > 0) {
-      const maxCol = onlineMode.gameState.hexes.reduce((m, h) => Math.max(m, h.col), 0);
-      const maxRow = onlineMode.gameState.hexes.reduce((m, h) => Math.max(m, h.row), 0);
-      // Find matching map size config
-      const matchKey = Object.entries(MAP_SIZES).find(([, v]) => v.cols === maxCol + 1 && v.rows === maxRow + 1);
-      if (matchKey) setMapConfig(matchKey[0]);
-      onlineMapConfigured.current = true;
-    }
     setGs(onlineMode.gameState);
   }, [onlineMode?.gameState]);
 
