@@ -3,6 +3,7 @@
 // ============================================================
 
 import { gameRng } from './constants.js';
+import { TECH_TREE } from './techs.js';
 import { isHexOccupied } from '../engine/movement.js';
 
 export const RANDOM_EVENTS = [
@@ -10,7 +11,7 @@ export const RANDOM_EVENTS = [
     id: "gold_rush", name: "Gold Rush!", desc: "Traders bring wealth.",
     effect: (g) => {
       const cp = g.players.find(p => p.id === g.currentPlayerId);
-      cp.gold += 25;
+      cp.gold += 8 * cp.cities.length;
     },
   },
   {
@@ -32,14 +33,20 @@ export const RANDOM_EVENTS = [
     id: "eureka", name: "Eureka!", desc: "A breakthrough advances research.",
     effect: (g) => {
       const cp = g.players.find(p => p.id === g.currentPlayerId);
-      if (cp.currentResearch) cp.currentResearch.progress += 12;
+      if (cp.currentResearch) {
+        const tech = TECH_TREE[cp.currentResearch.techId];
+        if (tech) cp.currentResearch.progress += Math.floor(tech.cost * 0.3);
+      }
     },
   },
   {
     id: "harvest", name: "Bountiful Harvest", desc: "Surplus food for all cities.",
     effect: (g) => {
       const cp = g.players.find(p => p.id === g.currentPlayerId);
-      cp.cities.forEach(c => c.foodAccumulated += 15);
+      cp.cities.forEach(c => {
+        const threshold = 5 + (c.population || 1) * (c.population || 1) * 2;
+        c.foodAccumulated += Math.floor(threshold * 0.5);
+      });
     },
   },
   {
