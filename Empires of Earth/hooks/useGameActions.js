@@ -168,7 +168,7 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
       expandTerritory(currentPlayer, g);
       g.currentPlayerId = g.currentPlayerId === "p1" ? "p2" : "p1";
       if (g.currentPlayerId === "p1") {
-        g.turnNumber++; spawnBarbarians(g); processBarbarians(g); rollRandomEvent(g);
+        g.turnNumber++; spawnBarbarians(g); processBarbarians(g); rollRandomEvent(g, sfxQ);
       }
       g.phase = "MOVEMENT";
       const nextPlayer = g.players.find(p => p.id === g.currentPlayerId);

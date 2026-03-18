@@ -391,7 +391,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
         g.turnNumber++;
         spawnBarbarians(g);
         processBarbarians(g);
-        rollRandomEvent(g);
+        rollRandomEvent(g, sfxQ);
       }
 
       // 6. Refresh next player's units and stay in MOVEMENT phase
@@ -425,6 +425,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
     setAiThinking(true);
 
     const timer = setTimeout(() => {
+      let sfxQ = [];
       setGs(prev => {
         if (!prev) return prev;
         let state = prev;
@@ -452,7 +453,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
           state.turnNumber++;
           spawnBarbarians(state);
           processBarbarians(state);
-          rollRandomEvent(state);
+          rollRandomEvent(state, sfxQ);
         }
 
         state.phase = "MOVEMENT";

@@ -328,7 +328,7 @@ export const applyEndTurn = (state) => {
     g.turnNumber++;
     spawnBarbarians(g);
     processBarbarians(g);
-    rollRandomEvent(g);
+    rollRandomEvent(g, sfxQ);
   }
 
   g.phase = "MOVEMENT";

@@ -277,7 +277,7 @@ export const processBarbarians = (g) => {
 };
 
 // Roll for a random event
-export const rollRandomEvent = (g) => {
+export const rollRandomEvent = (g, sfxQ) => {
   if (gameRng(g) < 0.20) {
     const available = RANDOM_EVENTS.filter(e => !e.condition || e.condition(g));
     if (available.length === 0) { g.eventMsg = null; return; }
@@ -285,6 +285,37 @@ export const rollRandomEvent = (g) => {
     evt.effect(g, addLogMsg);
     g.eventMsg = { id: evt.id, name: evt.name, desc: evt.desc };
     addLogMsg(`🎲 Event: ${evt.name} — ${evt.desc}`, g);
+
+    // Immediately apply any threshold completions from event bonuses
+    const cp = g.players.find(p => p.id === g.currentPlayerId);
+    if (cp) {
+      // Check research completion
+      if (cp.currentResearch) {
+        const tech = TECH_TREE[cp.currentResearch.techId];
+        if (tech && cp.currentResearch.progress >= tech.cost) {
+          cp.researchedTechs.push(cp.currentResearch.techId);
+          addLogMsg(`${cp.name} researched ${tech.name}!`, g);
+          cp.currentResearch = null;
+          if (sfxQ) sfxQ.push("research");
+        }
+      }
+      // Check city growth
+      for (const city of cp.cities) {
+        const growthThreshold = 5 + city.population * city.population * 2;
+        if (city.foodAccumulated >= growthThreshold) {
+          city.population++;
+          city.foodAccumulated -= growthThreshold;
+          addLogMsg(`${city.name} grew to pop ${city.population}!`, g);
+          autoAssignTiles(city, g.hexes);
+          const workableInBorder = (city.borderHexIds || []).filter(
+            hid => hid !== city.hexId && isWorkableHex(g.hexes[hid])
+          ).length;
+          if (city.population > workableInBorder) {
+            growCityBorder(city, cp, g.hexes);
+          }
+        }
+      }
+    }
   } else {
     g.eventMsg = null;
   }
