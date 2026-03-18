@@ -25,11 +25,11 @@ const MemoHex = memo(function MemoHex({
   // Explored but not currently visible: dimmed terrain, no units/cities
   if (isFogged) return (
     <g data-hex={hex.id} data-col={hex.col} data-row={hex.row} transform={`translate(${hex.x},${hex.y})`}>
-      {t === "grassland" && <polygon points={HEX_POINTS} fill="#1a2a10"/>}
-      {t === "forest" && <polygon points={HEX_POINTS} fill="#0e1a08"/>}
-      {t === "mountain" && <polygon points={HEX_POINTS} fill="#1a1a18"/>}
-      {t === "water" && <polygon points={HEX_POINTS} fill="#0a1a2a"/>}
-      <polygon points={HEX_POINTS} fill="rgba(0,0,0,.45)" stroke="rgba(30,40,20,.4)" strokeWidth="1"/>
+      {t === "grassland" && <polygon points={HEX_POINTS} fill="#2a4a1a"/>}
+      {t === "forest" && <polygon points={HEX_POINTS} fill="#1a3012"/>}
+      {t === "mountain" && <polygon points={HEX_POINTS} fill="#2a2a26"/>}
+      {t === "water" && <polygon points={HEX_POINTS} fill="#1a3050"/>}
+      <polygon points={HEX_POINTS} fill="rgba(0,0,0,.25)" stroke="rgba(30,40,20,.4)" strokeWidth="1"/>
       {hex.resource && <g opacity=".3" style={{pointerEvents:"none"}}><ResourceIcon type={hex.resource} x={0} y={2} s={12}/></g>}
     </g>
   );
