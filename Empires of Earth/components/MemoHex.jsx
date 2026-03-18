@@ -142,9 +142,6 @@ const MemoHex = memo(function MemoHex({
         {unitCount > 1 && <text x={10} y={-8} fill="#ffd740" fontSize={7} fontWeight="bold">+{unitCount - 1}</text>}
       </g>}
 
-      {/* Coordinate labels for empty hexes */}
-      {!city && unitCount === 0 && <text x={0} y={2} textAnchor="middle" dominantBaseline="middle" fill={t === "water" ? "rgba(150,200,240,.2)" : t === "mountain" ? "rgba(200,200,200,.18)" : "rgba(200,216,160,.18)"} fontSize={8} fontFamily="monospace" style={{pointerEvents:"none"}}>{hex.col},{hex.row}</text>}
-
       {/* Overlays */}
       {inMoveRange && <polygon points={HEX_POINTS} fill="rgba(96,208,255,.1)" stroke="#60d0ff" strokeWidth="2" opacity=".7"/>}
       {inAttackRange && <polygon points={HEX_POINTS} fill="rgba(255,60,60,.12)" stroke="#ff4040" strokeWidth="2" opacity=".7"/>}
