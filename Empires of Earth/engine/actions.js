@@ -11,6 +11,7 @@ import { UNIT_DEFS, SIEGE_UNITS } from '../data/units.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { calcCombatPreview } from './combat.js';
 import { canUpgradeUnit, autoAssignTiles } from './economy.js';
+import { calcCityMaxHP } from './turnProcessing.js';
 import { isHexOccupied } from './movement.js';
 import {
   processResearchAndIncome, processCityTurn, expandTerritory,
@@ -23,10 +24,10 @@ const clone = (state) => JSON.parse(JSON.stringify(state));
 
 const tryCaptureCity = (city, attackerPlayer, defenderPlayer, hex, g) => {
   defenderPlayer.cities = defenderPlayer.cities.filter(c => c.id !== city.id);
-  city.hp = 10;
-  city.hpMax = 20;
   city.captured = true;
   attackerPlayer.cities.push(city);
+  city.hpMax = calcCityMaxHP(city, attackerPlayer);
+  city.hp = Math.max(5, Math.floor(city.hpMax * 0.25));
   if (hex) hex.ownerPlayerId = attackerPlayer.id;
   // Transfer border ownership and reassign tiles
   for (const hid of (city.borderHexIds || [])) {
@@ -111,7 +112,7 @@ export const applyAttack = (state, { attackerId, col, row }) => {
         attUnit.movementCurrent = 0;
 
         if (defCity && defUnit) {
-          defCity.hp = (defCity.hp || 20) - 5;
+          defCity.hp = (defCity.hp || 20) - 3;
           if (defCity.hp <= 0) msg += ` ${tryCaptureCity(defCity, attPlayer, defPlayer, defHex, g)}`;
         }
         if (barbUnit && defHex && !defHex.ownerPlayerId) defHex.ownerPlayerId = attPlayer.id;
@@ -131,7 +132,15 @@ export const applyAttack = (state, { attackerId, col, row }) => {
   } else if (defCity) {
     // Direct city bombardment (no garrison)
     const isSiege = SIEGE_UNITS.has(attUnit.unitType);
-    let cityDmg = isSiege ? attDef.strength * 3 : Math.max(1, Math.floor(attDef.strength * 0.5));
+    const isRanged = attDef.range > 0 && !isSiege;
+    let cityDmg;
+    if (isSiege) {
+      cityDmg = attDef.strength * 5;
+    } else if (isRanged) {
+      cityDmg = Math.max(1, Math.floor(attDef.strength * 0.5));
+    } else {
+      cityDmg = attDef.strength * 2;
+    }
     if (attDef.ability === "city_siege") cityDmg += 3;
     defCity.hp = (defCity.hp || 20) - cityDmg;
     attUnit.hasAttacked = true;
@@ -275,10 +284,11 @@ export const applyFoundCity = (state, { unitId, col, row }) => {
   const cityName = civNames[player.cities.length] || `City ${g.nextCityId}`;
   const cityId = `${player.id}-c${g.nextCityId}`;
 
+  const initialMaxHP = calcCityMaxHP({ population: 1 }, player);
   const newCity = {
     id: cityId, name: cityName, hexId: hex.id, population: 1,
     districts: [], currentProduction: null, productionProgress: 0,
-    foodAccumulated: 0, hp: 20, hpMax: 20,
+    foodAccumulated: 0, hp: initialMaxHP, hpMax: initialMaxHP,
     workedTileIds: [], borderHexIds: [],
   };
   player.cities.push(newCity);

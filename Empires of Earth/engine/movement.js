@@ -149,6 +149,60 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
   return { reachable, costMap };
 };
 
+// Dijkstra-based pathfinding: returns array of {col,row} from start to end, or null
+export const findPath = (startCol, startRow, endCol, endRow, hexes, domain = "land", playerId = null, allPlayers = null, ability = null, barbarians = null) => {
+  const startKey = `${startCol},${startRow}`;
+  const endKey = `${endCol},${endRow}`;
+  if (startKey === endKey) return [{ col: startCol, row: startRow }];
+
+  const costTo = { [startKey]: 0 };
+  const cameFrom = {};
+  const heap = [];
+  heapPush(heap, { col: startCol, row: startRow, cost: 0 });
+
+  const enemyOccupied = new Set();
+  if (playerId && allPlayers) {
+    for (const p of allPlayers) {
+      if (p.id === playerId) continue;
+      for (const u of p.units) enemyOccupied.add(`${u.hexCol},${u.hexRow}`);
+    }
+  }
+  if (barbarians) {
+    for (const b of barbarians) enemyOccupied.add(`${b.hexCol},${b.hexRow}`);
+  }
+
+  while (heap.length > 0) {
+    const current = heapPop(heap);
+    const currentKey = `${current.col},${current.row}`;
+    if (currentKey === endKey) break;
+    if (costTo[currentKey] < current.cost) continue;
+    if (enemyOccupied.has(currentKey) && currentKey !== startKey) continue;
+
+    for (const [nc, nr] of getNeighbors(current.col, current.row)) {
+      const neighborKey = `${nc},${nr}`;
+      const nh = hexAt(hexes, nc, nr);
+      if (!nh) continue;
+      const moveCost = getMoveCost(nh.terrainType, domain, ability);
+      if (moveCost === null) continue;
+      const totalCost = current.cost + moveCost;
+      if (costTo[neighborKey] !== undefined && costTo[neighborKey] <= totalCost) continue;
+      costTo[neighborKey] = totalCost;
+      cameFrom[neighborKey] = currentKey;
+      heapPush(heap, { col: nc, row: nr, cost: totalCost });
+    }
+  }
+
+  if (!cameFrom[endKey]) return null;
+  const path = [];
+  let key = endKey;
+  while (key) {
+    const [c, r] = key.split(",").map(Number);
+    path.unshift({ col: c, row: r });
+    key = cameFrom[key];
+  }
+  return path;
+};
+
 // Check if a hex is occupied by any unit (player or barbarian)
 export const isHexOccupied = (col, row, allPlayers, barbarians, excludeUnitId = null) => {
   for (const p of allPlayers) {

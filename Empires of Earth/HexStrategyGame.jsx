@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { HEX_SIZE, SQRT3, COLS, ROWS, hexCenter, hexAt, getNeighbors, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS } from './data/constants.js';
+import { HEX_SIZE, SQRT3, COLS, ROWS, HEX_POINTS, hexCenter, hexAt, getNeighbors, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS } from './data/constants.js';
 import { TECH_TREE } from './data/techs.js';
 import { UNIT_DEFS } from './data/units.js';
 import { CIV_DEFS } from './data/civs.js';
 import { calcCombatPreview } from './engine/combat.js';
 import { calcPlayerIncome, canUpgradeUnit } from './engine/economy.js';
-import { getMoveBlockReason, getReachableHexes, getRangedTargets, getVisibleHexes, isHexOccupied } from './engine/movement.js';
+import { getMoveBlockReason, getReachableHexes, getRangedTargets, getVisibleHexes, isHexOccupied, findPath } from './engine/movement.js';
 import { processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg } from './engine/turnProcessing.js';
 import { checkVictoryState } from './engine/victory.js';
 import { createInitialState } from './engine/gameInit.js';
@@ -34,6 +34,8 @@ import { NotificationCircles } from './components/NotificationCircles.jsx';
 import { TutorialTips } from './components/TutorialTips.jsx';
 import { MinimapDisplay } from './components/MinimapDisplay.jsx';
 import { EventPopup } from './components/EventPopup.jsx';
+import useUnitAnimation from './hooks/useUnitAnimation.js';
+import UnitAnimationOverlay from './components/UnitAnimationOverlay.jsx';
 
 let uidCtr = 0;
 
@@ -71,6 +73,8 @@ export default function HexStrategyGame({ onlineMode } = {}){
   const turnPopupShownRef=useRef(null); // tracks which turn+player combo we've shown popups for
   const victoryPlayed=useRef(false);
   const prevCpId=useRef(null);
+  const gsRef=useRef(gs);
+  const{startAnimation,animatingUnitId,animVisuals,overlayRef}=useUnitAnimation();
 
   // Derived state (safe when gs is null)
   const hexes=gs?.hexes||[];
@@ -87,9 +91,9 @@ export default function HexStrategyGame({ onlineMode } = {}){
   const visData=useMemo(()=>hexes.map(h=>{const grass=genGrass(h.id);return{blades:grass.blades,flowers:grass.flowers,rocks:grass.rocks,detail:genDetail(h.id),trees:h.terrainType==="forest"?genTrees(h.id):{trunks:"",canopy:"",undergrowth:""},mtns:h.terrainType==="mountain"?genMtns(h.id):{peaks:"",snow:"",shadow:"",rocks:""},waves:h.terrainType==="water"?genWaves(h.id):{waves:"",foam:"",shimmer:""},coast:genCoast(h,hexes),waterCoast:genWaterCoast(h,hexes)};}),[hexes]);
   const cityMap=useMemo(()=>{const m={};players.forEach(p=>p.cities.forEach(c=>{m[c.hexId]={city:c,player:p};}));return m;},[players]);
   const unitMap=useMemo(()=>{const m={};
-    players.forEach(p=>p.units.forEach(u=>{const k=`${u.hexCol},${u.hexRow}`;if(!m[k])m[k]=[];m[k].push({...u,pid:p.id,pCol:p.color,pBg:p.colorBg,pLight:p.colorLight});}));
+    players.forEach(p=>p.units.forEach(u=>{if(u.id===animatingUnitId)return;const k=`${u.hexCol},${u.hexRow}`;if(!m[k])m[k]=[];m[k].push({...u,pid:p.id,pCol:p.color,pBg:p.colorBg,pLight:p.colorLight});}));
     barbarians.forEach(b=>{const k=`${b.hexCol},${b.hexRow}`;if(!m[k])m[k]=[];m[k].push({...b,pid:"barb",pCol:"#c05050",pBg:"#4a1010",pLight:"#ff8080"});});
-    return m;},[players,barbarians]);
+    return m;},[players,barbarians,animatingUnitId]);
   const fogVisible=useMemo(()=>gs?getVisibleHexes(cp,hexes):new Set(),[cp,hexes,gs]);
   const fogExplored=useMemo(()=>{if(!gs)return new Set();return new Set(gs.explored?.[cpId]||[]);},[gs,cpId]);
   const sud=useMemo(()=>{if(!selU||!gs)return null;const u=cp.units.find(u2=>u2.id===selU);if(!u)return null;return{...u,def:UNIT_DEFS[u.unitType]};},[selU,cp,gs]);
@@ -137,6 +141,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
     gameCenteredRef.current=true;
     sched();
   },[gs,hexes,wW,wH,sched]);
+  useEffect(()=>{gsRef.current=gs;},[gs]);
   useEffect(()=>{if(Object.keys(flashes).length>0){const t=setTimeout(()=>setFlashes({}),800);return()=>clearTimeout(t);}},[flashes]);
   useEffect(()=>{if(combatAnims.length>0){const t=setTimeout(()=>setCombatAnims([]),1200);return()=>clearTimeout(t);}},[combatAnims]);
   useEffect(()=>{if(moveMsg){const t=setTimeout(()=>setMoveMsg(null),1500);return()=>clearTimeout(t);}},[moveMsg]);
@@ -557,22 +562,47 @@ export default function HexStrategyGame({ onlineMode } = {}){
 
   const moveU = useCallback((unitId, targetCol, targetRow, cost) => {
     if(onlineMode){onlineMode.sendAction({type:"MOVE_UNIT",unitId,col:targetCol,row:targetRow});setSelU(null);SFX.move();return;}
-    let remaining = 0;
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const unit = g.players.find(p => p.id === g.currentPlayerId).units.find(u => u.id === unitId);
-      if (!unit) return prev;
-      if (isHexOccupied(targetCol, targetRow, g.players, g.barbarians, unit.id)) return prev;
-      unit.hexCol = targetCol;
-      unit.hexRow = targetRow;
-      unit.movementCurrent = Math.max(0, unit.movementCurrent - (cost || unit.movementCurrent));
-      unit.hasMoved = true;
-      remaining = unit.movementCurrent;
-      return g;
-    });
-    if (remaining <= 0) setSelU(null);
+    if(animatingUnitId)return; // block during animation
+
+    const currentGs = gsRef.current;
+    if (!currentGs) return;
+    const player = currentGs.players.find(p => p.id === currentGs.currentPlayerId);
+    const unit = player?.units.find(u => u.id === unitId);
+    if (!unit) return;
+
+    const unitDef = UNIT_DEFS[unit.unitType];
+    const path = findPath(
+      unit.hexCol, unit.hexRow, targetCol, targetRow,
+      currentGs.hexes, unitDef?.domain || 'land',
+      player.id, currentGs.players, unitDef?.ability, currentGs.barbarians
+    );
+    const waypoints = (path || [{ col: unit.hexCol, row: unit.hexRow }, { col: targetCol, row: targetRow }])
+      .map(p => hexCenter(p.col, p.row));
+
+    const visuals = {
+      unitType: unit.unitType,
+      pBg: player.colorBg, pCol: player.color, pLight: player.colorLight
+    };
+
     SFX.move();
-  }, []);
+
+    startAnimation(unitId, visuals, waypoints, () => {
+      let remaining = 0;
+      setGs(prev => {
+        const g = JSON.parse(JSON.stringify(prev));
+        const u = g.players.find(p => p.id === g.currentPlayerId)?.units.find(u2 => u2.id === unitId);
+        if (!u) return prev;
+        if (isHexOccupied(targetCol, targetRow, g.players, g.barbarians, u.id)) return prev;
+        u.hexCol = targetCol;
+        u.hexRow = targetRow;
+        u.movementCurrent = Math.max(0, u.movementCurrent - (cost || u.movementCurrent));
+        u.hasMoved = true;
+        remaining = u.movementCurrent;
+        return g;
+      });
+      if (remaining <= 0) setSelU(null);
+    });
+  }, [animatingUnitId, startAnimation]);
 
   const foundCity = useCallback((unitId, col, row) => {
     if(onlineMode){onlineMode.sendAction({type:"FOUND_CITY",unitId,col,row});setSettlerM(null);setSelU(null);SFX.found();return;}
@@ -653,7 +683,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
   const onHexLeave=useCallback(()=>{setHovH(null);setPreview(null);},[]);
 
   const onHexClick=useCallback(e=>{
-    e.stopPropagation();const h=findHexFromEvent(e);if(!h||isPanRef.current)return;
+    e.stopPropagation();if(animatingUnitId)return;const h=findHexFromEvent(e);if(!h||isPanRef.current)return;
     const{hex,uk}=h;if(!fogVisible.has(uk))return;
     const uH=unitMap[uk]||[];const myU=uH.filter(u=>u.pid===cpId);
     const eU=uH.filter(u=>u.pid!==cpId);const cE=cityMap[hex.id];const isMy=myU.length>0;
@@ -684,10 +714,10 @@ export default function HexStrategyGame({ onlineMode } = {}){
       if(myU.length>1){const ci=myU.findIndex(u=>u.id===selU);setSelU(myU[(ci+1)%myU.length].id);}
       else{const su=myU[0];if(su.unitType==="settler"){setSettlerM(su.id);return;}if(su.unitType==="nuke"||su.unitType==="icbm"){setNukeM(su.id);return;}setSelU(null);setSelH(hex.id);}
     }else{setSelU(null);setSelH(selH===hex.id?null:hex.id);}
-  },[findHexFromEvent,fogVisible,unitMap,cityMap,cpId,selU,nukeM,nukeR,settlerM,phase,selH,reach,moveCostMap,sud,launchNuke,foundCity,doCombat,moveU]);
+  },[findHexFromEvent,fogVisible,unitMap,cityMap,cpId,selU,nukeM,nukeR,settlerM,phase,selH,reach,moveCostMap,sud,launchNuke,foundCity,doCombat,moveU,animatingUnitId]);
 
   const onHexCtx=useCallback(e=>{
-    e.preventDefault();e.stopPropagation();if(isPanRef.current||phase!=="MOVEMENT")return;
+    e.preventDefault();e.stopPropagation();if(animatingUnitId||isPanRef.current||phase!=="MOVEMENT")return;
     const h=findHexFromEvent(e);if(!h)return;const{hex,uk}=h;
     const uH=unitMap[uk]||[];const myU=uH.filter(u=>u.pid===cpId);
     const eU=uH.filter(u=>u.pid!==cpId);const cE=cityMap[hex.id];
@@ -700,7 +730,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
     if(selU&&inMv){moveU(selU,hex.col,hex.row,moveCostMap[uk]);return;}
     if(selU&&!uSel2){const blk=getMoveBlockReason(hex,sud,sud?.def,reach,atkRange,phase,cpId,players);
       if(blk){setMoveMsg(blk);setFlashes(prev=>({...prev,[uk]:"blocked"}));}}
-  },[findHexFromEvent,phase,unitMap,cityMap,cpId,selU,sud,reach,atkRange,moveCostMap,doCombat,moveU,players]);
+  },[findHexFromEvent,phase,unitMap,cityMap,cpId,selU,sud,reach,atkRange,moveCostMap,doCombat,moveU,players,animatingUnitId]);
 
   const renderAll=useCallback(()=>hexes.map((hex,i)=>{
     const uk=hex.uk;
@@ -739,7 +769,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
     const EDGE_TO_NEIGHBOR = [1, 2, 3, 4, 5, 0];
     const result=[];
     for(const hex of hexes){
-      if(!hex.cityBorderId)continue;
+      if(!hex.ownerPlayerId)continue;
       const ownerP=hex.ownerPlayerId?players.find(p=>p.id===hex.ownerPlayerId):null;
       if(!ownerP)continue;
       const uk=`${hex.col},${hex.row}`;
@@ -753,7 +783,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
         const nc=hex.col+dc,nr=hex.row+dr;
         if(nc<0||nc>=COLS||nr<0||nr>=ROWS)return true;
         const nh=hexAt(hexes,nc,nr);
-        return !nh||nh.cityBorderId!==hex.cityBorderId;
+        return !nh||nh.ownerPlayerId!==hex.ownerPlayerId;
       });
       if(!edges.some(Boolean))continue;
       // Group consecutive edges into polylines
@@ -842,7 +872,18 @@ export default function HexStrategyGame({ onlineMode } = {}){
             @keyframes unitBob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
             .unit-glow { animation: unitPulse 2s ease-in-out infinite; }
             .unit-bob { animation: unitBob 2.5s ease-in-out infinite; }
+            @keyframes waveDrift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(3px,1.5px)} }
+            @keyframes waveDrift2 { 0%,100%{transform:translate(2px,4px)} 50%{transform:translate(-1px,6px)} }
+            @keyframes waveDrift3 { 0%,100%{transform:translate(-1px,8px)} 50%{transform:translate(2px,9.5px)} }
+            @keyframes foamPulse { 0%,100%{opacity:.3} 50%{opacity:.15} }
+            @keyframes shimmerFlicker { 0%,100%{opacity:.4} 30%{opacity:.15} 60%{opacity:.5} }
+            .wave-layer1 { animation: waveDrift1 6s ease-in-out infinite; }
+            .wave-layer2 { animation: waveDrift2 8s ease-in-out infinite; }
+            .wave-layer3 { animation: waveDrift3 7s ease-in-out infinite; }
+            .wave-foam { animation: foamPulse 5s ease-in-out infinite; }
+            .wave-shimmer { animation: shimmerFlicker 4s ease-in-out infinite; }
           `}</style>
+          <clipPath id="hexClip"><polygon points={HEX_POINTS}/></clipPath>
           <radialGradient id="gradGrass" cx="40%" cy="35%" r="70%"><stop offset="0%" stopColor="#5a9a2a"/><stop offset="30%" stopColor="#4e8826"/><stop offset="60%" stopColor="#437520"/><stop offset="100%" stopColor="#2a5014"/></radialGradient>
           <radialGradient id="varGrass" cx="60%" cy="55%" r="55%"><stop offset="0%" stopColor="#2a4a10"/><stop offset="100%" stopColor="#3a6a1a" stopOpacity="0"/></radialGradient>
           <radialGradient id="gradForest" cx="40%" cy="35%" r="70%"><stop offset="0%" stopColor="#306828"/><stop offset="30%" stopColor="#265a1e"/><stop offset="60%" stopColor="#1e4a16"/><stop offset="100%" stopColor="#12380c"/></radialGradient>
@@ -850,8 +891,9 @@ export default function HexStrategyGame({ onlineMode } = {}){
           <radialGradient id="gradWater" cx="40%" cy="35%" r="70%"><stop offset="0%" stopColor="#3578aa"/><stop offset="30%" stopColor="#2a6a9a"/><stop offset="60%" stopColor="#1e5580"/><stop offset="100%" stopColor="#0e3050"/></radialGradient>
         </defs>
         <g ref={gRef} style={{willChange:"transform"}} onMouseMove={onHexHover} onMouseLeave={onHexLeave} onClick={onHexClick} onContextMenu={onHexCtx}>{renderAll()}
-          {/* City border overlay — rendered after all hexes so borders are never covered */}
-          {borderOverlay.map(b=><g key={b.key} transform={`translate(${b.x},${b.y})`} style={{pointerEvents:"none"}}><polyline points={b.pts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke={b.color} strokeWidth={4} strokeLinejoin="round" strokeLinecap="round" opacity={0.8}/></g>)}
+          {/* Territory border overlay — rendered after all hexes so borders are never covered */}
+          {borderOverlay.map(b=><g key={b.key} transform={`translate(${b.x},${b.y})`} style={{pointerEvents:"none"}}><polyline points={b.pts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke="#000" strokeWidth={6} strokeLinejoin="round" strokeLinecap="round" opacity={0.3}/><polyline points={b.pts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke={b.color} strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.9}/></g>)}
+          <UnitAnimationOverlay ref={overlayRef} unitType={animVisuals?.unitType} playerColors={animVisuals||{}} visible={!!animatingUnitId}/>
           {combatAnims.map(a=><g key={a.id} transform={`translate(${a.x},${a.y})`} style={{pointerEvents:"none"}}>
             <text x={0} y={-20} textAnchor="middle" fill={a.color} fontSize={18} fontWeight="bold" fontFamily="'Palatino Linotype',serif" stroke="#000" strokeWidth="2" paintOrder="stroke">
               -{a.dmg}<animate attributeName="y" from="-20" to="-65" dur="1.1s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="1.1s" fill="freeze"/>

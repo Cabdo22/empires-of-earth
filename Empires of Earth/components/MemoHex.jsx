@@ -78,18 +78,20 @@ const MemoHex = memo(function MemoHex({
 
       {t === "water" && <>
         <polygon points={HEX_POINTS} fill="url(#gradWater)"/>
-        <path d={vis.waves.waves} stroke="#5aa8d0" strokeWidth="1.2" fill="none" opacity=".45"/>
-        <path d={vis.waves.waves} stroke="#7ac0e8" strokeWidth=".7" fill="none" opacity=".35" transform="translate(2,4)"/>
-        <path d={vis.waves.waves} stroke="#90d0f0" strokeWidth=".4" fill="none" opacity=".25" transform="translate(-1,8)"/>
-        <path d={vis.waves.foam} stroke="#c8e8f8" strokeWidth="1.5" fill="none" opacity=".3"/>
-        <path d={vis.waves.shimmer} stroke="#e0f4ff" strokeWidth=".8" fill="none" opacity=".4"/>
-        {vis.waterCoast && <path d={vis.waterCoast} stroke="#a0c890" strokeWidth="2.5" fill="none" opacity=".3"/>}
-        {vis.waterCoast && <path d={vis.waterCoast} stroke="#c8dca0" strokeWidth="1.2" fill="none" opacity=".25"/>}
+        <g clipPath="url(#hexClip)">
+          <path d={vis.waves.waves} stroke="#5aa8d0" strokeWidth="1.2" fill="none" opacity=".45" className="wave-layer1"/>
+          <path d={vis.waves.waves} stroke="#7ac0e8" strokeWidth=".7" fill="none" opacity=".35" className="wave-layer2"/>
+          <path d={vis.waves.waves} stroke="#90d0f0" strokeWidth=".4" fill="none" opacity=".25" className="wave-layer3"/>
+          <path d={vis.waves.foam} stroke="#c8e8f8" strokeWidth="1.5" fill="none" className="wave-foam"/>
+          <path d={vis.waves.shimmer} stroke="#e0f4ff" strokeWidth=".8" fill="none" className="wave-shimmer"/>
+          {vis.waterCoast && <path d={vis.waterCoast} stroke="#a0c890" strokeWidth="2.5" fill="none" opacity=".3"/>}
+          {vis.waterCoast && <path d={vis.waterCoast} stroke="#c8dca0" strokeWidth="1.2" fill="none" opacity=".25"/>}
+        </g>
         <polygon points={HEX_POINTS} fill="none" stroke="#1a4a6a" strokeWidth="1.2" opacity=".5"/>
       </>}
 
       {/* Territory tint */}
-      {hex.ownerPlayerId && player && <polygon points={HEX_POINTS} fill={player.color} opacity=".08"/>}
+      {hex.ownerPlayerId && player && <polygon points={HEX_POINTS} fill={player.color} opacity=".12"/>}
 
       {hex.resource && !city && <g style={{pointerEvents:"none"}}><ResourceIcon type={hex.resource} x={0} y={0} s={16}/></g>}
 

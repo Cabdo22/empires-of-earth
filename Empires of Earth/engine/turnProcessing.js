@@ -6,9 +6,20 @@ import { UNIT_DEFS, BARB_UNITS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
 import { TECH_TREE } from '../data/techs.js';
 import { RANDOM_EVENTS } from '../data/events.js';
-import { COLS, ROWS, hexAt, getNeighbors, hexDist, gameRng, FOG_SIGHT } from '../data/constants.js';
+import { COLS, ROWS, hexAt, getNeighbors, hexDist, gameRng, FOG_SIGHT, CITY_HP_BASE, CITY_HP_PER_ERA, CITY_HP_PER_POP } from '../data/constants.js';
 import { calcCityYields, calcPlayerIncome, autoAssignTiles, isWorkableHex, getHexYields } from './economy.js';
 import { isHexOccupied, findOpenNeighbor } from './movement.js';
+import { getPlayerMaxEra } from './combat.js';
+
+// Calculate city max HP based on owner's era, city population, and defense techs
+export const calcCityMaxHP = (city, player) => {
+  const eraTier = getPlayerMaxEra(player);
+  let hp = CITY_HP_BASE + eraTier * CITY_HP_PER_ERA + (city.population || 1) * CITY_HP_PER_POP;
+  if (player.researchedTechs.includes("stone_working")) hp += 5;
+  if (player.researchedTechs.includes("masonry")) hp += 5;
+  if (player.researchedTechs.includes("engineering")) hp += 5;
+  return hp;
+};
 
 // Append a log message (keeps last 30)
 export const addLogMsg = (msg, g) => {
@@ -90,9 +101,9 @@ export const processCityTurn = (city, player, g, sfxQ) => {
       growCityBorder(city, player, g.hexes);
     }
   }
-  const baseHpMax = city.hpMax || 20;
-  const hpMax = player.researchedTechs.includes("stone_working") ? Math.max(baseHpMax, 25) : baseHpMax;
-  if (city.hp < hpMax) city.hp = Math.min(hpMax, city.hp + 2);
+  const hpMax = calcCityMaxHP(city, player);
+  city.hpMax = hpMax;
+  if (city.hp < hpMax) city.hp = Math.min(hpMax, city.hp + 3);
 };
 
 // Legacy — territory now managed via city borders
