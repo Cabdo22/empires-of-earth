@@ -1,8 +1,8 @@
 import React from "react";
 
 const CIRCLE_CFG = {
-  tech:  { emoji: "🔬", border: "#40a0d0", bg: "rgba(6,14,30,.96)", glow: "rgba(60,160,220,.4)" },
-  city:  { emoji: "⚙",  border: "#60c060", bg: "rgba(10,20,10,.96)", glow: "rgba(60,180,60,.4)" },
+  tech:  { emoji: "🔬", color: "#a0d8f0", border: "#40a0d0", bg: "rgba(6,14,30,.96)", glow: "rgba(60,160,220,.4)" },
+  city:  { emoji: "⚙",  color: "#a0e0a0", border: "#60c060", bg: "rgba(10,20,10,.96)", glow: "rgba(60,180,60,.4)" },
 };
 
 export function NotificationCircles({ turnPopups, setTurnPopups, setShowTech, setShowCity }) {
@@ -28,7 +28,7 @@ export function NotificationCircles({ turnPopups, setTurnPopups, setShowTech, se
           setTurnPopups(prev => prev.filter(p => p.id !== popup.id));
         }}
       >
-        {cfg.emoji}
+        <span style={{ color: cfg.color }}>{cfg.emoji}</span>
       </div>
     </div>
   );
