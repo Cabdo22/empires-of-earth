@@ -2,7 +2,7 @@
 // ONLINE GAME — wrapper for online multiplayer via PartyKit
 // Manages: lobby -> civ select -> gameplay with server-authoritative state
 // ============================================================
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { MAP_SIZES, setMapConfig } from '../data/constants.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { UNIT_DEFS } from '../data/units.js';
@@ -213,16 +213,16 @@ export default function OnlineGame({ roomId, onBack }) {
     aiSlots, mapSize,
   } = useMultiplayerGame(roomId);
 
-  // Hooks must be called before any early returns (React rules of hooks)
-  const mapConfigured = useRef(false);
+  // Must use state (not ref) so setting it triggers a re-render past the loading screen
+  const [mapConfigured, setMapConfigured] = useState(false);
   useEffect(() => {
-    if (!gameState?.hexes?.length || mapConfigured.current) return;
+    if (!gameState?.hexes?.length || mapConfigured) return;
     const maxCol = gameState.hexes.reduce((m, h) => Math.max(m, h.col), 0);
     const maxRow = gameState.hexes.reduce((m, h) => Math.max(m, h.row), 0);
     const match = Object.entries(MAP_SIZES).find(([, v]) => v.cols === maxCol + 1 && v.rows === maxRow + 1);
     if (match) setMapConfig(match[0]);
-    mapConfigured.current = true;
-  }, [gameState]);
+    setMapConfigured(true);
+  }, [gameState, mapConfigured]);
 
   // Waiting for opponent
   if (roomPhase === "WAITING") {
@@ -269,7 +269,7 @@ export default function OnlineGame({ roomId, onBack }) {
   }
 
   if (roomPhase === "PLAYING" || roomPhase === "FINISHED") {
-    if (!gameState || !mapConfigured.current) {
+    if (!gameState || !mapConfigured) {
       return (
         <div style={{
           width: "100vw", height: "100vh",
