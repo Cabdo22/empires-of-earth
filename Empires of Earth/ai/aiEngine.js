@@ -258,7 +258,7 @@ const aiPickProduction = (city, player, hexes, enemies, smarter, strategy) => {
   if (city.currentProduction) return null;
 
   const availUnits = getAvailableUnits(player, city, hexes);
-  const availDistricts = getAvailableDistricts(player, city);
+  const availDistricts = getAvailableDistricts(player, city, hexes);
   const militaryCount = player.units.filter(u =>
     u.unitType !== "scout" && u.unitType !== "settler" && u.unitType !== "nuke" && u.unitType !== "icbm"
   ).length;

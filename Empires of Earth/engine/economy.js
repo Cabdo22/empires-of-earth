@@ -267,6 +267,7 @@ export const getAvailableUnits = (player, city, hexes) => {
     .filter(([id, u]) => {
       if (u.techReq && !player.researchedTechs.includes(u.techReq)) return false;
       if (u.resourceReq && hexes && !cityHasResource(city, hexes, u.resourceReq, player)) return false;
+      if (u.domain === "sea" && (!city || !city.districts.includes("port"))) return false;
       if (id === "settler" && city && (city.population || 1) < 2) return false;
       if (id === "nuke" || id === "icbm") return hasNuclearDistrict && player.gold >= 50;
       if (MILITARY_REQ_UNITS.has(id) && !hasMilitaryDistrict) return false;
@@ -298,7 +299,19 @@ export const canUpgradeUnit = (unit, player) => {
 };
 
 // Districts available for building in a city
-export const getAvailableDistricts = (player, city) =>
+export const getAvailableDistricts = (player, city, hexes) =>
   Object.entries(DISTRICT_DEFS)
-    .filter(([id, d]) => !city.districts.includes(id) && (!d.techReq || player.researchedTechs.includes(d.techReq)))
+    .filter(([id, d]) => {
+      if (city.districts.includes(id)) return false;
+      if (d.techReq && !player.researchedTechs.includes(d.techReq)) return false;
+      // Port requires coastal water hex in city borders
+      if (id === "port" && hexes) {
+        const hasCoastal = (city.borderHexIds || []).some(hid => {
+          const h = hexes[hid];
+          return h && h.terrainType === "water" && h.isCoastal;
+        });
+        if (!hasCoastal) return false;
+      }
+      return true;
+    })
     .map(([id, d]) => ({ id, ...d }));

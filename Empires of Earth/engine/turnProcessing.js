@@ -157,6 +157,11 @@ export const processCityTurn = (city, player, g, sfxQ) => {
       if (isUnit) {
         const cityHex = g.hexes[city.hexId];
         let spawnCol = cityHex.col, spawnRow = cityHex.row;
+        // Naval units spawn at port hex if available
+        if (def.domain === "sea" && city.portHexId != null) {
+          const portHex = g.hexes[city.portHexId];
+          if (portHex) { spawnCol = portHex.col; spawnRow = portHex.row; }
+        }
         if (isHexOccupied(spawnCol, spawnRow, g.players, g.barbarians)) {
           const open = findOpenNeighbor(spawnCol, spawnRow, g.hexes, g.players, g.barbarians);
           if (!open) return; // delay production — city is surrounded
@@ -173,6 +178,18 @@ export const processCityTurn = (city, player, g, sfxQ) => {
         if (city.currentProduction.itemId === "nuke" || city.currentProduction.itemId === "icbm") player.gold -= 50;
       } else {
         city.districts.push(city.currentProduction.itemId);
+        // When port is built, find the best coastal water hex for naval spawning
+        if (city.currentProduction.itemId === "port") {
+          let bestPortHex = null, bestYield = -1;
+          for (const hid of (city.borderHexIds || [])) {
+            const h = g.hexes[hid];
+            if (!h || h.terrainType !== "water" || !h.isCoastal) continue;
+            const hy = getHexYields(h);
+            const total = hy.food + hy.production + hy.gold;
+            if (total > bestYield) { bestYield = total; bestPortHex = h; }
+          }
+          if (bestPortHex) city.portHexId = bestPortHex.id;
+        }
       }
       addLogMsg(`${city.name} built ${def.name}!`, g, player.id);
       if (sfxQ) sfxQ.push("build");

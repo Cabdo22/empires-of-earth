@@ -8,6 +8,7 @@ export const DISTRICT_DEFS = {
   library:  { name: "Library",  icon: "📚", cost: 17,  effects: { science: 4 },    techReq: "writing" },
   market:   { name: "Market",   icon: "💰", cost: 17,  effects: { gold: 4 },       techReq: "trade" },
   bank:     { name: "Bank",     icon: "🏦", cost: 19,  effects: { gold: 5 },       techReq: "economics" },
+  port:     { name: "Port",     icon: "⚓", cost: 20,  effects: { gold: 2 },       techReq: "trade" },
   military: { name: "Military", icon: "⚔",  cost: 22, effects: {},                techReq: "bronze_working" },
   nuclear:  { name: "Nuclear",  icon: "☢",  cost: 30, effects: {},                techReq: "combustion" },
 };

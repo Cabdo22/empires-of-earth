@@ -11,7 +11,7 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
   if (!city) return null;
   const y = calcCityYields(city, cp, hexes);
   const avU = getAvailableUnits(cp, city, hexes);
-  const avD = getAvailableDistricts(cp, city);
+  const avD = getAvailableDistricts(cp, city, hexes);
   const cPos = cityPosRef.current;
   const cStyle = cPos.x != null ? { left: cPos.x, top: cPos.y } : { top: cPos.y, right: 14 };
 
