@@ -310,7 +310,7 @@ export const spawnBarbarians = (g) => {
     hexCol: spawnHex.col, hexRow: spawnHex.row,
     hpCurrent: barbDef.hp, movementCurrent: barbDef.move, hasAttacked: false,
   });
-  addLogMsg(`⚠ Barbarian ${barbDef.name} spotted at (${spawnHex.col},${spawnHex.row})!`, g);
+  addLogMsg(`⚠ Barbarian ${barbDef.name} spotted at (${spawnHex.col},${spawnHex.row})!`, g, g.currentPlayerId);
 };
 
 // Find nearest player unit or city for barbarian targeting
