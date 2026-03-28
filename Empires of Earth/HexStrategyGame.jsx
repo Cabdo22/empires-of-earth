@@ -380,18 +380,19 @@ export default function HexStrategyGame({ onlineMode } = {}){
       for (const city of currentPlayer.cities) processCityTurn(city, currentPlayer, g, sfxQ);
       // 3. Expand territory
       expandTerritory(currentPlayer, g);
+      // 4. Roll event for current player before advancing
+      rollRandomEvent(g, sfxQ);
 
-      // 4. Advance to next player in sequence
+      // 5. Advance to next player in sequence
       const curIdx = g.players.findIndex(p => p.id === g.currentPlayerId);
       const nextIdx = (curIdx + 1) % g.players.length;
       g.currentPlayerId = g.players[nextIdx].id;
 
-      // 5. If we've looped back to p1, a full round is complete
+      // 6. If we've looped back to p1, a full round is complete
       if (nextIdx === 0) {
         g.turnNumber++;
         spawnBarbarians(g);
         processBarbarians(g);
-        rollRandomEvent(g, sfxQ);
       }
 
       // 6. Refresh next player's units and stay in MOVEMENT phase
@@ -444,7 +445,8 @@ export default function HexStrategyGame({ onlineMode } = {}){
           state.explored = { ...state.explored, [aiP.id]: [...aiEx] };
         }
 
-        // End AI's turn: advance to next player (research/income/cities already processed in aiExecuteTurn)
+        // End AI's turn: roll event for AI, then advance to next player
+        rollRandomEvent(state, sfxQ);
         const curIdx = state.players.findIndex(p => p.id === state.currentPlayerId);
         const nextIdx = (curIdx + 1) % state.players.length;
         state.currentPlayerId = state.players[nextIdx].id;
@@ -453,7 +455,6 @@ export default function HexStrategyGame({ onlineMode } = {}){
           state.turnNumber++;
           spawnBarbarians(state);
           processBarbarians(state);
-          rollRandomEvent(state, sfxQ);
         }
 
         state.phase = "MOVEMENT";

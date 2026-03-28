@@ -276,15 +276,19 @@ export const processBarbarians = (g) => {
   }
 };
 
-// Roll for a random event
+// Roll for a random event for the current player
 export const rollRandomEvent = (g, sfxQ) => {
+  const cp = g.players.find(p => p.id === g.currentPlayerId);
   if (gameRng(g) < 0.20) {
     const available = RANDOM_EVENTS.filter(e => !e.condition || e.condition(g));
     if (available.length === 0) { g.eventMsg = null; return; }
     const evt = available[Math.floor(gameRng(g) * available.length)];
     evt.effect(g, addLogMsg);
-    g.eventMsg = { id: evt.id, name: evt.name, desc: evt.desc };
-    addLogMsg(`🎲 Event: ${evt.name} — ${evt.desc}`, g);
+    // Only show popup for human players
+    if (cp && cp.type !== "ai") {
+      g.eventMsg = { id: evt.id, name: evt.name, desc: evt.desc };
+    }
+    addLogMsg(`🎲 ${cp?.name || 'Unknown'}: ${evt.name} — ${evt.desc}`, g);
 
     // Immediately apply any threshold completions from event bonuses
     const cp = g.players.find(p => p.id === g.currentPlayerId);

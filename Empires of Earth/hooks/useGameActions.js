@@ -166,9 +166,10 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
       processResearchAndIncome(currentPlayer, g, sfxQ);
       for (const city of currentPlayer.cities) processCityTurn(city, currentPlayer, g, sfxQ);
       expandTerritory(currentPlayer, g);
+      rollRandomEvent(g, sfxQ);
       g.currentPlayerId = g.currentPlayerId === "p1" ? "p2" : "p1";
       if (g.currentPlayerId === "p1") {
-        g.turnNumber++; spawnBarbarians(g); processBarbarians(g); rollRandomEvent(g, sfxQ);
+        g.turnNumber++; spawnBarbarians(g); processBarbarians(g);
       }
       g.phase = "MOVEMENT";
       const nextPlayer = g.players.find(p => p.id === g.currentPlayerId);

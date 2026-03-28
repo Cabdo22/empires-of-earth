@@ -317,6 +317,7 @@ export const applyEndTurn = (state) => {
   processResearchAndIncome(currentPlayer, g, sfxQ);
   for (const city of currentPlayer.cities) processCityTurn(city, currentPlayer, g, sfxQ);
   expandTerritory(currentPlayer, g);
+  rollRandomEvent(g, sfxQ);
 
   // Advance to next player in sequence (N-player cycling)
   const curIdx = g.players.findIndex(p => p.id === g.currentPlayerId);
@@ -328,7 +329,6 @@ export const applyEndTurn = (state) => {
     g.turnNumber++;
     spawnBarbarians(g);
     processBarbarians(g);
-    rollRandomEvent(g, sfxQ);
   }
 
   g.phase = "MOVEMENT";
