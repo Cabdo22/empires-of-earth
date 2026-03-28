@@ -81,11 +81,13 @@ export default function HexStrategyGame({ onlineMode } = {}){
   const players=gs?.players||[];
   const turnNumber=gs?.turnNumber||1;
   const cpId=onlineMode?onlineMode.myPlayerId:(gs?.currentPlayerId||"p1");
+  // For rendering, always show from the human player's perspective (not AI)
+  const viewPlayerId=onlineMode?onlineMode.myPlayerId:(players.find(p=>p.type==="human")?.id||cpId);
   const phase=gs?.phase||"MOVEMENT";
   const log=gs?.log||[];
   const barbarians=gs?.barbarians||[];
-  const cp=players.find(p=>p.id===cpId)||{units:[],cities:[],researchedTechs:[],civilization:"Rome",name:"",color:"#888",colorBg:"#444",colorLight:"#aaa",gold:0,science:0};
-  const enemies=players.filter(p=>p.id!==cpId);
+  const cp=players.find(p=>p.id===viewPlayerId)||{units:[],cities:[],researchedTechs:[],civilization:"Rome",name:"",color:"#888",colorBg:"#444",colorLight:"#aaa",gold:0,science:0};
+  const enemies=players.filter(p=>p.id!==viewPlayerId);
   const op=enemies[0]; // legacy compat — prefer enemies array
   const inc=useMemo(()=>gs?calcPlayerIncome(cp,hexes):{food:0,production:0,science:0,gold:0},[cp,hexes,gs]);
   const visData=useMemo(()=>hexes.map(h=>{const grass=genGrass(h.id);return{blades:grass.blades,flowers:grass.flowers,rocks:grass.rocks,detail:genDetail(h.id),trees:h.terrainType==="forest"?genTrees(h.id):{trunks:"",canopy:"",undergrowth:""},mtns:h.terrainType==="mountain"?genMtns(h.id):{peaks:"",snow:"",shadow:"",rocks:""},waves:h.terrainType==="water"?genWaves(h.id):{waves:"",foam:"",shimmer:""},coast:genCoast(h,hexes),waterCoast:genWaterCoast(h,hexes)};}),[hexes]);
@@ -95,7 +97,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
     barbarians.forEach(b=>{const k=`${b.hexCol},${b.hexRow}`;if(!m[k])m[k]=[];m[k].push({...b,pid:"barb",pCol:"#c05050",pBg:"#4a1010",pLight:"#ff8080"});});
     return m;},[players,barbarians,animatingUnitId]);
   const fogVisible=useMemo(()=>gs?getVisibleHexes(cp,hexes):new Set(),[cp,hexes,gs]);
-  const fogExplored=useMemo(()=>{if(!gs)return new Set();return new Set(gs.explored?.[cpId]||[]);},[gs,cpId]);
+  const fogExplored=useMemo(()=>{if(!gs)return new Set();return new Set(gs.explored?.[viewPlayerId]||[]);},[gs,viewPlayerId]);
   const sud=useMemo(()=>{if(!selU||!gs)return null;const u=cp.units.find(u2=>u2.id===selU);if(!u)return null;return{...u,def:UNIT_DEFS[u.unitType]};},[selU,cp,gs]);
 
   const{reach,moveCostMap}=useMemo(()=>{
@@ -147,10 +149,10 @@ export default function HexStrategyGame({ onlineMode } = {}){
   useEffect(()=>{if(moveMsg){const t=setTimeout(()=>setMoveMsg(null),1500);return()=>clearTimeout(t);}},[moveMsg]);
   // Update explored set when fog visibility changes
   useEffect(()=>{if(!gs||fogVisible.size===0)return;
-    setGs(prev=>{if(!prev)return prev;const ex=prev.explored||{};const cur=ex[cpId]||[];const s=new Set(cur);let changed=false;
+    setGs(prev=>{if(!prev)return prev;const ex=prev.explored||{};const cur=ex[viewPlayerId]||[];const s=new Set(cur);let changed=false;
       for(const k of fogVisible){if(!s.has(k)){s.add(k);changed=true;}}
-      if(!changed)return prev;return{...prev,explored:{...ex,[cpId]:[...s]}};});
-  },[fogVisible,cpId]);
+      if(!changed)return prev;return{...prev,explored:{...ex,[viewPlayerId]:[...s]}};});
+  },[fogVisible,viewPlayerId]);
 
   // === ONLINE MODE: sync server state to local state ===
   // Note: setMapConfig is called in OnlineGame.jsx BEFORE this component mounts
@@ -1047,7 +1049,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
       <Legend tCounts={tCounts}/>
 
       {/* Log */}
-      <LogPanel log={log} currentPlayerId={cpId} currentPlayerTechs={cp.researchedTechs}/>
+      <LogPanel log={log} currentPlayerId={viewPlayerId} currentPlayerTechs={cp.researchedTechs}/>
 
       {/* Bottom info */}
       <BottomInfo selH={selH} hexes={hexes} unitMap={unitMap} players={players} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} moveMsg={moveMsg} buildRoad={buildRoad} cp={cp}/>
