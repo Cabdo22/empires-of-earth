@@ -6,26 +6,61 @@ import React, { useState, useEffect, useRef } from "react";
 import { MAP_SIZES, setMapConfig } from '../data/constants.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { UNIT_DEFS } from '../data/units.js';
+import { AI_DIFFICULTY } from '../engine/gameInit.js';
 import { SFX } from '../sfx.js';
 import { useMultiplayerGame } from '../hooks/useParty.js';
 import HexStrategyGame from '../HexStrategyGame.jsx';
 
+const DIFF_KEYS = Object.keys(AI_DIFFICULTY);
+const SLOT_COLORS = { ai: "#b08030", closed: "#555" };
+const SLOT_LABELS = { ai: "AI", closed: "Closed" };
+
 // ============================================================
 // ONLINE CIV SELECT
 // ============================================================
-function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1 }) {
+function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSlots: serverAiSlots }) {
   const [selectedCiv, setSelectedCiv] = useState("Rome");
   const [selectedSize, setSelectedSize] = useState(mapSize || "medium");
+  const maxPlayers = MAP_SIZES[selectedSize]?.maxPlayers || 2;
+  const maxAiSlots = Math.max(0, maxPlayers - 2); // 2 humans already
+  const [aiSlots, setAiSlots] = useState(() =>
+    Array.from({ length: 4 }, () => ({ type: "closed", difficulty: "normal" }))
+  );
   const hasPicked = civPicks[myPlayerId];
   const civKeys = Object.keys(CIV_DEFS);
   const otherPick = civPicks[myPlayerId === "p1" ? "p2" : "p1"];
 
+  const cycleSlot = (idx) => {
+    SFX.click();
+    setAiSlots(prev => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], type: next[idx].type === "closed" ? "ai" : "closed" };
+      return next;
+    });
+  };
+
+  const cycleDifficulty = (idx) => {
+    SFX.click();
+    setAiSlots(prev => {
+      const next = [...prev];
+      const cur = next[idx].difficulty || "normal";
+      const curIdx = DIFF_KEYS.indexOf(cur);
+      next[idx] = { ...next[idx], difficulty: DIFF_KEYS[(curIdx + 1) % DIFF_KEYS.length] };
+      return next;
+    });
+  };
+
   const confirmPick = () => {
     SFX.click();
+    // Collect active AI slots (only visible ones that are set to "ai")
+    const activeAi = aiSlots.slice(0, maxAiSlots)
+      .filter(s => s.type === "ai")
+      .map(s => ({ difficulty: s.difficulty || "normal" }));
     sendAction({
       type: "PICK_CIV",
       civilization: selectedCiv,
       mapSize: isP1 ? selectedSize : undefined,
+      aiSlots: isP1 ? activeAi : undefined,
     });
   };
 
@@ -58,6 +93,58 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1 }) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* AI Player Slots — P1 configures, P2 sees read-only */}
+        {!hasPicked && maxAiSlots > 0 && (
+          <div style={{ marginBottom: 8, minWidth: 280 }}>
+            <div style={{ color: "#6a7a50", fontSize: 10, letterSpacing: 2, marginBottom: 6, textAlign: "center" }}>
+              AI PLAYERS {!isP1 && "(Host configures)"}
+            </div>
+            {(isP1 ? aiSlots : (serverAiSlots || []).map(s => ({ type: "ai", difficulty: s.difficulty })))
+              .slice(0, maxAiSlots).map((slot, i) => {
+              const slotNum = i + 3; // p1=human, p2=human, p3+ = AI slots
+              const isActive = slot.type === "ai";
+              return (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "6px 14px", borderRadius: 6, marginBottom: 4,
+                  background: isActive ? "rgba(30,40,20,.6)" : "rgba(20,20,20,.3)",
+                  border: `1px solid ${isActive ? "rgba(100,140,50,.4)" : "rgba(60,60,60,.3)"}`,
+                }}>
+                  <div onClick={() => isP1 && cycleSlot(i)}
+                    style={{
+                      width: 26, height: 26, borderRadius: "50%",
+                      background: SLOT_COLORS[isActive ? "ai" : "closed"],
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "#fff", fontSize: 11, fontWeight: 700,
+                      cursor: isP1 ? "pointer" : "default",
+                    }}
+                    title={isP1 ? "Click to toggle AI / Closed" : ""}>
+                    {slotNum}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: isActive ? "#c8d8a0" : "#6a6a6a", fontSize: 11, fontWeight: 600 }}>Player {slotNum}</div>
+                    <div onClick={() => isP1 && cycleSlot(i)}
+                      style={{ color: SLOT_COLORS[isActive ? "ai" : "closed"], fontSize: 9, cursor: isP1 ? "pointer" : "default", fontWeight: 600, letterSpacing: 1 }}>
+                      {SLOT_LABELS[isActive ? "ai" : "closed"]}
+                    </div>
+                  </div>
+                  {isActive && (
+                    <div onClick={() => isP1 && cycleDifficulty(i)}
+                      style={{
+                        padding: "2px 8px", borderRadius: 4, fontSize: 9,
+                        cursor: isP1 ? "pointer" : "default",
+                        background: "rgba(100,80,30,.4)", border: "1px solid rgba(200,160,60,.4)",
+                        color: "#e0c060", letterSpacing: 1, fontWeight: 600,
+                      }}
+                      title={isP1 ? "Click to cycle difficulty" : ""}>
+                      {AI_DIFFICULTY[slot.difficulty || "normal"]?.label || "Normal"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -123,6 +210,7 @@ export default function OnlineGame({ roomId, onBack }) {
   const {
     gameState, connected, myPlayerId, sendAction, error,
     roomPhase, civPicks, opponentDisconnected, events, clearEvents,
+    aiSlots, mapSize,
   } = useMultiplayerGame(roomId);
 
   // Waiting for opponent
@@ -163,6 +251,8 @@ export default function OnlineGame({ roomId, onBack }) {
         civPicks={civPicks}
         sendAction={sendAction}
         isP1={myPlayerId === "p1"}
+        aiSlots={aiSlots}
+        mapSize={mapSize}
       />
     );
   }

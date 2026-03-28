@@ -6,6 +6,7 @@
 import { setMapConfig, hexAt, hexDist, MAP_SIZES } from '../data/constants.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { TECH_TREE } from '../data/techs.js';
+import { CIV_DEFS } from '../data/civs.js';
 import { createInitialState } from '../engine/gameInit.js';
 import { getVisibleHexes, getReachableHexes, getRangedTargets } from '../engine/movement.js';
 import { getAvailableTechs, canUpgradeUnit } from '../engine/economy.js';
@@ -15,7 +16,12 @@ import {
   applySelectResearch, applySetProduction, applyUpgradeUnit,
   applyFoundCity, applyCancelProduction, applyEndTurn,
 } from '../engine/actions.js';
-import { addLogMsg } from '../engine/turnProcessing.js';
+import {
+  addLogMsg, refreshUnits, spawnBarbarians, processBarbarians,
+  rollRandomEvent, recalcAllTradeRoutes,
+} from '../engine/turnProcessing.js';
+import { checkVictoryState } from '../engine/victory.js';
+import { aiExecuteTurn } from '../ai/aiEngine.js';
 
 // ============================================================
 // ACTION VALIDATION
@@ -119,6 +125,7 @@ export default class EmpiresServer {
     this.playerSlots = {}; // { p1: connectionId, p2: connectionId }
     this.civPicks = {}; // { p1: "Rome", p2: "China" }
     this.mapSize = "medium";
+    this.aiSlots = []; // [{ difficulty: "normal" }, ...] — AI players beyond p1/p2
     this.disconnected = {}; // { p1: true/false, p2: true/false }
   }
 
@@ -130,6 +137,7 @@ export default class EmpiresServer {
       this.playerSlots = saved.playerSlots;
       this.civPicks = saved.civPicks;
       this.mapSize = saved.mapSize || "medium";
+      this.aiSlots = saved.aiSlots || [];
     }
   }
 
@@ -140,6 +148,7 @@ export default class EmpiresServer {
       playerSlots: this.playerSlots,
       civPicks: this.civPicks,
       mapSize: this.mapSize,
+      aiSlots: this.aiSlots,
     });
   }
 
@@ -250,11 +259,13 @@ export default class EmpiresServer {
       this.civPicks[playerId] = data.civilization;
 
       if (data.mapSize) this.mapSize = data.mapSize;
+      if (data.aiSlots) this.aiSlots = data.aiSlots;
 
       this.broadcastAll({
         type: "civ_picks",
         picks: this.civPicks,
         mapSize: this.mapSize,
+        aiSlots: this.aiSlots,
       });
 
       // If both have picked, start the game
@@ -266,6 +277,17 @@ export default class EmpiresServer {
           { civ: this.civPicks.p1, type: "human" },
           { civ: this.civPicks.p2, type: "human" },
         ];
+
+        // Add AI players from slot config
+        const usedCivs = new Set([this.civPicks.p1, this.civPicks.p2]);
+        const civKeys = Object.keys(CIV_DEFS);
+        for (const slot of (this.aiSlots || [])) {
+          const available = civKeys.filter(k => !usedCivs.has(k));
+          const aiCiv = available[Math.floor(Math.random() * available.length)] || civKeys[0];
+          usedCivs.add(aiCiv);
+          playerConfigs.push({ civ: aiCiv, type: "ai", difficulty: slot.difficulty || "normal" });
+        }
+
         this.gameState = createInitialState(playerConfigs);
         this.phase = "PLAYING";
         this.broadcastPhase();
@@ -322,7 +344,59 @@ export default class EmpiresServer {
       this.phase = "FINISHED";
     }
 
-    this.broadcastState(events);
+    // Auto-execute consecutive AI turns after END_TURN
+    // NOTE: aiExecuteTurn() already processes research, income, cities, and combat.
+    // We must NOT call applyEndTurn() here as it would double-process income/cities.
+    // Instead we manually handle turn advancement (the parts applyEndTurn does beyond income).
+    let allEvents = events || [];
+    if (data.type === "END_TURN" && !this.gameState.victoryStatus) {
+      let nextPlayer = this.gameState.players.find(p => p.id === this.gameState.currentPlayerId);
+      while (nextPlayer && nextPlayer.type === "ai" && !this.gameState.victoryStatus) {
+        // Execute AI decisions (research, production, income, cities, combat, movement)
+        this.gameState = aiExecuteTurn(this.gameState);
+
+        // Update explored hexes for AI player
+        const aiP = this.gameState.players.find(p => p.id === this.gameState.currentPlayerId);
+        if (aiP) {
+          const vis = getVisibleHexes(aiP, this.gameState.hexes);
+          const ex = new Set(this.gameState.explored?.[aiP.id] || []);
+          for (const k of vis) ex.add(k);
+          this.gameState.explored = { ...this.gameState.explored, [aiP.id]: [...ex] };
+        }
+
+        // Advance turn manually (without re-processing income/cities)
+        recalcAllTradeRoutes(this.gameState);
+        const sfxQ = [];
+        rollRandomEvent(this.gameState, sfxQ);
+
+        const curIdx = this.gameState.players.findIndex(p => p.id === this.gameState.currentPlayerId);
+        const nextIdx = (curIdx + 1) % this.gameState.players.length;
+        this.gameState.currentPlayerId = this.gameState.players[nextIdx].id;
+
+        if (nextIdx === 0) {
+          this.gameState.turnNumber++;
+          spawnBarbarians(this.gameState);
+          processBarbarians(this.gameState);
+        }
+
+        this.gameState.phase = "MOVEMENT";
+        const nextP = this.gameState.players[nextIdx];
+        refreshUnits(nextP, this.gameState);
+        addLogMsg(`Turn ${this.gameState.turnNumber} \u2014 ${nextP.name}`, this.gameState);
+        checkVictoryState(this.gameState);
+
+        if (sfxQ.length) allEvents = allEvents.concat(sfxQ.map(s => ({ type: "sfx", name: s })));
+
+        // Check victory after AI turn
+        if (this.gameState.victoryStatus) {
+          this.phase = "FINISHED";
+        }
+
+        nextPlayer = this.gameState.players.find(p => p.id === this.gameState.currentPlayerId);
+      }
+    }
+
+    this.broadcastState(allEvents);
     await this.persist();
   }
 

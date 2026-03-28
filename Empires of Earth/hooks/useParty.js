@@ -15,6 +15,8 @@ export function useMultiplayerGame(roomId) {
   const [civPicks, setCivPicks] = useState({});
   const [opponentDisconnected, setOpponentDisconnected] = useState(false);
   const [events, setEvents] = useState([]);
+  const [aiSlots, setAiSlots] = useState([]);
+  const [mapSize, setMapSize] = useState("medium");
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -62,6 +64,8 @@ export function useMultiplayerGame(roomId) {
 
           case "civ_picks":
             setCivPicks(data.picks);
+            if (data.aiSlots) setAiSlots(data.aiSlots);
+            if (data.mapSize) setMapSize(data.mapSize);
             break;
 
           case "opponent_disconnected":
@@ -104,5 +108,7 @@ export function useMultiplayerGame(roomId) {
     opponentDisconnected,
     events,
     clearEvents,
+    aiSlots,
+    mapSize,
   };
 }
