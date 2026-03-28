@@ -959,6 +959,8 @@ export default function HexStrategyGame({ onlineMode } = {}){
             .coast-wash1 { animation: coastWash1 4s ease-in-out infinite; }
             .coast-wash2 { animation: coastWash2 4s ease-in-out infinite; animation-delay: -1.3s; }
             .coast-wash3 { animation: coastWash3 4s ease-in-out infinite; animation-delay: -2.6s; }
+            @keyframes cloudDrift { 0%,100%{transform:translate(0,0)} 50%{transform:translate(2px,1px)} }
+            .fog-cloud { animation: cloudDrift 8s ease-in-out infinite; }
           `}</style>
           <clipPath id="hexClip"><polygon points={HEX_POINTS}/></clipPath>
           <radialGradient id="gradGrass" cx="40%" cy="35%" r="70%"><stop offset="0%" stopColor="#5a9a2a"/><stop offset="30%" stopColor="#4e8826"/><stop offset="60%" stopColor="#437520"/><stop offset="100%" stopColor="#2a5014"/></radialGradient>

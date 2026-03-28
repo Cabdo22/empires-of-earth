@@ -15,12 +15,22 @@ const MemoHex = memo(function MemoHex({
 }) {
   const t = hex.terrainType;
 
-  // Unexplored: completely black
-  if (isFogged && !isExplored) return (
-    <g data-hex={hex.id} data-col={hex.col} data-row={hex.row} transform={`translate(${hex.x},${hex.y})`}>
-      <polygon points={HEX_POINTS} fill="#050805" stroke="rgba(20,30,10,.3)" strokeWidth="1"/>
-    </g>
-  );
+  // Unexplored: fluffy clouds
+  if (isFogged && !isExplored) {
+    const s = hex.id * 137 + 29;
+    const r = (i) => ((s * (i + 1) * 9301 + 49297) % 233280) / 233280;
+    return (
+      <g data-hex={hex.id} data-col={hex.col} data-row={hex.row} transform={`translate(${hex.x},${hex.y})`}>
+        <polygon points={HEX_POINTS} fill="#b8c8d8" stroke="rgba(200,210,220,.3)" strokeWidth="1"/>
+        <g clipPath="url(#hexClip)" className="fog-cloud">
+          <ellipse cx={r(0)*20-10} cy={r(1)*16-8} rx={28+r(2)*10} ry={18+r(3)*8} fill="#e8eef4" opacity=".85"/>
+          <ellipse cx={r(4)*16-8} cy={r(5)*12-6} rx={22+r(6)*8} ry={14+r(7)*6} fill="#f4f8fc" opacity=".7"/>
+          <ellipse cx={r(8)*10-5} cy={r(9)*10-5} rx={16+r(10)*6} ry={10+r(11)*4} fill="#fff" opacity=".6"/>
+        </g>
+        <polygon points={HEX_POINTS} fill="none" stroke="rgba(180,195,210,.4)" strokeWidth="1"/>
+      </g>
+    );
+  }
 
   // Explored but not currently visible: dimmed terrain, no units/cities
   if (isFogged) return (
