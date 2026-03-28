@@ -213,6 +213,17 @@ export default function OnlineGame({ roomId, onBack }) {
     aiSlots, mapSize,
   } = useMultiplayerGame(roomId);
 
+  // Hooks must be called before any early returns (React rules of hooks)
+  const mapConfigured = useRef(false);
+  useEffect(() => {
+    if (!gameState?.hexes?.length || mapConfigured.current) return;
+    const maxCol = gameState.hexes.reduce((m, h) => Math.max(m, h.col), 0);
+    const maxRow = gameState.hexes.reduce((m, h) => Math.max(m, h.row), 0);
+    const match = Object.entries(MAP_SIZES).find(([, v]) => v.cols === maxCol + 1 && v.rows === maxRow + 1);
+    if (match) setMapConfig(match[0]);
+    mapConfigured.current = true;
+  }, [gameState]);
+
   // Waiting for opponent
   if (roomPhase === "WAITING") {
     return (
@@ -256,17 +267,6 @@ export default function OnlineGame({ roomId, onBack }) {
       />
     );
   }
-
-  // Playing — configure map dimensions before mounting HexStrategyGame
-  const mapConfigured = useRef(false);
-  useEffect(() => {
-    if (!gameState?.hexes?.length || mapConfigured.current) return;
-    const maxCol = gameState.hexes.reduce((m, h) => Math.max(m, h.col), 0);
-    const maxRow = gameState.hexes.reduce((m, h) => Math.max(m, h.row), 0);
-    const match = Object.entries(MAP_SIZES).find(([, v]) => v.cols === maxCol + 1 && v.rows === maxRow + 1);
-    if (match) setMapConfig(match[0]);
-    mapConfigured.current = true;
-  }, [gameState]);
 
   if (roomPhase === "PLAYING" || roomPhase === "FINISHED") {
     if (!gameState || !mapConfigured.current) {
