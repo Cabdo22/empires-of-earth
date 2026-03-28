@@ -5,18 +5,19 @@ import OnlineGame from './client/online-game.jsx';
 
 export default function App() {
   const [onlineRoom, setOnlineRoom] = useState(null);
+  const [playerName, setPlayerName] = useState(null);
   const [showLobby, setShowLobby] = useState(false);
 
   // Online game in progress
   if (onlineRoom) {
-    return <OnlineGame roomId={onlineRoom} onBack={() => setOnlineRoom(null)} />;
+    return <OnlineGame roomId={onlineRoom} playerName={playerName} onBack={() => { setOnlineRoom(null); setPlayerName(null); }} />;
   }
 
   // Online lobby
   if (showLobby) {
     return (
       <Lobby
-        onJoinRoom={(code) => setOnlineRoom(code)}
+        onJoinRoom={(code, name) => { setOnlineRoom(code); setPlayerName(name); }}
         onBack={() => setShowLobby(false)}
       />
     );

@@ -6,7 +6,7 @@ import PartySocket from "partysocket";
 
 const PARTYKIT_HOST = import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
 
-export function useMultiplayerGame(roomId) {
+export function useMultiplayerGame(roomId, playerName) {
   const [gameState, setGameState] = useState(null);
   const [connected, setConnected] = useState(false);
   const [myPlayerId, setMyPlayerId] = useState(null);
@@ -15,6 +15,7 @@ export function useMultiplayerGame(roomId) {
   const [civPicks, setCivPicks] = useState({});
   const [opponentDisconnected, setOpponentDisconnected] = useState(false);
   const [events, setEvents] = useState([]);
+  const [playerNames, setPlayerNames] = useState({});
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -30,6 +31,8 @@ export function useMultiplayerGame(roomId) {
     socket.addEventListener("open", () => {
       setConnected(true);
       setError(null);
+      // Send player name to server
+      socket.send(JSON.stringify({ type: "SET_NAME", name: playerName || "Player" }));
     });
 
     socket.addEventListener("close", () => {
@@ -71,6 +74,10 @@ export function useMultiplayerGame(roomId) {
           case "opponent_reconnected":
             setOpponentDisconnected(false);
             break;
+
+          case "player_names":
+            setPlayerNames(data.names);
+            break;
         }
       } catch (e) {
         console.error("Failed to parse message:", e);
@@ -81,7 +88,7 @@ export function useMultiplayerGame(roomId) {
       socket.close();
       socketRef.current = null;
     };
-  }, [roomId]);
+  }, [roomId, playerName]);
 
   const sendAction = useCallback((action) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -104,5 +111,6 @@ export function useMultiplayerGame(roomId) {
     opponentDisconnected,
     events,
     clearEvents,
+    playerNames,
   };
 }

@@ -12,7 +12,7 @@ import HexStrategyGame from './hex-strategy.jsx';
 // ============================================================
 // ONLINE CIV SELECT
 // ============================================================
-function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1 }) {
+function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, playerNames }) {
   const [selectedCiv, setSelectedCiv] = useState("Rome");
   const [selectedSize, setSelectedSize] = useState(mapSize || "medium");
   const hasPicked = civPicks[myPlayerId];
@@ -38,7 +38,7 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1 }) {
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "24px 0 32px" }}>
         <h1 style={{ color: "#c8d8a0", fontSize: 28, fontWeight: 400, letterSpacing: 8, textTransform: "uppercase", margin: 0 }}>Empires of Earth</h1>
         <div style={{ color: "#6a7a50", fontSize: 12, letterSpacing: 3 }}>
-          {hasPicked ? "Waiting for opponent to pick..." : `${myPlayerId === "p1" ? "Player 1" : "Player 2"} — Choose Your Civilization`}
+          {hasPicked ? `Waiting for ${playerNames?.[myPlayerId === "p1" ? "p2" : "p1"] || "opponent"} to pick...` : `${playerNames?.[myPlayerId] || myPlayerId} — Choose Your Civilization`}
         </div>
 
         {isP1 && !hasPicked && (
@@ -118,11 +118,12 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1 }) {
 // ============================================================
 // ONLINE GAME WRAPPER
 // ============================================================
-export default function OnlineGame({ roomId, onBack }) {
+export default function OnlineGame({ roomId, playerName, onBack }) {
   const {
     gameState, connected, myPlayerId, sendAction, error,
     roomPhase, civPicks, opponentDisconnected, events, clearEvents,
-  } = useMultiplayerGame(roomId);
+    playerNames,
+  } = useMultiplayerGame(roomId, playerName);
 
   // Events are passed to HexStrategyGame via onlineMode for processing
 
@@ -149,7 +150,7 @@ export default function OnlineGame({ roomId, onBack }) {
           {roomId}
         </div>
         <div style={{ color: "#4a5a3a", fontSize: 10 }}>Share this code with your opponent</div>
-        {myPlayerId && <div style={{ color: "#4a5a3a", fontSize: 10 }}>You are {myPlayerId === "p1" ? "Player 1" : "Player 2"}</div>}
+        {myPlayerId && <div style={{ color: "#4a5a3a", fontSize: 10 }}>You are {playerName || (myPlayerId === "p1" ? "Player 1" : "Player 2")}</div>}
         <div onClick={onBack} style={{ color: "#6a7a50", fontSize: 9, cursor: "pointer", textDecoration: "underline", marginTop: 8 }}>← Leave</div>
         {error && <div style={{ color: "#ff6060", fontSize: 10 }}>{error}</div>}
       </div>
@@ -164,6 +165,7 @@ export default function OnlineGame({ roomId, onBack }) {
         civPicks={civPicks}
         sendAction={sendAction}
         isP1={myPlayerId === "p1"}
+        playerNames={playerNames}
       />
     );
   }

@@ -15,19 +15,21 @@ export default function Lobby({ onJoinRoom, onBack }) {
   const [mode, setMode] = useState(null); // null | "create" | "join"
   const [roomCode, setRoomCode] = useState("");
   const [createdCode, setCreatedCode] = useState(null);
+  const [playerName, setPlayerName] = useState("");
 
   const createGame = () => {
+    if (!playerName.trim()) return;
     SFX.click();
     const code = generateRoomCode();
     setCreatedCode(code);
     setMode("create");
-    onJoinRoom(code);
+    onJoinRoom(code, playerName.trim());
   };
 
   const joinGame = () => {
-    if (roomCode.length < 4) return;
+    if (roomCode.length < 4 || !playerName.trim()) return;
     SFX.click();
-    onJoinRoom(roomCode.toUpperCase());
+    onJoinRoom(roomCode.toUpperCase(), playerName.trim());
   };
 
   const inputStyle = {
@@ -35,6 +37,13 @@ export default function Lobby({ onJoinRoom, onBack }) {
     letterSpacing: 8, textTransform: "uppercase", fontFamily: "monospace",
     background: "rgba(30,40,20,.8)", border: "1px solid rgba(100,140,50,.5)",
     color: "#c8d8a0", width: 160, outline: "none",
+  };
+
+  const nameInputStyle = {
+    padding: "8px 16px", borderRadius: 6, fontSize: 16, textAlign: "center",
+    fontFamily: "'Palatino Linotype',serif",
+    background: "rgba(30,40,20,.8)", border: "1px solid rgba(100,140,50,.5)",
+    color: "#c8d8a0", width: 200, outline: "none",
   };
 
   return (
@@ -49,8 +58,23 @@ export default function Lobby({ onJoinRoom, onBack }) {
       </h1>
       <div style={{ color: "#6a7a50", fontSize: 12, letterSpacing: 3 }}>Online Multiplayer</div>
 
+      {/* Name input — always visible until game is created/joined */}
+      {!createdCode && (
+        <div style={{ textAlign: "center" }}>
+          <div style={{ color: "#6a7a50", fontSize: 10, letterSpacing: 2, marginBottom: 8 }}>Your Name</div>
+          <input
+            style={nameInputStyle}
+            maxLength={16}
+            value={playerName}
+            onChange={e => setPlayerName(e.target.value)}
+            placeholder="Enter your name"
+            autoFocus
+          />
+        </div>
+      )}
+
       {!mode && !createdCode && (
-        <div style={{ display: "flex", gap: 24 }}>
+        <div style={{ display: "flex", gap: 24, opacity: playerName.trim() ? 1 : 0.4, pointerEvents: playerName.trim() ? "auto" : "none" }}>
           <div onClick={createGame}
             style={{
               padding: "24px 36px", borderRadius: 8, cursor: "pointer",

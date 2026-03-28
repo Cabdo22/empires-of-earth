@@ -162,6 +162,7 @@ export default class EmpiresServer {
     this.phase = "WAITING"; // WAITING | CIV_SELECT | PLAYING | FINISHED
     this.playerSlots = {}; // { p1: connectionId, p2: connectionId }
     this.civPicks = {}; // { p1: "Rome", p2: "China" }
+    this.playerNames = {}; // { p1: "Alice", p2: "Bob" }
     this.mapSize = "medium";
     this.disconnected = {}; // { p1: true/false, p2: true/false }
   }
@@ -174,6 +175,7 @@ export default class EmpiresServer {
       this.phase = saved.phase;
       this.playerSlots = saved.playerSlots;
       this.civPicks = saved.civPicks;
+      this.playerNames = saved.playerNames || {};
       this.mapSize = saved.mapSize || "medium";
     }
   }
@@ -184,6 +186,7 @@ export default class EmpiresServer {
       phase: this.phase,
       playerSlots: this.playerSlots,
       civPicks: this.civPicks,
+      playerNames: this.playerNames,
       mapSize: this.mapSize,
     });
   }
@@ -218,12 +221,15 @@ export default class EmpiresServer {
 
     connection.setState({ playerId: assignedSlot });
 
-    // Send assignment
+    // Send assignment + current names
     connection.send(JSON.stringify({
       type: "assigned",
       playerId: assignedSlot,
       phase: this.phase,
     }));
+    if (Object.keys(this.playerNames).length > 0) {
+      connection.send(JSON.stringify({ type: "player_names", names: this.playerNames }));
+    }
 
     // If both players are connected and still in WAITING, move to CIV_SELECT
     if (this.phase === "WAITING" && this.playerSlots.p1 && this.playerSlots.p2) {
@@ -269,6 +275,14 @@ export default class EmpiresServer {
     const playerId = sender.state?.playerId;
     if (!playerId) {
       sender.send(JSON.stringify({ type: "error", message: "Not assigned to a slot" }));
+      return;
+    }
+
+    // Handle name setting
+    if (data.type === "SET_NAME") {
+      this.playerNames[playerId] = data.name;
+      this.broadcastAll({ type: "player_names", names: this.playerNames });
+      await this.persist();
       return;
     }
 
