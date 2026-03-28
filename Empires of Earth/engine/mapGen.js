@@ -44,52 +44,114 @@ const growTerrainBlob = (grid, rng, terrain, minSize, maxSize, protectedHexes) =
   return placed;
 };
 
-// Scatter resources across the map
-const placeResources = (grid, rng, protectedHexes) => {
+// Scatter resources across the map with balanced distribution per player region
+const placeResources = (grid, rng, protectedHexes, spawns) => {
   const key = (c, r) => `${c},${r}`;
-  const land = [], water = [];
+
+  // Assign each land hex to the nearest spawn (player region)
+  const regions = spawns.map(() => ({ land: [], workable: [] }));
+  const unowned = [];
 
   for (let c = 0; c < COLS; c++) {
     for (let r = 0; r < ROWS; r++) {
-      if (grid[c][r].terrain !== "water") land.push([c, r]);
-      else water.push([c, r]);
+      if (grid[c][r].terrain === "water") continue;
+      if (protectedHexes.has(key(c, r))) continue;
+
+      let bestIdx = 0, bestDist = Infinity;
+      for (let si = 0; si < spawns.length; si++) {
+        const d = hexDist(c, r, spawns[si].col, spawns[si].row);
+        if (d < bestDist) { bestDist = d; bestIdx = si; }
+      }
+      regions[bestIdx].land.push([c, r]);
+      if (grid[c][r].terrain !== "mountain") {
+        regions[bestIdx].workable.push([c, r]);
+      }
     }
   }
 
-  const numResources = Math.round(land.length * 0.12);
-  const shuffled = land.sort(() => rng() - 0.5);
+  // Strategic resources each region must have at least 1 of
+  const guaranteedResources = ["iron", "coal", "oil", "aluminum"];
 
-  for (let i = 0; i < numResources && i < shuffled.length; i++) {
+  // Place guaranteed resources per region first (on workable tiles near spawn)
+  for (let si = 0; si < spawns.length; si++) {
+    const region = regions[si];
+    // Sort workable tiles by distance to spawn (closest first for guaranteed resources)
+    const sorted = region.workable
+      .map(([c, r]) => ({ c, r, d: hexDist(c, r, spawns[si].col, spawns[si].row) }))
+      .sort((a, b) => a.d - b.d);
+
+    for (const resType of guaranteedResources) {
+      // Find a suitable tile that doesn't already have a resource (prefer within 5 hex of spawn)
+      for (const { c, r } of sorted) {
+        if (grid[c][r].resource) continue;
+        // Iron prefers forest, coal prefers forest, oil/aluminum prefer grassland
+        const terrain = grid[c][r].terrain;
+        const preferred = (resType === "iron" || resType === "coal") ? "forest" : "grassland";
+        if (terrain !== preferred && rng() < 0.5) continue; // 50% chance to skip non-preferred
+        grid[c][r].resource = resType;
+        break;
+      }
+    }
+
+    // Also guarantee wheat near each spawn
+    for (const { c, r } of sorted) {
+      if (grid[c][r].resource) continue;
+      if (grid[c][r].terrain === "grassland") {
+        grid[c][r].resource = "wheat";
+        break;
+      }
+    }
+  }
+
+  // Place remaining resources randomly across all land (respecting density target)
+  const allLand = [];
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      if (grid[c][r].terrain === "water" || grid[c][r].resource) continue;
+      if (protectedHexes.has(key(c, r))) continue;
+      allLand.push([c, r]);
+    }
+  }
+
+  const totalLand = COLS * ROWS; // approximate
+  const targetResources = Math.round(totalLand * 0.10);
+  const alreadyPlaced = spawns.length * (guaranteedResources.length + 1);
+  const remaining = Math.max(0, targetResources - alreadyPlaced);
+
+  const shuffled = allLand.sort(() => rng() - 0.5);
+  for (let i = 0; i < remaining && i < shuffled.length; i++) {
     const [c, r] = shuffled[i];
-    if (protectedHexes.has(key(c, r))) continue;
-
     const roll = rng();
     if (grid[c][r].terrain === "mountain") {
       grid[c][r].resource = "uranium";
     } else if (roll < 0.03) {
       grid[c][r].resource = "uranium";
-    } else if (roll < 0.28) {
+    } else if (roll < 0.25) {
       grid[c][r].resource = grid[c][r].terrain === "grassland" ? "wheat" : "iron";
-    } else if (roll < 0.48) {
+    } else if (roll < 0.42) {
       grid[c][r].resource = "iron";
-    } else if (roll < 0.63) {
+    } else if (roll < 0.57) {
       grid[c][r].resource = "coal";
-    } else if (roll < 0.78) {
+    } else if (roll < 0.72) {
       grid[c][r].resource = "oil";
-    } else if (roll < 0.93) {
+    } else if (roll < 0.87) {
       grid[c][r].resource = "aluminum";
     } else {
       grid[c][r].resource = "coal";
     }
   }
 
-  for (const [c, r] of water) {
-    if (grid[c][r].isCoastal) {
-      const roll = rng();
-      if (roll < 0.35) {
-        grid[c][r].resource = "fish";
-      } else if (roll < 0.50) {
-        grid[c][r].resource = "oil";
+  // Water resources (unchanged — fish and oil on coastal)
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      if (grid[c][r].terrain !== "water") continue;
+      if (grid[c][r].isCoastal) {
+        const roll = rng();
+        if (roll < 0.35) {
+          grid[c][r].resource = "fish";
+        } else if (roll < 0.50) {
+          grid[c][r].resource = "oil";
+        }
       }
     }
   }
@@ -191,8 +253,8 @@ export const generateMap = (seed, numPlayers = 2) => {
     protectedHexes.add(key(sp.col, sp.row));
   }
 
-  // Place resources, protecting spawn hexes
-  placeResources(grid, rng, protectedHexes);
+  // Place resources, protecting spawn hexes, balanced per player region
+  placeResources(grid, rng, protectedHexes, spawns);
 
   return { grid, spawns };
 };
