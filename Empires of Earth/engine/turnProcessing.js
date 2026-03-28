@@ -119,8 +119,9 @@ export const calcCityMaxHP = (city, player) => {
 };
 
 // Append a log message (keeps last 30)
-export const addLogMsg = (msg, g) => {
-  g.log = [...(g.log || []).slice(-30), msg];
+// playerId: null = visible to all, string = only visible to that player (or with Telecommunications)
+export const addLogMsg = (msg, g, playerId = null) => {
+  g.log = [...(g.log || []).slice(-30), { msg, playerId }];
 };
 
 // Process research progress and gold income for a player
@@ -131,7 +132,7 @@ export const processResearchAndIncome = (player, g, sfxQ) => {
     const tech = TECH_TREE[player.currentResearch.techId];
     if (tech && player.currentResearch.progress >= tech.cost) {
       player.researchedTechs.push(player.currentResearch.techId);
-      addLogMsg(`${player.name} researched ${tech.name}!`, g);
+      addLogMsg(`${player.name} researched ${tech.name}!`, g, player.id);
       player.currentResearch = null;
       if (sfxQ) sfxQ.push("research");
     }
@@ -173,7 +174,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
       } else {
         city.districts.push(city.currentProduction.itemId);
       }
-      addLogMsg(`${city.name} built ${def.name}!`, g);
+      addLogMsg(`${city.name} built ${def.name}!`, g, player.id);
       if (sfxQ) sfxQ.push("build");
       city.currentProduction = null;
       city.productionProgress = 0;
@@ -188,7 +189,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
   if (city.foodAccumulated >= growthThreshold) {
     city.population++;
     city.foodAccumulated -= growthThreshold;
-    addLogMsg(`${city.name} grew to pop ${city.population}!`, g);
+    addLogMsg(`${city.name} grew to pop ${city.population}!`, g, player.id);
     // Auto-assign new citizen and check border growth (respect manual override)
     if (!city.manualTiles) autoAssignTiles(city, g.hexes);
     const workableInBorder = (city.borderHexIds || []).filter(
@@ -358,14 +359,14 @@ export const processBarbarians = (g) => {
         target.hpCurrent -= dmg;
         barb.hpCurrent -= counterDmg;
         barb.hasAttacked = true;
-        addLogMsg(`⚠ Barbarian ${barbDef.name}→${targetDef.name}: ${dmg}dmg`, g);
+        addLogMsg(`⚠ Barbarian ${barbDef.name}→${targetDef.name}: ${dmg}dmg`, g, player.id);
         if (target.hpCurrent <= 0) {
           player.units = player.units.filter(u => u.id !== target.id);
-          addLogMsg(`☠ ${targetDef.name} killed by barbarians!`, g);
+          addLogMsg(`☠ ${targetDef.name} killed by barbarians!`, g, player.id);
         }
         if (barb.hpCurrent <= 0) {
           g.barbarians = g.barbarians.filter(b => b.id !== barb.id);
-          addLogMsg(`☠ Barbarian ${barbDef.name} destroyed!`, g);
+          addLogMsg(`☠ Barbarian ${barbDef.name} destroyed!`, g, player.id);
         }
         break;
       }
@@ -385,7 +386,7 @@ export const rollRandomEvent = (g, sfxQ) => {
     if (cp && cp.type !== "ai") {
       g.eventMsg = { id: evt.id, name: evt.name, desc: evt.desc };
     }
-    addLogMsg(`🎲 ${cp?.name || 'Unknown'}: ${evt.name} — ${evt.desc}`, g);
+    addLogMsg(`🎲 ${cp?.name || 'Unknown'}: ${evt.name} — ${evt.desc}`, g, g.currentPlayerId);
 
     // Immediately apply any threshold completions from event bonuses
     const cp = g.players.find(p => p.id === g.currentPlayerId);
@@ -395,7 +396,7 @@ export const rollRandomEvent = (g, sfxQ) => {
         const tech = TECH_TREE[cp.currentResearch.techId];
         if (tech && cp.currentResearch.progress >= tech.cost) {
           cp.researchedTechs.push(cp.currentResearch.techId);
-          addLogMsg(`${cp.name} researched ${tech.name}!`, g);
+          addLogMsg(`${cp.name} researched ${tech.name}!`, g, cp.id);
           cp.currentResearch = null;
           if (sfxQ) sfxQ.push("research");
         }
@@ -406,7 +407,7 @@ export const rollRandomEvent = (g, sfxQ) => {
         if (city.foodAccumulated >= growthThreshold) {
           city.population++;
           city.foodAccumulated -= growthThreshold;
-          addLogMsg(`${city.name} grew to pop ${city.population}!`, g);
+          addLogMsg(`${city.name} grew to pop ${city.population}!`, g, cp.id);
           if (!city.manualTiles) autoAssignTiles(city, g.hexes);
           const workableInBorder = (city.borderHexIds || []).filter(
             hid => hid !== city.hexId && isWorkableHex(g.hexes[hid])

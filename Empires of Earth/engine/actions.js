@@ -130,7 +130,7 @@ export const applyAttack = (state, { attackerId, col, row }) => {
       msg += ` \u2620${attDef.name}`;
     }
 
-    addLogMsg(msg, g);
+    addLogMsg(msg, g, g.currentPlayerId);
   } else if (defCity) {
     // Direct city bombardment (no garrison)
     const isSiege = SIEGE_UNITS.has(attUnit.unitType);
@@ -169,7 +169,7 @@ export const applyAttack = (state, { attackerId, col, row }) => {
     }
 
     events.push({ type: "combat_anim", defender: { col, row }, aDmg: cityDmg, dDmg: cityCounter });
-    addLogMsg(msg, g);
+    addLogMsg(msg, g, g.currentPlayerId);
   }
 
   events.push({ type: "sfx", name: "combat" });
@@ -195,7 +195,7 @@ export const applyLaunchNuke = (state, { nukeId, col, row }) => {
     return hexDist(u.hexCol, u.hexRow, col, row) <= 2;
   });
   if (interceptor) {
-    addLogMsg(`\u2708 ${UNIT_DEFS[interceptor.unitType]?.name || "Fighter"} intercepts nuke at (${col},${row})!`, g);
+    addLogMsg(`\u2708 ${UNIT_DEFS[interceptor.unitType]?.name || "Fighter"} intercepts nuke at (${col},${row})!`, g, g.currentPlayerId);
     interceptor.hasAttacked = true;
     interceptor.movementCurrent = 0;
     events.push({ type: "flash", key: `${col},${row}`, kind: "combat" });
@@ -214,10 +214,10 @@ export const applyLaunchNuke = (state, { nukeId, col, row }) => {
     // Damage cities of any enemy player
     for (const p of g.players.filter(pp => pp.id !== g.currentPlayerId)) {
       const dc = p.cities.find(c => { const h = g.hexes[c.hexId]; return h && h.col === bh.col && h.row === bh.row; });
-      if (dc) { dc.hp = 1; addLogMsg(`\u2622 ${dc.name} hit! (${dc.hp}HP)`, g); }
+      if (dc) { dc.hp = 1; addLogMsg(`\u2622 ${dc.name} hit! (${dc.hp}HP)`, g, g.currentPlayerId); }
     }
   }
-  addLogMsg(`\u2622 NUCLEAR STRIKE at (${col},${row})!`, g);
+  addLogMsg(`\u2622 NUCLEAR STRIKE at (${col},${row})!`, g, null);
   events.push({ type: "sfx", name: "nuke" });
   checkVictoryState(g);
   return { state: g, events };
@@ -228,7 +228,7 @@ export const applySelectResearch = (state, { techId }) => {
   const g = clone(state);
   const player = g.players.find(p => p.id === g.currentPlayerId);
   player.currentResearch = { techId, progress: 0 };
-  addLogMsg(`${player.name} researching ${TECH_TREE[techId].name}`, g);
+  addLogMsg(`${player.name} researching ${TECH_TREE[techId].name}`, g, player.id);
   return { state: g, events: [{ type: "sfx", name: "click" }] };
 };
 
@@ -258,7 +258,7 @@ export const applyUpgradeUnit = (state, { unitId }) => {
   unit.hpCurrent = Math.ceil((unit.hpCurrent / oldDef.hp) * newDef.hp);
   unit.movementCurrent = 0;
   unit.hasAttacked = true;
-  addLogMsg(`\u2B06 ${oldDef.name} upgraded to ${newDef.name} (-${info.cost}\u{1F4B0})`, g);
+  addLogMsg(`\u2B06 ${oldDef.name} upgraded to ${newDef.name} (-${info.cost}\u{1F4B0})`, g, g.currentPlayerId);
   return { state: g, events: [{ type: "sfx", name: "click" }] };
 };
 
@@ -298,7 +298,7 @@ export const applyFoundCity = (state, { unitId, col, row }) => {
   initCityBorders(newCity, player, g.hexes);
   recalcAllTradeRoutes(g);
 
-  addLogMsg(`${player.name} founded ${cityName}!`, g);
+  addLogMsg(`${player.name} founded ${cityName}!`, g, player.id);
   return { state: g, events: [{ type: "sfx", name: "found" }] };
 };
 
@@ -338,7 +338,7 @@ export const applyEndTurn = (state) => {
   g.phase = "MOVEMENT";
   const nextPlayer = g.players[nextIdx];
   refreshUnits(nextPlayer, g);
-  addLogMsg(`Turn ${g.turnNumber} \u2014 ${nextPlayer.name}`, g);
+  addLogMsg(`Turn ${g.turnNumber} \u2014 ${nextPlayer.name}`, g, null);
   checkVictoryState(g);
 
   const events = sfxQ.map(s => ({ type: "sfx", name: s }));
@@ -362,7 +362,7 @@ export const applyBuildRoad = (state, { hexId }) => {
   hex.roadOwner = player.id;
 
   recalcAllTradeRoutes(g);
-  addLogMsg(`${player.name} built road at (${hex.col},${hex.row}) (-${ROAD_COST}g)`, g);
+  addLogMsg(`${player.name} built road at (${hex.col},${hex.row}) (-${ROAD_COST}g)`, g, player.id);
   return { state: g, events: [{ type: "sfx", name: "build" }] };
 };
 

@@ -1041,7 +1041,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
       <Legend tCounts={tCounts}/>
 
       {/* Log */}
-      <LogPanel log={log}/>
+      <LogPanel log={log} currentPlayerId={cpId} currentPlayerTechs={cp.researchedTechs}/>
 
       {/* Bottom info */}
       <BottomInfo selH={selH} hexes={hexes} unitMap={unitMap} players={players} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} moveMsg={moveMsg}/>

@@ -844,7 +844,7 @@ export const aiExecuteTurn = (gameState) => {
   const techPick = aiPickResearch(aiPlayer, g.hexes, enemies, smarter, strategy);
   if (techPick) {
     aiPlayer.currentResearch = { techId: techPick, progress: 0 };
-    addLogMsg(`${aiPlayer.name} researching ${TECH_TREE[techPick].name}`, g);
+    addLogMsg(`${aiPlayer.name} researching ${TECH_TREE[techPick].name}`, g, aiPlayer.id);
   }
 
   // City production
@@ -875,7 +875,7 @@ export const aiExecuteTurn = (gameState) => {
     aiPlayer.gold -= info.cost;
     unit.hpCurrent = Math.ceil((unit.hpCurrent / oldDef.hp) * info.toDef.hp);
     unit.unitType = info.toType;
-    addLogMsg(`AI ${oldDef.name} upgraded to ${info.toDef.name}`, g);
+    addLogMsg(`AI ${oldDef.name} upgraded to ${info.toDef.name}`, g, aiPlayer.id);
   }
 
   // Movement & combat
