@@ -9,7 +9,8 @@ import { hexAt, getNeighbors, hexDist, gameRng, COLS, ROWS } from '../data/const
 import { getPlayerMaxEra, calcCombatPreview } from '../engine/combat.js';
 import { getAvailableTechs, getAvailableUnits, getAvailableDistricts, canUpgradeUnit } from '../engine/economy.js';
 import { getReachableHexes, getVisibleHexes, isHexOccupied } from '../engine/movement.js';
-import { addLogMsg, processResearchAndIncome, processCityTurn, expandTerritory, healGarrison, initCityBorders } from '../engine/turnProcessing.js';
+import { addLogMsg, processResearchAndIncome, processCityTurn, expandTerritory, healGarrison, initCityBorders, recalcAllTradeRoutes } from '../engine/turnProcessing.js';
+import { ROAD_COST } from '../data/constants.js';
 import { autoAssignTiles, cityHasResource, getHexYields } from '../engine/economy.js';
 import { getHexesInRadius, FOG_SIGHT } from '../data/constants.js';
 import { AI_DIFFICULTY } from '../engine/gameInit.js';
@@ -826,6 +827,57 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemies, addLogFn, smarter, strategy
 };
 
 // ============================================================
+// AI Road Building — connect cities via roads when affordable
+// ============================================================
+
+const aiBuildRoads = (player, g) => {
+  if (!player.researchedTechs.includes("trade")) return;
+  const goldReserve = 10; // keep at least this much gold
+
+  for (let i = 0; i < player.cities.length; i++) {
+    for (let j = i + 1; j < player.cities.length; j++) {
+      const cA = player.cities[i], cB = player.cities[j];
+      // Skip if already connected by a domestic trade route
+      const alreadyConnected = (cA.tradeRoutes || []).some(r => r.targetCityId === cB.id && !r.isInternational);
+      if (alreadyConnected) continue;
+
+      // Try to build roads on owned hexes between the two cities
+      const hA = g.hexes[cA.hexId], hB = g.hexes[cB.hexId];
+      // Find owned land hexes along the path (simple greedy approach toward target)
+      let cur = { col: hA.col, row: hA.row };
+      const target = { col: hB.col, row: hB.row };
+      const visited = new Set([`${cur.col},${cur.row}`]);
+
+      for (let step = 0; step < 30 && player.gold >= goldReserve + ROAD_COST; step++) {
+        if (hexDist(cur.col, cur.row, target.col, target.row) <= 1) break;
+
+        // Find best neighbor: owned, land, closest to target
+        let bestN = null, bestDist = Infinity;
+        for (const [nc, nr] of getNeighbors(cur.col, cur.row)) {
+          const nh = hexAt(g.hexes, nc, nr);
+          if (!nh || visited.has(`${nc},${nr}`)) continue;
+          if (nh.ownerPlayerId !== player.id) continue;
+          if (nh.terrainType === "water" || nh.terrainType === "mountain") continue;
+          const d = hexDist(nc, nr, target.col, target.row);
+          if (d < bestDist) { bestDist = d; bestN = nh; }
+        }
+
+        if (!bestN) break; // no owned path available
+        visited.add(`${bestN.col},${bestN.row}`);
+
+        if (!bestN.road) {
+          bestN.road = true;
+          bestN.roadOwner = player.id;
+          player.gold -= ROAD_COST;
+        }
+        cur = { col: bestN.col, row: bestN.row };
+      }
+    }
+  }
+  recalcAllTradeRoutes(g);
+};
+
+// ============================================================
 // Execute full AI turn
 // ============================================================
 
@@ -877,6 +929,9 @@ export const aiExecuteTurn = (gameState) => {
     unit.unitType = info.toType;
     addLogMsg(`AI ${oldDef.name} upgraded to ${info.toDef.name}`, g, aiPlayer.id);
   }
+
+  // Build roads between cities
+  aiBuildRoads(aiPlayer, g);
 
   // Movement & combat
   aiPlanAndExecuteMoves(g, aiPlayer, enemies, addLogMsg, smarter, strategy);

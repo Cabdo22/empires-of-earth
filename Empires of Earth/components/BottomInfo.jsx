@@ -3,7 +3,7 @@ import { TERRAIN_INFO, RESOURCE_INFO } from '../data/terrain.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { getHexYields } from '../engine/economy.js';
 
-export function BottomInfo({ selH, hexes, unitMap, players, settlerM, setSettlerM, nukeM, setNukeM, moveMsg }) {
+export function BottomInfo({ selH, hexes, unitMap, players, settlerM, setSettlerM, nukeM, setNukeM, moveMsg, buildRoad, cp }) {
   return (
     <>
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 48, background: "linear-gradient(0deg,rgba(10,14,6,.95) 0%,rgba(10,14,6,0) 100%)", zIndex: 10, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 8, pointerEvents: "none" }}>
@@ -16,6 +16,7 @@ export function BottomInfo({ selH, hexes, unitMap, players, settlerM, setSettler
               {(() => { const hy = getHexYields(sd); return <><span style={{ color: "#7db840" }}>F{hy.food}</span><span style={{ color: "#b89040" }}>P{hy.production}</span>{hy.gold > 0 && <span style={{ color: "#d0c050" }}>G{hy.gold}</span>}{hy.science > 0 && <span style={{ color: "#60a0d0" }}>S{hy.science}</span>}</>; })()}
               <span style={{ color: si.moveCost != null ? "#a0b880" : "#c05050" }}>{si.moveCost != null ? `Mv${sd.road ? "0.5" : si.moveCost}` : "—"}</span>
               {sd.road && <span style={{ color: "#c8a060" }}>🛣Road</span>}
+              {!sd.road && buildRoad && cp && sd.ownerPlayerId === cp.id && cp.researchedTechs.includes("trade") && sd.terrainType !== "water" && sd.terrainType !== "mountain" && cp.gold >= 5 && <span style={{ pointerEvents: "auto", cursor: "pointer", color: "#c8a060", background: "rgba(160,128,96,.2)", borderRadius: 3, padding: "1px 4px" }} onClick={() => buildRoad(sd.id)}>🛣+Road(5g)</span>}
               {si.defBonus > 0 && <span style={{ color: "#60a0d0" }}>+{si.defBonus}def</span>}
               {uH.length > 0 && <span style={{ color: "#ffd740" }}>{uH.map(u => UNIT_DEFS[u.unitType]?.icon).join("")}</span>}
               {oP && <span style={{ color: oP.colorLight }}>⚑{oP.name.slice(0, 6)}</span>}

@@ -15,6 +15,7 @@ import {
   applyMoveUnit, applyAttack, applyLaunchNuke,
   applySelectResearch, applySetProduction, applyUpgradeUnit,
   applyFoundCity, applyCancelProduction, applyEndTurn,
+  applyBuildRoad, applySetTradeFocus,
 } from '../engine/actions.js';
 import {
   addLogMsg, refreshUnits, spawnBarbarians, processBarbarians,
@@ -310,6 +311,8 @@ export default class EmpiresServer {
       UPGRADE_UNIT: (gs, a) => applyUpgradeUnit(gs, { unitId: a.unitId }),
       FOUND_CITY: (gs, a) => applyFoundCity(gs, { unitId: a.unitId, col: a.col, row: a.row }),
       CANCEL_PRODUCTION: (gs, a) => applyCancelProduction(gs, { cityId: a.cityId }),
+      BUILD_ROAD: (gs, a) => applyBuildRoad(gs, { hexId: a.hexId }),
+      SET_TRADE_FOCUS: (gs, a) => applySetTradeFocus(gs, { cityId: a.cityId, routeIndex: a.routeIndex, focus: a.focus }),
       END_TURN: (gs) => applyEndTurn(gs),
     };
 
