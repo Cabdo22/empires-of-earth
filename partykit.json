@@ -1,0 +1,5 @@
+{
+  "name": "empires-of-earth",
+  "main": "party/server.js",
+  "compatibilityDate": "2026-03-09"
+}
