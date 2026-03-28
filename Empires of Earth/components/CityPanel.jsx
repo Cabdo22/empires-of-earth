@@ -6,7 +6,7 @@ import { calcCityYields, getHexYields, isWorkableHex } from '../engine/economy.j
 import { getAvailableUnits, getAvailableDistricts } from '../engine/economy.js';
 import { btnStyle, panelStyle } from '../styles.js';
 
-export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityCollapsed, setShowCity, onPanelDown, setProd, cancelProduction }) {
+export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityCollapsed, setShowCity, onPanelDown, setProd, cancelProduction, toggleTile, maximizeTiles }) {
   if (!city) return null;
   const y = calcCityYields(city, cp, hexes);
   const avU = getAvailableUnits(cp, city, hexes);
@@ -27,8 +27,17 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
     return { hex: h, yields: getHexYields(h) };
   });
 
+  // Available (unworked) tiles in city borders
+  const workedSet = new Set(city.workedTileIds || []);
+  const slotsUsed = workedSet.size;
+  const slotsAvailable = (city.population || 1) - slotsUsed;
+  const unworkedTiles = (city.borderHexIds || [])
+    .filter(hid => hid !== city.hexId && !workedSet.has(hid) && isWorkableHex(hexes[hid]))
+    .map(hid => ({ hex: hexes[hid], yields: getHexYields(hexes[hid]) }))
+    .sort((a, b) => (b.yields.food + b.yields.production + b.yields.gold) - (a.yields.food + a.yields.production + a.yields.gold));
+
   return (
-    <div data-panel="city" style={{ ...panelStyle, ...cStyle, width: 320, maxHeight: cityCollapsed ? 40 : 500, overflowY: cityCollapsed ? "hidden" : "auto", transition: "max-height .2s ease" }}>
+    <div data-panel="city" style={{ ...panelStyle, ...cStyle, width: 320, maxHeight: cityCollapsed ? 40 : 560, overflowY: cityCollapsed ? "hidden" : "auto", transition: "max-height .2s ease" }}>
       <div onMouseDown={e => onPanelDown(e, "city")} style={{ display: "flex", justifyContent: "space-between", marginBottom: cityCollapsed ? 0 : 6, cursor: "grab", userSelect: "none" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <button onClick={() => setCityCollapsed(!cityCollapsed)} style={{ ...btnStyle(false), fontSize: 10, padding: "1px 5px" }}>{cityCollapsed ? "▸" : "▾"}</button>
@@ -39,18 +48,44 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
         <div style={{ fontSize: 10, color: "#8a9a70", marginBottom: 2 }}>Growth: {city.foodAccumulated}/{growthThreshold} <span style={{ color: surplus > 0 ? "#90d070" : "#c08040" }}>(+{Math.max(0, surplus)}/turn)</span> Eats: {foodConsumed}🌾</div>
         <div style={{ fontSize: 10, color: "#8a9a70", marginBottom: 4 }}>HP: {city.hp}/{city.hpMax || 20}</div>
 
+        {/* Maximize buttons */}
+        <div style={{ display: "flex", gap: 3, marginBottom: 4, alignItems: "center" }}>
+          <span style={{ fontSize: 9, color: "#8a9a70", marginRight: 2 }}>Maximize:</span>
+          {[{k:"food",icon:"🌾",c:"#7db840"},{k:"production",icon:"⚙",c:"#b89040"},{k:"gold",icon:"💰",c:"#d0c050"},{k:"science",icon:"🔬",c:"#60a0d0"}].map(p =>
+            <button key={p.k} onClick={() => maximizeTiles(city.id, p.k)}
+              style={{...btnStyle(false), fontSize: 9, padding: "3px 7px", marginBottom: 0, marginRight: 0}}
+              title={`Auto-assign tiles for maximum ${p.k}`}><span style={{color: p.c}}>{p.icon}</span></button>
+          )}
+          {city.manualTiles && <span style={{ fontSize: 8, color: "#d0a040", marginLeft: 3, fontStyle: "italic" }}>(Manual)</span>}
+        </div>
+
         {/* Worked Tiles */}
-        <div style={{ fontSize: 10, color: "#c8d8a0", fontWeight: 600, marginBottom: 2 }}>Tiles ({(city.workedTileIds || []).length + 1} worked)</div>
+        <div style={{ fontSize: 10, color: "#c8d8a0", fontWeight: 600, marginBottom: 2 }}>Tiles ({slotsUsed}/{city.population} worked)</div>
         <div style={{ fontSize: 9, padding: "3px 5px", background: "rgba(80,120,40,.15)", borderRadius: 3, marginBottom: 1 }}>
           <span style={{ color: "#b0c890" }}>City Center ({TERRAIN_INFO[centerHex?.terrainType]?.label || "?"})</span>
           <span style={{ float: "right" }}>🌾{centerY.food} ⚙{centerY.production}{centerY.science > 0 && <> 🔬{centerY.science}</>} 💰{centerY.gold}</span>
         </div>
         {workedTiles.map(({ hex: h, yields: ty }) => (
-          <div key={h.id} style={{ fontSize: 9, padding: "3px 5px", background: "rgba(80,120,40,.1)", borderRadius: 3, marginBottom: 1 }}>
-            <span style={{ color: "#9aaa7a" }}>{TERRAIN_INFO[h.terrainType]?.label}{h.resource ? ` ${RESOURCE_INFO[h.resource]?.icon}` : ''}</span>
-            <span style={{ float: "right" }}>🌾{ty.food} ⚙{ty.production}{ty.science > 0 && <> 🔬{ty.science}</>} 💰{ty.gold}</span>
+          <div key={h.id} onClick={() => toggleTile(city.id, h.id)}
+            style={{ fontSize: 9, padding: "3px 5px", background: "rgba(80,120,40,.18)", borderRadius: 3, marginBottom: 1, cursor: "pointer", border: "1px solid rgba(100,160,50,.25)", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+            title="Click to unassign this tile">
+            <span style={{ color: "#b0c890" }}>{TERRAIN_INFO[h.terrainType]?.label}{h.resource ? ` ${RESOURCE_INFO[h.resource]?.icon}` : ''}</span>
+            <span><span style={{ marginRight: 6 }}>🌾{ty.food} ⚙{ty.production}{ty.science > 0 && <> 🔬{ty.science}</>} 💰{ty.gold}</span><span style={{ color: "#c05050", fontSize: 8, fontWeight: 700 }}>✕</span></span>
           </div>
         ))}
+
+        {/* Unworked (available) tiles */}
+        {unworkedTiles.length > 0 && <>
+          <div style={{ fontSize: 9, color: "#6a7a50", fontWeight: 600, marginTop: 4, marginBottom: 2, letterSpacing: 1 }}>AVAILABLE{slotsAvailable > 0 ? ` (${slotsAvailable} slot${slotsAvailable !== 1 ? 's' : ''})` : ' (full)'}</div>
+          {unworkedTiles.map(({ hex: h, yields: ty }) => (
+            <div key={h.id} onClick={() => slotsAvailable > 0 ? toggleTile(city.id, h.id) : null}
+              style={{ fontSize: 9, padding: "3px 5px", background: "rgba(40,50,30,.3)", borderRadius: 3, marginBottom: 1, cursor: slotsAvailable > 0 ? "pointer" : "default", opacity: slotsAvailable > 0 ? 0.8 : 0.4, display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              title={slotsAvailable > 0 ? "Click to assign this tile" : "No available slots"}>
+              <span style={{ color: "#7a8a6a" }}>{TERRAIN_INFO[h.terrainType]?.label}{h.resource ? ` ${RESOURCE_INFO[h.resource]?.icon}` : ''}</span>
+              <span>{slotsAvailable > 0 && <span style={{ color: "#90d070", fontSize: 8, fontWeight: 700, marginRight: 6 }}>+</span>}🌾{ty.food} ⚙{ty.production}{ty.science > 0 && <> 🔬{ty.science}</>} 💰{ty.gold}</span>
+            </div>
+          ))}
+        </>}
         <div style={{ marginBottom: 4 }} />
 
         {city.districts.length > 0 && <div style={{ fontSize: 10, marginBottom: 6 }}><span style={{ color: "#8a9a70" }}>Districts: </span>{city.districts.map(d => <span key={d} style={{ color: "#b0c890", marginRight: 4 }}>{DISTRICT_DEFS[d]?.icon}{DISTRICT_DEFS[d]?.name}</span>)}</div>}

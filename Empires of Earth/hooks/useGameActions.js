@@ -10,7 +10,7 @@ import { CIV_DEFS } from '../data/civs.js';
 import { calcCombatPreview } from '../engine/combat.js';
 import { canUpgradeUnit } from '../engine/economy.js';
 import { processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg, initCityBorders } from '../engine/turnProcessing.js';
-import { autoAssignTiles } from '../engine/economy.js';
+import { autoAssignTiles, isWorkableHex } from '../engine/economy.js';
 import { checkVictoryState } from '../engine/victory.js';
 import { SFX } from '../sfx.js';
 
@@ -268,18 +268,42 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
     setSettlerM(null); setSelU(null); SFX.found();
   }, [setGs, setSettlerM, setSelU]);
 
-  // Toggle a tile assignment in a city (manual citizen override)
-  const reassignTile = useCallback((cityId, tileHexId) => {
+  // Toggle a single tile's worked status (manual citizen assignment)
+  const toggleTile = useCallback((cityId, hexId) => {
     setGs(prev => {
       const g = JSON.parse(JSON.stringify(prev));
       const player = g.players.find(p => p.id === g.currentPlayerId);
       const city = player?.cities.find(c => c.id === cityId);
       if (!city) return prev;
-      // Just re-run auto-assign (toggle not needed for now — auto is default)
-      autoAssignTiles(city, g.hexes);
+      const worked = city.workedTileIds || [];
+      const idx = worked.indexOf(hexId);
+      if (idx !== -1) {
+        worked.splice(idx, 1);
+      } else {
+        if (worked.length >= city.population) return prev;
+        const hex = g.hexes[hexId];
+        if (!hex || !isWorkableHex(hex)) return prev;
+        if (!(city.borderHexIds || []).includes(hexId)) return prev;
+        worked.push(hexId);
+      }
+      city.workedTileIds = worked;
+      city.manualTiles = true;
       return g;
     });
   }, [setGs]);
 
-  return { launchNuke, doCombat, endTurn, selResearch, upgradeUnit, setProd, moveU, foundCity, reassignTile };
+  // Auto-assign tiles prioritizing a specific yield
+  const maximizeTiles = useCallback((cityId, priority) => {
+    setGs(prev => {
+      const g = JSON.parse(JSON.stringify(prev));
+      const player = g.players.find(p => p.id === g.currentPlayerId);
+      const city = player?.cities.find(c => c.id === cityId);
+      if (!city) return prev;
+      autoAssignTiles(city, g.hexes, priority);
+      city.manualTiles = false;
+      return g;
+    });
+  }, [setGs]);
+
+  return { launchNuke, doCombat, endTurn, selResearch, upgradeUnit, setProd, moveU, foundCity, toggleTile, maximizeTiles };
 }

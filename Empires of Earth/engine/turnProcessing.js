@@ -92,8 +92,8 @@ export const processCityTurn = (city, player, g, sfxQ) => {
     city.population++;
     city.foodAccumulated -= growthThreshold;
     addLogMsg(`${city.name} grew to pop ${city.population}!`, g);
-    // Auto-assign new citizen and check border growth
-    autoAssignTiles(city, g.hexes);
+    // Auto-assign new citizen and check border growth (respect manual override)
+    if (!city.manualTiles) autoAssignTiles(city, g.hexes);
     const workableInBorder = (city.borderHexIds || []).filter(
       hid => hid !== city.hexId && isWorkableHex(g.hexes[hid])
     ).length;
@@ -151,7 +151,7 @@ export const growCityBorder = (city, player, hexes) => {
     bestHex.cityBorderId = city.id;
     bestHex.ownerPlayerId = player.id;
     city.borderHexIds.push(bestHex.id);
-    autoAssignTiles(city, hexes);
+    if (!city.manualTiles) autoAssignTiles(city, hexes);
     // Log message handled by caller (processCityTurn has access to g)
   }
 };
@@ -310,7 +310,7 @@ export const rollRandomEvent = (g, sfxQ) => {
           city.population++;
           city.foodAccumulated -= growthThreshold;
           addLogMsg(`${city.name} grew to pop ${city.population}!`, g);
-          autoAssignTiles(city, g.hexes);
+          if (!city.manualTiles) autoAssignTiles(city, g.hexes);
           const workableInBorder = (city.borderHexIds || []).filter(
             hid => hid !== city.hexId && isWorkableHex(g.hexes[hid])
           ).length;
