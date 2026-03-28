@@ -2,14 +2,16 @@
 // ONLINE GAME — wrapper for online multiplayer via PartyKit
 // Manages: lobby -> civ select -> gameplay with server-authoritative state
 // ============================================================
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { MAP_SIZES, setMapConfig } from '../data/constants.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { AI_DIFFICULTY } from '../engine/gameInit.js';
 import { SFX } from '../sfx.js';
 import { useMultiplayerGame } from '../hooks/useParty.js';
-import HexStrategyGame from '../HexStrategyGame.jsx';
+
+// Lazy import to break circular dependency (HexStrategyGame imports OnlineGame)
+const HexStrategyGame = React.lazy(() => import('../HexStrategyGame.jsx'));
 
 const DIFF_KEYS = Object.keys(AI_DIFFICULTY);
 const SLOT_COLORS = { ai: "#b08030", closed: "#555" };
@@ -283,18 +285,20 @@ export default function OnlineGame({ roomId, onBack }) {
     }
 
     return (
-      <HexStrategyGame
-        onlineMode={{
-          gameState,
-          myPlayerId,
-          sendAction,
-          opponentDisconnected,
-          error,
-          isMyTurn: gameState.currentPlayerId === myPlayerId,
-          events,
-          clearEvents,
-        }}
-      />
+      <Suspense fallback={<div style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Palatino Linotype',serif"}}><div style={{color:"#6a7a50",fontSize:14,letterSpacing:3}}>Loading game...</div></div>}>
+        <HexStrategyGame
+          onlineMode={{
+            gameState,
+            myPlayerId,
+            sendAction,
+            opponentDisconnected,
+            error,
+            isMyTurn: gameState.currentPlayerId === myPlayerId,
+            events,
+            clearEvents,
+          }}
+        />
+      </Suspense>
     );
   }
 
