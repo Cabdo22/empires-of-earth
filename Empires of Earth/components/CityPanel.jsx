@@ -4,9 +4,10 @@ import { DISTRICT_DEFS } from '../data/districts.js';
 import { TERRAIN_INFO, RESOURCE_INFO } from '../data/terrain.js';
 import { calcCityYields, getHexYields, isWorkableHex } from '../engine/economy.js';
 import { getAvailableUnits, getAvailableDistricts } from '../engine/economy.js';
+import { TRADE_FOCUS } from '../data/constants.js';
 import { btnStyle, panelStyle } from '../styles.js';
 
-export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityCollapsed, setShowCity, onPanelDown, setProd, cancelProduction, toggleTile, maximizeTiles }) {
+export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityCollapsed, setShowCity, onPanelDown, setProd, cancelProduction, toggleTile, maximizeTiles, setTradeFocus, allCities }) {
   if (!city) return null;
   const y = calcCityYields(city, cp, hexes);
   const avU = getAvailableUnits(cp, city, hexes);
@@ -89,6 +90,25 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
         <div style={{ marginBottom: 4 }} />
 
         {city.districts.length > 0 && <div style={{ fontSize: 10, marginBottom: 6 }}><span style={{ color: "#8a9a70" }}>Districts: </span>{city.districts.map(d => <span key={d} style={{ color: "#b0c890", marginRight: 4 }}>{DISTRICT_DEFS[d]?.icon}{DISTRICT_DEFS[d]?.name}</span>)}</div>}
+        {(city.tradeRoutes || []).length > 0 && <>
+          <div style={{ fontSize: 10, color: "#c8d8a0", fontWeight: 600, marginBottom: 2 }}>Trade Routes ({city.tradeRoutes.length})</div>
+          {city.tradeRoutes.map((route, idx) => {
+            const targetCity = (allCities || []).find(c => c.id === route.targetCityId);
+            const focus = TRADE_FOCUS[route.focus] || TRADE_FOCUS.merchant;
+            return (
+              <div key={idx} style={{ fontSize: 9, padding: "3px 5px", background: "rgba(200,180,60,.1)", borderRadius: 3, marginBottom: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>{route.isInternational ? "🌐" : "🛣"} {targetCity?.name || "?"} <span style={{ color: "#8a9a70" }}>({route.distance}hex)</span></span>
+                <select value={route.focus} onChange={e => setTradeFocus && setTradeFocus(city.id, idx, e.target.value)}
+                  style={{ fontSize: 8, background: "#1a2a10", color: "#c8d8a0", border: "1px solid #3a4a2a", borderRadius: 3, padding: "1px 3px" }}>
+                  {Object.entries(TRADE_FOCUS).map(([k, v]) => (
+                    <option key={k} value={k}>{v.icon} {v.label} ({v.desc})</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+          <div style={{ marginBottom: 4 }} />
+        </>}
         {city.currentProduction ? <div style={{ fontSize: 11, padding: "5px 8px", background: "rgba(80,120,40,.3)", borderRadius: 4, marginBottom: 6 }}>
           Building: {city.currentProduction.type === "unit" ? UNIT_DEFS[city.currentProduction.itemId]?.name : DISTRICT_DEFS[city.currentProduction.itemId]?.name}
           <span style={{ color: "#8a9a70" }}> ({city.productionProgress}/{(() => { const isU = city.currentProduction.type === "unit"; let c = isU ? UNIT_DEFS[city.currentProduction.itemId]?.cost : DISTRICT_DEFS[city.currentProduction.itemId]?.cost; if (isU) { if (cp.civilization === "Germany") c -= 3; if (cp.researchedTechs.includes("conscription")) c -= 2; c = Math.max(1, c); } return c; })()})</span>

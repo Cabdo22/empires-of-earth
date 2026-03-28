@@ -6,10 +6,107 @@ import { UNIT_DEFS, BARB_UNITS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
 import { TECH_TREE } from '../data/techs.js';
 import { RANDOM_EVENTS } from '../data/events.js';
-import { COLS, ROWS, hexAt, getNeighbors, hexDist, gameRng, FOG_SIGHT, CITY_HP_BASE, CITY_HP_PER_ERA, CITY_HP_PER_POP } from '../data/constants.js';
+import { COLS, ROWS, hexAt, getNeighbors, hexDist, gameRng, FOG_SIGHT, CITY_HP_BASE, CITY_HP_PER_ERA, CITY_HP_PER_POP, TRADE_FOCUS } from '../data/constants.js';
 import { calcCityYields, calcPlayerIncome, autoAssignTiles, isWorkableHex, getHexYields } from './economy.js';
 import { isHexOccupied, findOpenNeighbor } from './movement.js';
 import { getPlayerMaxEra } from './combat.js';
+
+// Recalculate auto-roads and domestic trade routes between same-player cities with adjacent borders
+export const recalcAutoRoads = (player, hexes) => {
+  if (!player.researchedTechs.includes("trade")) return;
+  const cities = player.cities;
+  // Clear existing domestic trade routes (keep international ones)
+  for (const city of cities) {
+    city.tradeRoutes = (city.tradeRoutes || []).filter(r => r.isInternational);
+  }
+
+  for (let i = 0; i < cities.length; i++) {
+    for (let j = i + 1; j < cities.length; j++) {
+      const cA = cities[i], cB = cities[j];
+      let connected = false;
+
+      for (const hid of (cA.borderHexIds || [])) {
+        const bh = hexes[hid];
+        if (!bh) continue;
+        for (const [nc, nr] of getNeighbors(bh.col, bh.row)) {
+          const nh = hexAt(hexes, nc, nr);
+          if (nh && nh.cityBorderId === cB.id) {
+            connected = true;
+            // Mark connecting hexes as road
+            if (bh.terrainType !== "water" && bh.terrainType !== "mountain") bh.road = true;
+            if (nh.terrainType !== "water" && nh.terrainType !== "mountain") nh.road = true;
+            break;
+          }
+        }
+        if (connected) break;
+      }
+
+      if (connected) {
+        const hA = hexes[cA.hexId], hB = hexes[cB.hexId];
+        const dist = hexDist(hA.col, hA.row, hB.col, hB.row);
+        // Preserve existing focus if route existed before
+        const existingA = (cA.tradeRoutes || []).find(r => r.targetCityId === cB.id);
+        const focusA = existingA?.focus || "merchant";
+        const existingB = (cB.tradeRoutes || []).find(r => r.targetCityId === cA.id);
+        const focusB = existingB?.focus || "merchant";
+        if (!existingA) {
+          cA.tradeRoutes = [...(cA.tradeRoutes || []), { targetCityId: cB.id, focus: focusA, distance: dist, isInternational: false }];
+        }
+        if (!existingB) {
+          cB.tradeRoutes = [...(cB.tradeRoutes || []), { targetCityId: cA.id, focus: focusB, distance: dist, isInternational: false }];
+        }
+      }
+    }
+  }
+};
+
+// Recalculate foreign trade routes between players (requires economics tech + manual roads)
+export const recalcForeignTradeRoutes = (players, hexes) => {
+  // Clear existing international routes
+  for (const p of players) {
+    for (const c of p.cities) {
+      c.tradeRoutes = (c.tradeRoutes || []).filter(r => !r.isInternational);
+    }
+  }
+
+  for (let pi = 0; pi < players.length; pi++) {
+    const pA = players[pi];
+    if (!pA.researchedTechs.includes("economics")) continue;
+
+    for (let pj = pi + 1; pj < players.length; pj++) {
+      const pB = players[pj];
+      if (!pB.researchedTechs.includes("economics")) continue;
+
+      // Check if any of pA's road hexes are adjacent to pB's city border (or vice versa)
+      for (const cA of pA.cities) {
+        for (const hid of (cA.borderHexIds || [])) {
+          const bh = hexes[hid];
+          if (!bh || !bh.road || bh.ownerPlayerId !== pA.id) continue;
+          for (const [nc, nr] of getNeighbors(bh.col, bh.row)) {
+            const nh = hexAt(hexes, nc, nr);
+            if (!nh || nh.ownerPlayerId !== pB.id) continue;
+            const cB = pB.cities.find(c => (c.borderHexIds || []).includes(nh.id));
+            if (!cB) continue;
+            // Found a foreign connection
+            const hA = hexes[cA.hexId], hB = hexes[cB.hexId];
+            const dist = hexDist(hA.col, hA.row, hB.col, hB.row);
+            const alreadyA = (cA.tradeRoutes || []).find(r => r.targetCityId === cB.id && r.isInternational);
+            if (!alreadyA) {
+              cA.tradeRoutes = [...(cA.tradeRoutes || []), { targetCityId: cB.id, focus: "merchant", distance: dist, isInternational: true }];
+              cB.tradeRoutes = [...(cB.tradeRoutes || []), { targetCityId: cA.id, focus: "merchant", distance: dist, isInternational: true }];
+            }
+          }
+        }
+      }
+    }
+  }
+};
+
+// Recalculate all trade routes for all players
+export const recalcAllTradeRoutes = (g) => {
+  for (const p of g.players) recalcAutoRoads(p, g.hexes);
+  recalcForeignTradeRoutes(g.players, g.hexes);
+};
 
 // Calculate city max HP based on owner's era, city population, and defense techs
 export const calcCityMaxHP = (city, player) => {

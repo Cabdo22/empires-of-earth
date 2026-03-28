@@ -5,13 +5,13 @@
 // city_siege, borderHexIds, workedTileIds, autoAssignTiles, initCityBorders, N-player cycling).
 // ============================================================
 
-import { hexAt, getNeighbors, hexDist, getHexesInRadius } from '../data/constants.js';
+import { hexAt, getNeighbors, hexDist, getHexesInRadius, ROAD_COST } from '../data/constants.js';
 import { TECH_TREE } from '../data/techs.js';
 import { UNIT_DEFS, SIEGE_UNITS } from '../data/units.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { calcCombatPreview } from './combat.js';
 import { canUpgradeUnit, autoAssignTiles } from './economy.js';
-import { calcCityMaxHP } from './turnProcessing.js';
+import { calcCityMaxHP, recalcAllTradeRoutes } from './turnProcessing.js';
 import { isHexOccupied } from './movement.js';
 import {
   processResearchAndIncome, processCityTurn, expandTerritory,
@@ -35,6 +35,8 @@ const tryCaptureCity = (city, attackerPlayer, defenderPlayer, hex, g) => {
     if (bh) { bh.ownerPlayerId = attackerPlayer.id; bh.cityBorderId = city.id; }
   }
   autoAssignTiles(city, g.hexes);
+  city.tradeRoutes = [];
+  recalcAllTradeRoutes(g);
   return `\u{1F3DB}${city.name} captured!`;
 };
 
@@ -289,11 +291,12 @@ export const applyFoundCity = (state, { unitId, col, row }) => {
     id: cityId, name: cityName, hexId: hex.id, population: 1,
     districts: [], currentProduction: null, productionProgress: 0,
     foodAccumulated: 0, hp: initialMaxHP, hpMax: initialMaxHP,
-    workedTileIds: [], borderHexIds: [],
+    workedTileIds: [], borderHexIds: [], tradeRoutes: [],
   };
   player.cities.push(newCity);
   hex.cityId = cityId;
   initCityBorders(newCity, player, g.hexes);
+  recalcAllTradeRoutes(g);
 
   addLogMsg(`${player.name} founded ${cityName}!`, g);
   return { state: g, events: [{ type: "sfx", name: "found" }] };
@@ -317,6 +320,7 @@ export const applyEndTurn = (state) => {
   processResearchAndIncome(currentPlayer, g, sfxQ);
   for (const city of currentPlayer.cities) processCityTurn(city, currentPlayer, g, sfxQ);
   expandTerritory(currentPlayer, g);
+  recalcAllTradeRoutes(g);
   rollRandomEvent(g, sfxQ);
 
   // Advance to next player in sequence (N-player cycling)
@@ -339,4 +343,35 @@ export const applyEndTurn = (state) => {
 
   const events = sfxQ.map(s => ({ type: "sfx", name: s }));
   return { state: g, events };
+};
+
+// ---- BUILD ROAD ----
+export const applyBuildRoad = (state, { hexId }) => {
+  const g = clone(state);
+  const player = g.players.find(p => p.id === g.currentPlayerId);
+  const hex = g.hexes[hexId];
+
+  if (!hex || hex.road) return { state, events: [] };
+  if (hex.ownerPlayerId !== player.id) return { state, events: [] };
+  if (!player.researchedTechs.includes("trade")) return { state, events: [] };
+  if (player.gold < ROAD_COST) return { state, events: [] };
+  if (hex.terrainType === "water" || hex.terrainType === "mountain") return { state, events: [] };
+
+  player.gold -= ROAD_COST;
+  hex.road = true;
+  hex.roadOwner = player.id;
+
+  recalcAllTradeRoutes(g);
+  addLogMsg(`${player.name} built road at (${hex.col},${hex.row}) (-${ROAD_COST}g)`, g);
+  return { state: g, events: [{ type: "sfx", name: "build" }] };
+};
+
+// ---- SET TRADE FOCUS ----
+export const applySetTradeFocus = (state, { cityId, routeIndex, focus }) => {
+  const g = clone(state);
+  const player = g.players.find(p => p.id === g.currentPlayerId);
+  const city = player.cities.find(c => c.id === cityId);
+  if (!city || !city.tradeRoutes || !city.tradeRoutes[routeIndex]) return { state, events: [] };
+  city.tradeRoutes[routeIndex].focus = focus;
+  return { state: g, events: [] };
 };

@@ -96,6 +96,18 @@ export const CITY_HP_PER_ERA = 8;
 export const CITY_HP_PER_POP = 3;
 export const FOG_SIGHT = { scout: 2, fighter: 3, bomber: 2, default: 1 };
 
+// Road & Trade constants
+export const ROAD_COST = 5;
+export const ROAD_MOVE_COST = 0.5;
+export const TRADE_FOCUS = {
+  merchant:   { gold: 4, science: 0, food: 0, production: 0, label: "Merchant",   icon: "💰", desc: "+4 gold" },
+  scholar:    { gold: 2, science: 2, food: 0, production: 0, label: "Scholar",    icon: "🔬", desc: "+2 gold, +2 science" },
+  harvest:    { gold: 2, science: 0, food: 2, production: 0, label: "Harvest",    icon: "🌾", desc: "+2 gold, +2 food" },
+  industrial: { gold: 2, science: 0, food: 0, production: 2, label: "Industrial", icon: "⚙",  desc: "+2 gold, +2 production" },
+};
+export const TRADE_DISTANCE_BONUS_PER = 3;
+export const FOREIGN_TRADE_MULTIPLIER = 1.5;
+
 // Legacy phase constants kept for compatibility — game now uses single "MOVEMENT" phase
 export const PHASES = ["MOVEMENT"];
 export const PHASE_LABELS = { MOVEMENT: "Playing" };

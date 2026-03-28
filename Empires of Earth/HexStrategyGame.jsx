@@ -6,7 +6,7 @@ import { CIV_DEFS } from './data/civs.js';
 import { calcCombatPreview } from './engine/combat.js';
 import { calcPlayerIncome, canUpgradeUnit, autoAssignTiles, isWorkableHex } from './engine/economy.js';
 import { getMoveBlockReason, getReachableHexes, getRangedTargets, getVisibleHexes, isHexOccupied, findPath } from './engine/movement.js';
-import { processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg } from './engine/turnProcessing.js';
+import { processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg, recalcAllTradeRoutes } from './engine/turnProcessing.js';
 import { checkVictoryState } from './engine/victory.js';
 import { createInitialState } from './engine/gameInit.js';
 import { aiExecuteTurn } from './ai/aiEngine.js';
@@ -599,6 +599,36 @@ export default function HexStrategyGame({ onlineMode } = {}){
     });
   }, [onlineMode]);
 
+  const setTradeFocus = useCallback((cityId, routeIndex, focus) => {
+    if(onlineMode){onlineMode.sendAction({type:"SET_TRADE_FOCUS",cityId,routeIndex,focus});return;}
+    setGs(prev => {
+      const g = JSON.parse(JSON.stringify(prev));
+      const city = g.players.find(p => p.id === g.currentPlayerId).cities.find(c => c.id === cityId);
+      if (city && city.tradeRoutes && city.tradeRoutes[routeIndex]) {
+        city.tradeRoutes[routeIndex].focus = focus;
+      }
+      return g;
+    });
+  }, [onlineMode]);
+
+  const buildRoad = useCallback((hexId) => {
+    if(onlineMode){onlineMode.sendAction({type:"BUILD_ROAD",hexId});return;}
+    setGs(prev => {
+      const g = JSON.parse(JSON.stringify(prev));
+      const player = g.players.find(p => p.id === g.currentPlayerId);
+      const hex = g.hexes[hexId];
+      if (!hex || hex.road || hex.ownerPlayerId !== player.id) return prev;
+      if (!player.researchedTechs.includes("trade") || player.gold < 5) return prev;
+      if (hex.terrainType === "water" || hex.terrainType === "mountain") return prev;
+      player.gold -= 5;
+      hex.road = true;
+      hex.roadOwner = player.id;
+      recalcAllTradeRoutes(g);
+      return g;
+    });
+    SFX.click();
+  }, [onlineMode]);
+
   const moveU = useCallback((unitId, targetCol, targetRow, cost) => {
     if(onlineMode){onlineMode.sendAction({type:"MOVE_UNIT",unitId,col:targetCol,row:targetRow});setSelU(null);SFX.move();return;}
     if(animatingUnitId)return; // block during animation
@@ -1005,7 +1035,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
       {/* City panel */}
       {showCity&&(()=>{const city=cp.cities.find(c=>c.id===showCity);if(!city)return null;
         const cancelProduction=(cityId)=>{if(onlineMode){onlineMode.sendAction({type:"CANCEL_PRODUCTION",cityId});return;}setGs(prev=>{const g=JSON.parse(JSON.stringify(prev));const c=g.players.find(p=>p.id===g.currentPlayerId).cities.find(c2=>c2.id===cityId);if(c){c.currentProduction=null;c.productionProgress=0;}return g;});};
-        return <CityPanel city={city} cp={cp} hexes={hexes} cityPosRef={cityPosRef} cityCollapsed={cityCollapsed} setCityCollapsed={setCityCollapsed} setShowCity={setShowCity} onPanelDown={onPanelDown} setProd={setProd} cancelProduction={cancelProduction} toggleTile={toggleTile} maximizeTiles={maximizeTiles}/>;})()}
+        return <CityPanel city={city} cp={cp} hexes={hexes} cityPosRef={cityPosRef} cityCollapsed={cityCollapsed} setCityCollapsed={setCityCollapsed} setShowCity={setShowCity} onPanelDown={onPanelDown} setProd={setProd} cancelProduction={cancelProduction} toggleTile={toggleTile} maximizeTiles={maximizeTiles} setTradeFocus={setTradeFocus} allCities={cp.cities}/>;})()}
 
       {/* Legend */}
       <Legend tCounts={tCounts}/>

@@ -115,41 +115,52 @@ export const genDetail = (id) => {
   return p;
 };
 
-// Coastline: for each hex, check which neighbor directions border water
+// Coastline: generate 3 wave layers at different insets for wash-up animation
 export const genCoast = (hex, allHexes) => {
-  if (hex.terrainType === "water") return "";
+  if (hex.terrainType === "water") return null;
   const ec2 = hex.col % 2 === 0 ? EVEN_COL_NEIGHBORS : ODD_COL_NEIGHBORS;
-  let coast = "";
+  const insets = [0.88, 0.78, 0.68]; // outer (edge), mid, inner (shore wash)
+  const curves = ["", "", ""];
+  let hasCoast = false;
   for (let d = 0; d < 6; d++) {
     const nc = hex.col + ec2[d][0], nr = hex.row + ec2[d][1];
     const nh = hexAt(allHexes, nc, nr);
     if (nh && nh.terrainType === "water") {
+      hasCoast = true;
       const angle0 = (d * 60 - 30) * Math.PI / 180, angle1 = ((d + 1) * 60 - 30) * Math.PI / 180;
       const x0 = HEX_SIZE * Math.cos(angle0), y0 = HEX_SIZE * Math.sin(angle0);
       const x1 = HEX_SIZE * Math.cos(angle1), y1 = HEX_SIZE * Math.sin(angle1);
       const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
-      const inset = .78;
-      coast += `M${(x0 * inset).toFixed(1)},${(y0 * inset).toFixed(1)}Q${(mx * .7).toFixed(1)},${(my * .7).toFixed(1)},${(x1 * inset).toFixed(1)},${(y1 * inset).toFixed(1)}`;
+      for (let i = 0; i < 3; i++) {
+        const ins = insets[i], ctrl = ins - 0.12;
+        curves[i] += `M${(x0 * ins).toFixed(1)},${(y0 * ins).toFixed(1)}Q${(mx * ctrl).toFixed(1)},${(my * ctrl).toFixed(1)},${(x1 * ins).toFixed(1)},${(y1 * ins).toFixed(1)}`;
+      }
     }
   }
-  return coast;
+  return hasCoast ? curves : null;
 };
 
-// Water-side coastline: for water hexes bordering land
+// Water-side coastline: foam on water hexes bordering land
 export const genWaterCoast = (hex, allHexes) => {
-  if (hex.terrainType !== "water") return "";
+  if (hex.terrainType !== "water") return null;
   const ec2 = hex.col % 2 === 0 ? EVEN_COL_NEIGHBORS : ODD_COL_NEIGHBORS;
-  let coast = "";
+  const insets = [0.92, 0.84];
+  const curves = ["", ""];
+  let hasCoast = false;
   for (let d = 0; d < 6; d++) {
     const nc = hex.col + ec2[d][0], nr = hex.row + ec2[d][1];
     const nh = hexAt(allHexes, nc, nr);
     if (nh && nh.terrainType !== "water") {
+      hasCoast = true;
       const angle0 = (d * 60 - 30) * Math.PI / 180, angle1 = ((d + 1) * 60 - 30) * Math.PI / 180;
       const x0 = HEX_SIZE * Math.cos(angle0), y0 = HEX_SIZE * Math.sin(angle0);
       const x1 = HEX_SIZE * Math.cos(angle1), y1 = HEX_SIZE * Math.sin(angle1);
-      const inset = .88;
-      coast += `M${(x0 * inset).toFixed(1)},${(y0 * inset).toFixed(1)}Q${((x0 + x1) * .42).toFixed(1)},${((y0 + y1) * .42).toFixed(1)},${(x1 * inset).toFixed(1)},${(y1 * inset).toFixed(1)}`;
+      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      for (let i = 0; i < 2; i++) {
+        const ins = insets[i], ctrl = ins - 0.1;
+        curves[i] += `M${(x0 * ins).toFixed(1)},${(y0 * ins).toFixed(1)}Q${(mx * ctrl).toFixed(1)},${(my * ctrl).toFixed(1)},${(x1 * ins).toFixed(1)},${(y1 * ins).toFixed(1)}`;
+      }
     }
   }
-  return coast;
+  return hasCoast ? curves : null;
 };

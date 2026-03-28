@@ -56,6 +56,8 @@ export const createInitialState = (playerConfigs) => {
         ownerPlayerId: null,
         cityId: null,
         cityBorderId: null,
+        road: false,
+        roadOwner: null,
       });
     }
   }
@@ -96,6 +98,7 @@ export const createInitialState = (playerConfigs) => {
         hpMax: 23,
         workedTileIds: [],
         borderHexIds: [],
+        tradeRoutes: [],
       }],
       units: [
         mkUnit(pid, "warrior", spawn.col, spawn.row),

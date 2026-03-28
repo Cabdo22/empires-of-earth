@@ -4,19 +4,26 @@
 
 import { TERRAIN_INFO } from '../data/terrain.js';
 import { UNIT_DEFS } from '../data/units.js';
-import { COLS, ROWS, hexAt, getNeighbors, hexDist, FOG_SIGHT } from '../data/constants.js';
+import { COLS, ROWS, hexAt, getNeighbors, hexDist, FOG_SIGHT, ROAD_MOVE_COST } from '../data/constants.js';
 
 // Calculate movement cost for a hex based on unit domain
-export const getMoveCost = (terrain, domain, ability) => {
+// hex can be a terrain string (backward compat) or a hex object
+export const getMoveCost = (hex, domain, ability) => {
+  const terrain = typeof hex === 'string' ? hex : hex.terrainType;
+  const hasRoad = typeof hex === 'object' && hex.road;
+
   if (domain === "air") return 1;
   if (domain === "sea") return terrain === "water" ? 1 : null;
   if (domain === "amphibious") {
     if (terrain === "water") return ability === "water_speed" ? 1 : 2;
     const cost = TERRAIN_INFO[terrain].moveCost;
-    return cost === null ? null : cost;
+    if (cost === null) return null;
+    return hasRoad ? ROAD_MOVE_COST : cost;
   }
   // Land unit
   const info = TERRAIN_INFO[terrain];
+  if (info.moveCost === null) return null;
+  if (hasRoad) return ROAD_MOVE_COST;
   if (ability === "forest_move" && terrain === "forest") return 1;
   return info.moveCost;
 };
@@ -111,9 +118,7 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
       const neighborKey = `${nc},${nr}`;
       const nh = hexAt(hexes, nc, nr);
       if (!nh) continue;
-      const terrain = nh.terrainType;
-
-      const moveCost = getMoveCost(terrain, domain, ability);
+      const moveCost = getMoveCost(nh, domain, ability);
       if (moveCost === null) continue;
 
       const totalCost = current.cost + moveCost;
@@ -182,7 +187,7 @@ export const findPath = (startCol, startRow, endCol, endRow, hexes, domain = "la
       const neighborKey = `${nc},${nr}`;
       const nh = hexAt(hexes, nc, nr);
       if (!nh) continue;
-      const moveCost = getMoveCost(nh.terrainType, domain, ability);
+      const moveCost = getMoveCost(nh, domain, ability);
       if (moveCost === null) continue;
       const totalCost = current.cost + moveCost;
       if (costTo[neighborKey] !== undefined && costTo[neighborKey] <= totalCost) continue;

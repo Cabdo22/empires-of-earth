@@ -95,6 +95,9 @@ const MemoHex = memo(function MemoHex({
 
       {hex.resource && !city && <g style={{pointerEvents:"none"}}><ResourceIcon type={hex.resource} x={0} y={0} s={16}/></g>}
 
+      {/* Road indicator */}
+      {hex.road && !city && <circle cx={0} cy={0} r={5} fill="#a08060" stroke="#705030" strokeWidth="1" opacity=".5" style={{pointerEvents:"none"}}/>}
+
       {/* City */}
       {city && <>
         <polygon points={HEX_POINTS} fill={player.color} opacity=".15"/>

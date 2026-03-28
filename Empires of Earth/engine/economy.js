@@ -6,7 +6,7 @@ import { TERRAIN_INFO, RESOURCE_INFO } from '../data/terrain.js';
 import { TECH_TREE } from '../data/techs.js';
 import { UNIT_DEFS, MILITARY_REQ_UNITS, UPGRADE_PATHS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
-import { hexAt, getNeighbors } from '../data/constants.js';
+import { hexAt, getNeighbors, TRADE_FOCUS, TRADE_DISTANCE_BONUS_PER, FOREIGN_TRADE_MULTIPLIER } from '../data/constants.js';
 
 // ---- Tile yield helpers ----
 
@@ -144,7 +144,51 @@ export const calcCityYields = (city, player, hexes) => {
   // Ottoman: +1 gold from captured cities
   if (player.civilization === "Ottoman" && city.captured) gold += 1;
 
+  // Trade route yields
+  const tradeY = calcTradeYields(city);
+  food += tradeY.food;
+  prod += tradeY.production;
+  gold += tradeY.gold;
+  science += tradeY.science;
+
   return { food, production: prod, science, gold };
+};
+
+// Calculate trade yields for a city from its trade routes
+export const calcTradeYields = (city) => {
+  let food = 0, production = 0, gold = 0, science = 0;
+
+  for (const route of (city.tradeRoutes || [])) {
+    const focus = TRADE_FOCUS[route.focus] || TRADE_FOCUS.merchant;
+    let rFood = focus.food;
+    let rProd = focus.production;
+    let rGold = focus.gold;
+    let rSci = focus.science;
+
+    // Distance bonus: +1 gold per N hexes
+    rGold += Math.floor(route.distance / TRADE_DISTANCE_BONUS_PER);
+
+    // Foreign trade multiplier
+    if (route.isInternational) {
+      rFood = Math.floor(rFood * FOREIGN_TRADE_MULTIPLIER);
+      rProd = Math.floor(rProd * FOREIGN_TRADE_MULTIPLIER);
+      rGold = Math.floor(rGold * FOREIGN_TRADE_MULTIPLIER);
+      rSci = Math.floor(rSci * FOREIGN_TRADE_MULTIPLIER);
+    }
+
+    food += rFood;
+    production += rProd;
+    gold += rGold;
+    science += rSci;
+  }
+
+  // District trade multipliers (applied to trade gold)
+  let tradeGoldMultiplier = 1.0;
+  if (city.districts.includes("market")) tradeGoldMultiplier += 0.5;
+  if (city.districts.includes("bank")) tradeGoldMultiplier += 0.25;
+  gold = Math.floor(gold * tradeGoldMultiplier);
+
+  return { food, production, gold, science };
 };
 
 // Sum all city yields for a player
@@ -170,20 +214,41 @@ export const getAvailableTechs = (player) =>
     return met >= needed;
   });
 
-// Check if a city has access to a strategic resource
-export const cityHasResource = (city, hexes, resourceType) => {
+// Direct resource check for a single city (no network sharing)
+const directCityHasResource = (city, hexes, resourceType) => {
   if (resourceType === "uranium") {
-    // Uranium: just needs to be inside city borders (mountains are unworkable but count as territory)
     for (const hid of (city.borderHexIds || [])) {
       if (hexes[hid]?.resource === "uranium") return true;
     }
     return false;
   }
-  // Iron/Oil: must be city center or actively worked tile
   const centerHex = hexes[city.hexId];
   if (centerHex?.resource === resourceType) return true;
   for (const tileId of (city.workedTileIds || [])) {
     if (hexes[tileId]?.resource === resourceType) return true;
+  }
+  return false;
+};
+
+// Check if a city has access to a strategic resource (includes trade network sharing)
+export const cityHasResource = (city, hexes, resourceType, player) => {
+  if (directCityHasResource(city, hexes, resourceType)) return true;
+  // Resource sharing: BFS through domestic trade routes
+  if (!player) return false;
+  const visited = new Set([city.id]);
+  const queue = [city.id];
+  while (queue.length > 0) {
+    const cid = queue.shift();
+    const c = player.cities.find(cc => cc.id === cid);
+    if (!c) continue;
+    for (const route of (c.tradeRoutes || [])) {
+      if (route.isInternational || visited.has(route.targetCityId)) continue;
+      const targetCity = player.cities.find(cc => cc.id === route.targetCityId);
+      if (!targetCity) continue;
+      visited.add(route.targetCityId);
+      if (directCityHasResource(targetCity, hexes, resourceType)) return true;
+      queue.push(route.targetCityId);
+    }
   }
   return false;
 };
@@ -201,7 +266,7 @@ export const getAvailableUnits = (player, city, hexes) => {
   return Object.entries(UNIT_DEFS)
     .filter(([id, u]) => {
       if (u.techReq && !player.researchedTechs.includes(u.techReq)) return false;
-      if (u.resourceReq && hexes && !cityHasResource(city, hexes, u.resourceReq)) return false;
+      if (u.resourceReq && hexes && !cityHasResource(city, hexes, u.resourceReq, player)) return false;
       if (id === "settler" && city && (city.population || 1) < 2) return false;
       if (id === "nuke" || id === "icbm") return hasNuclearDistrict && player.gold >= 50;
       if (MILITARY_REQ_UNITS.has(id) && !hasMilitaryDistrict) return false;

@@ -29,7 +29,7 @@ export const TECH_TREE = {
 
   // ── Classical Phase 2 (need 2 of 3 Classical P1) ──
   writing:          { id: "writing",          name: "Writing",          era: "Classical", phase: 2, cost: 23, prereqs: ["bronze_working", "archery", "animal_husbandry"], prereqMin: 2, effects: ["Unlocks Library"], row: 0 },
-  trade:            { id: "trade",            name: "Trade",            era: "Classical", phase: 2, cost: 22, prereqs: ["bronze_working", "archery", "animal_husbandry"], prereqMin: 2, effects: ["Unlocks Market, Galley"], row: 1 },
+  trade:            { id: "trade",            name: "Trade",            era: "Classical", phase: 2, cost: 22, prereqs: ["bronze_working", "archery", "animal_husbandry"], prereqMin: 2, effects: ["Unlocks Market, Galley, Roads & Trade Routes"], row: 1 },
   masonry:          { id: "masonry",          name: "Masonry",          era: "Classical", phase: 2, cost: 21, prereqs: ["bronze_working", "archery", "animal_husbandry"], prereqMin: 2, effects: ["+2 city defense, Unlocks Catapult"], row: 2 },
 
   // ── Medieval Phase 1 (need 2 of 3 Classical P2) ──
@@ -49,7 +49,7 @@ export const TECH_TREE = {
 
   // ── Industrial Phase 2 (need 2 of 3 Industrial P1) ──
   steam_power:  { id: "steam_power",  name: "Steam Power",  era: "Industrial", phase: 2, cost: 52,  prereqs: ["machinery", "engineering", "gunpowder"], prereqMin: 2, effects: ["Unlocks Frigate"], row: 0 },
-  economics:    { id: "economics",    name: "Economics",    era: "Industrial", phase: 2, cost: 58, prereqs: ["machinery", "engineering", "gunpowder"], prereqMin: 2, effects: ["Unlocks Bank"], row: 1 },
+  economics:    { id: "economics",    name: "Economics",    era: "Industrial", phase: 2, cost: 58, prereqs: ["machinery", "engineering", "gunpowder"], prereqMin: 2, effects: ["Unlocks Bank, Foreign Trade Routes"], row: 1 },
   conscription: { id: "conscription", name: "Conscription", era: "Industrial", phase: 2, cost: 52,  prereqs: ["machinery", "engineering", "gunpowder"], prereqMin: 2, effects: ["-2 unit cost"], row: 2 },
 
   // ── Modern Phase 1 (need 2 of 3 Industrial P2) ──

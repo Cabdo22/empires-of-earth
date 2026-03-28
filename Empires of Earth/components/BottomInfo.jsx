@@ -14,7 +14,8 @@ export function BottomInfo({ selH, hexes, unitMap, players, settlerM, setSettler
               <span style={{ color: "#c8d8a0", fontWeight: 600 }}>({sd.col},{sd.row})</span><span style={{ color: si.color }}>{si.label}</span>
               {sd.resource && <span>{RESOURCE_INFO[sd.resource].icon}{RESOURCE_INFO[sd.resource].label}</span>}
               {(() => { const hy = getHexYields(sd); return <><span style={{ color: "#7db840" }}>F{hy.food}</span><span style={{ color: "#b89040" }}>P{hy.production}</span>{hy.gold > 0 && <span style={{ color: "#d0c050" }}>G{hy.gold}</span>}{hy.science > 0 && <span style={{ color: "#60a0d0" }}>S{hy.science}</span>}</>; })()}
-              <span style={{ color: si.moveCost != null ? "#a0b880" : "#c05050" }}>{si.moveCost != null ? `Mv${si.moveCost}` : "—"}</span>
+              <span style={{ color: si.moveCost != null ? "#a0b880" : "#c05050" }}>{si.moveCost != null ? `Mv${sd.road ? "0.5" : si.moveCost}` : "—"}</span>
+              {sd.road && <span style={{ color: "#c8a060" }}>🛣Road</span>}
               {si.defBonus > 0 && <span style={{ color: "#60a0d0" }}>+{si.defBonus}def</span>}
               {uH.length > 0 && <span style={{ color: "#ffd740" }}>{uH.map(u => UNIT_DEFS[u.unitType]?.icon).join("")}</span>}
               {oP && <span style={{ color: oP.colorLight }}>⚑{oP.name.slice(0, 6)}</span>}
