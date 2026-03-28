@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useRef, useCallback, useEffect, Suspense } from "react";
 import { HEX_SIZE, SQRT3, COLS, ROWS, HEX_POINTS, hexCenter, hexAt, getNeighbors, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS } from './data/constants.js';
 import { TECH_TREE } from './data/techs.js';
 import { RESOURCE_INFO } from './data/terrain.js';
@@ -22,7 +22,8 @@ import { useMinimap } from './hooks/useMinimap.js';
 import { ModeSelectScreen, MapSizeScreen, LobbyScreen, CivSelectScreen, TurnTransitionScreen, VictoryScreen } from './components/GameScreens.jsx';
 import { MAX_PLAYERS } from './data/constants.js';
 import Lobby from './components/Lobby.jsx';
-import OnlineGame from './components/OnlineGame.jsx';
+// Lazy import to break circular dependency (OnlineGame imports HexStrategyGame)
+const OnlineGame = React.lazy(() => import('./components/OnlineGame.jsx'));
 import { TechTreePanel } from './components/TechTreePanel.jsx';
 import { CityPanel } from './components/CityPanel.jsx';
 import { CombatPreview } from './components/CombatPreview.jsx';
@@ -900,7 +901,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
     return <Lobby onJoinRoom={(code)=>setOnlineRoomId(code)} onBack={()=>{setGameMode(null);setOnlineRoomId(null);}}/>;
   }
   if(gameMode==="online"&&onlineRoomId){
-    return <OnlineGame roomId={onlineRoomId} onBack={()=>{setOnlineRoomId(null);setGameMode(null);}}/>;
+    return <Suspense fallback={<div style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Palatino Linotype',serif"}}><div style={{color:"#6a7a50",fontSize:14,letterSpacing:3}}>Connecting...</div></div>}><OnlineGame roomId={onlineRoomId} onBack={()=>{setOnlineRoomId(null);setGameMode(null);}}/></Suspense>;
   }
 
   // === MODE SELECTION SCREEN ===
