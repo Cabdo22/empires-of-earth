@@ -951,6 +951,12 @@ export default function HexStrategyGame({ onlineMode } = {}){
             .wave-layer3 { animation: waveDrift3 7s ease-in-out infinite; }
             .wave-foam { animation: foamPulse 5s ease-in-out infinite; }
             .wave-shimmer { animation: shimmerFlicker 4s ease-in-out infinite; }
+            @keyframes coastWash1 { 0%,100%{transform:translate(0,0);opacity:.4} 50%{transform:scale(0.95);opacity:.55} }
+            @keyframes coastWash2 { 0%,100%{transform:translate(0,0);opacity:.35} 50%{transform:scale(0.92);opacity:.5} }
+            @keyframes coastWash3 { 0%,100%{transform:translate(0,0);opacity:.3} 50%{transform:scale(0.88);opacity:.45} }
+            .coast-wash1 { animation: coastWash1 4s ease-in-out infinite; }
+            .coast-wash2 { animation: coastWash2 4s ease-in-out infinite; animation-delay: -1.3s; }
+            .coast-wash3 { animation: coastWash3 4s ease-in-out infinite; animation-delay: -2.6s; }
           `}</style>
           <clipPath id="hexClip"><polygon points={HEX_POINTS}/></clipPath>
           <radialGradient id="gradGrass" cx="40%" cy="35%" r="70%"><stop offset="0%" stopColor="#5a9a2a"/><stop offset="30%" stopColor="#4e8826"/><stop offset="60%" stopColor="#437520"/><stop offset="100%" stopColor="#2a5014"/></radialGradient>

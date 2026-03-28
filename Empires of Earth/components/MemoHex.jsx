@@ -47,8 +47,11 @@ const MemoHex = memo(function MemoHex({
         <path d={vis.blades} stroke="#78c040" strokeWidth=".5" fill="none" opacity=".3" transform="translate(0.5,-0.5)"/>
         <path d={vis.flowers} fill={hex.id % 3 === 0 ? "#e8d040" : hex.id % 3 === 1 ? "#e07060" : "#d080c0"} stroke="none" opacity=".6"/>
         <path d={vis.rocks} fill="#8a8a78" stroke="#6a6a5a" strokeWidth=".4" opacity=".35"/>
-        {vis.coast && <path d={vis.coast} stroke="#c8b480" strokeWidth="3" fill="none" opacity=".5"/>}
-        {vis.coast && <path d={vis.coast} stroke="#e8d8a0" strokeWidth="1.5" fill="none" opacity=".35"/>}
+        {vis.coast && <g clipPath="url(#hexClip)">
+          <path d={vis.coast[0]} stroke="#6ab8e0" strokeWidth="2.5" fill="none" opacity=".4" className="coast-wash1"/>
+          <path d={vis.coast[1]} stroke="#88ccee" strokeWidth="2" fill="none" opacity=".35" className="coast-wash2"/>
+          <path d={vis.coast[2]} stroke="#a0d8f4" strokeWidth="1.5" fill="none" opacity=".3" className="coast-wash3"/>
+        </g>}
         <polygon points={HEX_POINTS} fill="none" stroke="#1a2e0a" strokeWidth="1" opacity=".5"/>
       </>}
 
@@ -60,8 +63,11 @@ const MemoHex = memo(function MemoHex({
         <path d={vis.trees.trunks} stroke="#3a2810" strokeWidth="1" fill="none" opacity=".3" transform="translate(1,0)"/>
         <path d={vis.trees.canopy} fill="#2a6a30" stroke="#1a5020" strokeWidth=".6" opacity=".8"/>
         <path d={vis.trees.canopy} fill="#3a8a3a" stroke="none" opacity=".25" transform="translate(-1,-1)"/>
-        {vis.coast && <path d={vis.coast} stroke="#c8b480" strokeWidth="3" fill="none" opacity=".5"/>}
-        {vis.coast && <path d={vis.coast} stroke="#e8d8a0" strokeWidth="1.5" fill="none" opacity=".35"/>}
+        {vis.coast && <g clipPath="url(#hexClip)">
+          <path d={vis.coast[0]} stroke="#6ab8e0" strokeWidth="2.5" fill="none" opacity=".4" className="coast-wash1"/>
+          <path d={vis.coast[1]} stroke="#88ccee" strokeWidth="2" fill="none" opacity=".35" className="coast-wash2"/>
+          <path d={vis.coast[2]} stroke="#a0d8f4" strokeWidth="1.5" fill="none" opacity=".3" className="coast-wash3"/>
+        </g>}
         <polygon points={HEX_POINTS} fill="none" stroke="#0e2a08" strokeWidth="1.2" opacity=".6"/>
       </>}
 
@@ -72,7 +78,11 @@ const MemoHex = memo(function MemoHex({
         <path d={vis.mtns.shadow} fill="#3a3530" stroke="none" opacity=".3"/>
         <path d={vis.mtns.snow} fill="#eaeaea" stroke="#d0d0d0" strokeWidth=".4" opacity=".92"/>
         <path d={vis.mtns.snow} fill="#fff" stroke="none" opacity=".3" transform="translate(-0.5,-0.5)"/>
-        {vis.coast && <path d={vis.coast} stroke="#c8b480" strokeWidth="3" fill="none" opacity=".5"/>}
+        {vis.coast && <g clipPath="url(#hexClip)">
+          <path d={vis.coast[0]} stroke="#6ab8e0" strokeWidth="2.5" fill="none" opacity=".4" className="coast-wash1"/>
+          <path d={vis.coast[1]} stroke="#88ccee" strokeWidth="2" fill="none" opacity=".35" className="coast-wash2"/>
+          <path d={vis.coast[2]} stroke="#a0d8f4" strokeWidth="1.5" fill="none" opacity=".3" className="coast-wash3"/>
+        </g>}
         <polygon points={HEX_POINTS} fill="none" stroke="#2a2a2a" strokeWidth="1.2" opacity=".55"/>
       </>}
 
@@ -84,8 +94,8 @@ const MemoHex = memo(function MemoHex({
           <path d={vis.waves.waves} stroke="#90d0f0" strokeWidth=".4" fill="none" opacity=".25" className="wave-layer3"/>
           <path d={vis.waves.foam} stroke="#c8e8f8" strokeWidth="1.5" fill="none" className="wave-foam"/>
           <path d={vis.waves.shimmer} stroke="#e0f4ff" strokeWidth=".8" fill="none" className="wave-shimmer"/>
-          {vis.waterCoast && <path d={vis.waterCoast} stroke="#a0c890" strokeWidth="2.5" fill="none" opacity=".3"/>}
-          {vis.waterCoast && <path d={vis.waterCoast} stroke="#c8dca0" strokeWidth="1.2" fill="none" opacity=".25"/>}
+          {vis.waterCoast && <path d={vis.waterCoast[0]} stroke="#6ab8e0" strokeWidth="2" fill="none" opacity=".3" className="coast-wash1"/>}
+          {vis.waterCoast && <path d={vis.waterCoast[1]} stroke="#88ccee" strokeWidth="1.2" fill="none" opacity=".25" className="coast-wash2"/>}
         </g>
         <polygon points={HEX_POINTS} fill="none" stroke="#1a4a6a" strokeWidth="1.2" opacity=".5"/>
       </>}
