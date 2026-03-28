@@ -22,10 +22,10 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
 
   // Worked tiles info
   const centerHex = hexes[city.hexId];
-  const centerY = centerHex ? getHexYields(centerHex) : { food: 0, production: 0, gold: 0 };
+  const centerY = centerHex ? getHexYields(centerHex, cp) : { food: 0, production: 0, gold: 0 };
   const workedTiles = (city.workedTileIds || []).map(hid => {
     const h = hexes[hid];
-    return { hex: h, yields: getHexYields(h) };
+    return { hex: h, yields: getHexYields(h, cp) };
   });
 
   // Available (unworked) tiles in city borders

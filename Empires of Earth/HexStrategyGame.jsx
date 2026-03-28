@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { HEX_SIZE, SQRT3, COLS, ROWS, HEX_POINTS, hexCenter, hexAt, getNeighbors, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS } from './data/constants.js';
 import { TECH_TREE } from './data/techs.js';
+import { RESOURCE_INFO } from './data/terrain.js';
 import { UNIT_DEFS } from './data/units.js';
 import { CIV_DEFS } from './data/civs.js';
 import { calcCombatPreview } from './engine/combat.js';
@@ -98,6 +99,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
     return m;},[players,barbarians,animatingUnitId]);
   const fogVisible=useMemo(()=>gs?getVisibleHexes(cp,hexes):new Set(),[cp,hexes,gs]);
   const fogExplored=useMemo(()=>{if(!gs)return new Set();return new Set(gs.explored?.[viewPlayerId]||[]);},[gs,viewPlayerId]);
+  const discoveredResources=useMemo(()=>{const s=new Set();for(const[type,info]of Object.entries(RESOURCE_INFO)){if(!info.techReq||cp.researchedTechs.includes(info.techReq))s.add(type);}return s;},[cp.researchedTechs]);
   const sud=useMemo(()=>{if(!selU||!gs)return null;const u=cp.units.find(u2=>u2.id===selU);if(!u)return null;return{...u,def:UNIT_DEFS[u.unitType]};},[selU,cp,gs]);
 
   const{reach,moveCostMap}=useMemo(()=>{
@@ -823,8 +825,8 @@ export default function HexStrategyGame({ onlineMode } = {}){
     return <MemoHex key={hex.id} hex={hex} vis={visData[i]}
       isHovered={hovH===hex.id} isSelected={selH===hex.id} inMoveRange={inMv} inAttackRange={!!(inMelee||inRng)} inNukeRange={!!inNk}
       unitSelected={!!uSel} units={fogged?null:uH} unitCount={fogged?0:uH.length}
-      city={fogged?null:(cE?.city||null)} player={cE?.player||ownerP} settlerMode={!!settlerM} canAct={!!canA} flash={flashes[uk]||null} isFogged={fogged} isExplored={isExplored2} blockReason={blkReason}/>;
-  }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,actable,nukeM,nukeR,flashes,fogVisible,fogExplored]);
+      city={fogged?null:(cE?.city||null)} player={cE?.player||ownerP} settlerMode={!!settlerM} canAct={!!canA} flash={flashes[uk]||null} isFogged={fogged} isExplored={isExplored2} blockReason={blkReason} discoveredResources={discoveredResources}/>;
+  }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,actable,nukeM,nukeR,flashes,fogVisible,fogExplored,discoveredResources]);
 
   // City border overlay (rendered above all hexes so no hex can cover borders)
   const borderOverlay=useMemo(()=>{

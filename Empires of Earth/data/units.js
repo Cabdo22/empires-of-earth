@@ -41,10 +41,10 @@ export const UNIT_DEFS = {
   battleship:       { name: "Battleship",       icon: "⚓",    strength: 7, hp: 28, move: 3, range: 3, cost: 22,  techReq: "combustion",       domain: "sea", resourceReq: "oil" },
 
   // ── Air units ──
-  fighter:          { name: "Fighter",          icon: "✈",    strength: 4, hp: 18, move: 5, range: 0, cost: 16,  techReq: "aviation",         domain: "air", resourceReq: "oil" },
-  bomber:           { name: "Bomber",           icon: "💣",    strength: 5, hp: 16, move: 4, range: 3, cost: 19,  techReq: "aviation",         domain: "air", resourceReq: "oil" },
-  jet_fighter:      { name: "Jet Fighter",      icon: "✈",    strength: 6, hp: 22, move: 6, range: 0, cost: 21,  techReq: "nanotech",         domain: "air", resourceReq: "oil" },
-  stealth_bomber:   { name: "Stealth Bomber",   icon: "💣",    strength: 7, hp: 20, move: 5, range: 3, cost: 24,  techReq: "nanotech",         domain: "air", resourceReq: "oil" },
+  fighter:          { name: "Fighter",          icon: "✈",    strength: 4, hp: 18, move: 5, range: 0, cost: 16,  techReq: "aviation",         domain: "air", resourceReq: "aluminum" },
+  bomber:           { name: "Bomber",           icon: "💣",    strength: 5, hp: 16, move: 4, range: 3, cost: 19,  techReq: "aviation",         domain: "air", resourceReq: "aluminum" },
+  jet_fighter:      { name: "Jet Fighter",      icon: "✈",    strength: 6, hp: 22, move: 6, range: 0, cost: 21,  techReq: "nanotech",         domain: "air", resourceReq: "aluminum" },
+  stealth_bomber:   { name: "Stealth Bomber",   icon: "💣",    strength: 7, hp: 20, move: 5, range: 3, cost: 24,  techReq: "nanotech",         domain: "air", resourceReq: "aluminum" },
 
   // ── Special ──
   nuke:             { name: "Nuke",             icon: "☢",    strength: 99, hp: 1, move: 0, range: 12, cost: 40, techReq: "combustion",       domain: "special", resourceReq: "uranium" },

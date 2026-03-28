@@ -10,9 +10,11 @@ export const TERRAIN_INFO = {
 };
 
 export const RESOURCE_INFO = {
-  wheat:   { label: "Wheat",   icon: "🌾", bonus: { food: 2 } },
-  iron:    { label: "Iron",    icon: "⛏",  bonus: { prod: 2 } },
-  oil:     { label: "Oil",     icon: "🛢",  bonus: { prod: 2, gold: 1 } },
-  uranium: { label: "Uranium", icon: "☢",  bonus: { science: 2, prod: 1 } },
-  fish:    { label: "Fish",    icon: "🐟", bonus: { food: 2 } },
+  wheat:    { label: "Wheat",    icon: "🌾", bonus: { food: 2 },              techReq: null },
+  fish:     { label: "Fish",     icon: "🐟", bonus: { food: 2 },              techReq: null },
+  iron:     { label: "Iron",     icon: "⛏",  bonus: { prod: 2 },              techReq: "bronze_working" },
+  coal:     { label: "Coal",     icon: "⚫", bonus: { prod: 2, gold: 1 },     techReq: "machinery" },
+  oil:      { label: "Oil",      icon: "🛢",  bonus: { prod: 2, gold: 1 },     techReq: "steam_power" },
+  aluminum: { label: "Aluminum", icon: "🔷", bonus: { prod: 1, science: 1 },  techReq: "electronics" },
+  uranium:  { label: "Uranium",  icon: "☢",  bonus: { science: 2, prod: 1 },  techReq: "quantum_computing" },
 };

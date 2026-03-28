@@ -6,11 +6,13 @@ import React from "react";
 import { UNIT_DEFS } from '../data/units.js';
 
 const RESOURCE_BADGE = {
-  wheat:   { bg: "#3a2e10", border: "#daa520" },
-  iron:    { bg: "#2a2a30", border: "#8a9aaa" },
-  oil:     { bg: "#1a1a20", border: "#4a4a4a" },
-  uranium: { bg: "#0a2a0a", border: "#40ff40" },
-  fish:    { bg: "#0a2030", border: "#4ac0e8" },
+  wheat:    { bg: "#3a2e10", border: "#daa520" },
+  iron:     { bg: "#2a2a30", border: "#8a9aaa" },
+  coal:     { bg: "#1a1a1a", border: "#6a6a6a" },
+  oil:      { bg: "#1a1a20", border: "#4a4a4a" },
+  aluminum: { bg: "#1a2a3a", border: "#80b0e0" },
+  uranium:  { bg: "#0a2a0a", border: "#40ff40" },
+  fish:     { bg: "#0a2030", border: "#4ac0e8" },
 };
 
 export const ResourceIcon = ({ type, x, y, s }) => {
@@ -43,6 +45,21 @@ export const ResourceIcon = ({ type, x, y, s }) => {
       <rect x={-sz * .25} y={-sz * .35} width={sz * .5} height={sz * .6} rx={sz * .12} fill="#2a2a2a" stroke="#1a1a1a" strokeWidth=".6" />
       <ellipse cx={0} cy={-sz * .35} rx={sz * .25} ry={sz * .08} fill="#3a3a3a" />
       <circle cx={0} cy={sz * .4} r={sz * .25} fill="#1a1a2a" opacity=".6" />
+    </g>
+  );
+  if (type === "coal") return (
+    <g transform={`translate(${x},${y})`}>
+      {badgeBg}
+      <rect x={-sz * .3} y={-sz * .25} width={sz * .6} height={sz * .5} rx={sz * .1} fill="#2a2a2a" stroke="#4a4a4a" strokeWidth=".8" />
+      <rect x={-sz * .2} y={-sz * .15} width={sz * .15} height={sz * .15} fill="#4a4a4a" rx={sz * .03} />
+      <rect x={sz * .05} y={-sz * .1} width={sz * .15} height={sz * .2} fill="#3a3a3a" rx={sz * .03} />
+    </g>
+  );
+  if (type === "aluminum") return (
+    <g transform={`translate(${x},${y})`}>
+      {badgeBg}
+      <polygon points={`0,${-sz * .4} ${sz * .35},${sz * .2} ${-sz * .35},${sz * .2}`} fill="#a0c8e8" stroke="#6090b8" strokeWidth=".8" />
+      <polygon points={`0,${-sz * .2} ${sz * .18},${sz * .15} ${-sz * .18},${sz * .15}`} fill="#c0e0f8" stroke="none" opacity=".6" />
     </g>
   );
   if (type === "uranium") return (

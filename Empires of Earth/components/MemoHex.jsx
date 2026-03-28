@@ -11,7 +11,7 @@ import { ResourceIcon, UnitIcon } from './Icons.jsx';
 const MemoHex = memo(function MemoHex({
   hex, vis, isHovered, isSelected, inMoveRange, inAttackRange, inNukeRange,
   units, unitCount, city, player, unitSelected, settlerMode, canAct, flash,
-  isFogged, isExplored, blockReason
+  isFogged, isExplored, blockReason, discoveredResources
 }) {
   const t = hex.terrainType;
 
@@ -40,7 +40,7 @@ const MemoHex = memo(function MemoHex({
       {t === "mountain" && <polygon points={HEX_POINTS} fill="#2a2a26"/>}
       {t === "water" && <polygon points={HEX_POINTS} fill="#1a3050"/>}
       <polygon points={HEX_POINTS} fill="rgba(0,0,0,.25)" stroke="rgba(30,40,20,.4)" strokeWidth="1"/>
-      {hex.resource && <g opacity=".3" style={{pointerEvents:"none"}}><ResourceIcon type={hex.resource} x={0} y={2} s={12}/></g>}
+      {hex.resource && discoveredResources?.has(hex.resource) && <g opacity=".3" style={{pointerEvents:"none"}}><ResourceIcon type={hex.resource} x={0} y={2} s={12}/></g>}
     </g>
   );
 
@@ -113,7 +113,7 @@ const MemoHex = memo(function MemoHex({
       {/* Territory tint */}
       {hex.ownerPlayerId && player && <polygon points={HEX_POINTS} fill={player.color} opacity=".12"/>}
 
-      {hex.resource && !city && <g style={{pointerEvents:"none"}}><ResourceIcon type={hex.resource} x={0} y={0} s={16}/></g>}
+      {hex.resource && discoveredResources?.has(hex.resource) && !city && <g style={{pointerEvents:"none"}}><ResourceIcon type={hex.resource} x={0} y={0} s={16}/></g>}
 
       {/* Road indicator */}
       {hex.road && !city && <circle cx={0} cy={0} r={5} fill="#a08060" stroke="#705030" strokeWidth="1" opacity=".5" style={{pointerEvents:"none"}}/>}
@@ -187,7 +187,8 @@ const MemoHex = memo(function MemoHex({
   a.flash === b.flash && a.isFogged === b.isFogged &&
   a.isExplored === b.isExplored && a.blockReason === b.blockReason &&
   a.unitCount === b.unitCount && a.units === b.units &&
-  a.city === b.city && a.player === b.player && a.hex === b.hex
+  a.city === b.city && a.player === b.player && a.hex === b.hex &&
+  a.discoveredResources === b.discoveredResources
 );
 
 export default MemoHex;

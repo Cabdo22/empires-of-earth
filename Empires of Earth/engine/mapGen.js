@@ -68,12 +68,18 @@ const placeResources = (grid, rng, protectedHexes) => {
       grid[c][r].resource = "uranium";
     } else if (roll < 0.03) {
       grid[c][r].resource = "uranium";
-    } else if (roll < 0.40) {
+    } else if (roll < 0.28) {
       grid[c][r].resource = grid[c][r].terrain === "grassland" ? "wheat" : "iron";
-    } else if (roll < 0.70) {
+    } else if (roll < 0.48) {
       grid[c][r].resource = "iron";
-    } else {
+    } else if (roll < 0.63) {
+      grid[c][r].resource = "coal";
+    } else if (roll < 0.78) {
       grid[c][r].resource = "oil";
+    } else if (roll < 0.93) {
+      grid[c][r].resource = "aluminum";
+    } else {
+      grid[c][r].resource = "coal";
     }
   }
 

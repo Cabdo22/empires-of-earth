@@ -12,8 +12,8 @@ export function BottomInfo({ selH, hexes, unitMap, players, settlerM, setSettler
           return (
             <div style={{ background: "rgba(15,25,10,.9)", border: "1px solid rgba(100,140,50,.3)", borderRadius: 8, padding: "5px 16px", color: "#a0b880", fontSize: 9, letterSpacing: 1, display: "flex", gap: 10, alignItems: "center" }}>
               <span style={{ color: "#c8d8a0", fontWeight: 600 }}>({sd.col},{sd.row})</span><span style={{ color: si.color }}>{si.label}</span>
-              {sd.resource && <span>{RESOURCE_INFO[sd.resource].icon}{RESOURCE_INFO[sd.resource].label}</span>}
-              {(() => { const hy = getHexYields(sd); return <><span style={{ color: "#7db840" }}>F{hy.food}</span><span style={{ color: "#b89040" }}>P{hy.production}</span>{hy.gold > 0 && <span style={{ color: "#d0c050" }}>G{hy.gold}</span>}{hy.science > 0 && <span style={{ color: "#60a0d0" }}>S{hy.science}</span>}</>; })()}
+              {sd.resource && (!RESOURCE_INFO[sd.resource]?.techReq || cp?.researchedTechs?.includes(RESOURCE_INFO[sd.resource].techReq)) && <span>{RESOURCE_INFO[sd.resource].icon}{RESOURCE_INFO[sd.resource].label}</span>}
+              {(() => { const hy = getHexYields(sd, cp); return <><span style={{ color: "#7db840" }}>F{hy.food}</span><span style={{ color: "#b89040" }}>P{hy.production}</span>{hy.gold > 0 && <span style={{ color: "#d0c050" }}>G{hy.gold}</span>}{hy.science > 0 && <span style={{ color: "#60a0d0" }}>S{hy.science}</span>}</>; })()}
               <span style={{ color: si.moveCost != null ? "#a0b880" : "#c05050" }}>{si.moveCost != null ? `Mv${sd.road ? "0.5" : si.moveCost}` : "—"}</span>
               {sd.road && <span style={{ color: "#c8a060" }}>🛣Road</span>}
               {!sd.road && buildRoad && cp && sd.ownerPlayerId === cp.id && cp.researchedTechs.includes("trade") && sd.terrainType !== "water" && sd.terrainType !== "mountain" && cp.gold >= 5 && <span style={{ pointerEvents: "auto", cursor: "pointer", color: "#c8a060", background: "rgba(160,128,96,.2)", borderRadius: 3, padding: "1px 4px" }} onClick={() => buildRoad(sd.id)}>🛣+Road(5g)</span>}

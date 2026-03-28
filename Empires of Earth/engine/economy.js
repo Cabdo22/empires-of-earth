@@ -10,8 +10,17 @@ import { hexAt, getNeighbors, TRADE_FOCUS, TRADE_DISTANCE_BONUS_PER, FOREIGN_TRA
 
 // ---- Tile yield helpers ----
 
+// Check if a player has discovered a resource type via tech
+export const isResourceDiscovered = (resourceType, player) => {
+  const info = RESOURCE_INFO[resourceType];
+  if (!info) return false;
+  if (!info.techReq) return true;
+  return player?.researchedTechs?.includes(info.techReq) ?? false;
+};
+
 // Get yields for a single hex based on terrain + resource
-export const getHexYields = (hex) => {
+// If player is provided, only include discovered resource bonuses
+export const getHexYields = (hex, player) => {
   if (!hex) return { food: 0, production: 0, gold: 0, science: 0 };
   const terrain = TERRAIN_INFO[hex.terrainType];
   if (!terrain) return { food: 0, production: 0, gold: 0, science: 0 };
@@ -26,13 +35,15 @@ export const getHexYields = (hex) => {
   let gold = terrain.gold || 0;
   let science = terrain.science || 0;
 
-  // Resource bonuses
+  // Resource bonuses (only if discovered or no player context)
   if (hex.resource && RESOURCE_INFO[hex.resource]) {
-    const bonus = RESOURCE_INFO[hex.resource].bonus;
-    food += (bonus.food || 0);
-    production += (bonus.prod || 0);
-    gold += (bonus.gold || 0);
-    science += (bonus.science || 0);
+    if (!player || isResourceDiscovered(hex.resource, player)) {
+      const bonus = RESOURCE_INFO[hex.resource].bonus;
+      food += (bonus.food || 0);
+      production += (bonus.prod || 0);
+      gold += (bonus.gold || 0);
+      science += (bonus.science || 0);
+    }
   }
 
   return { food, production, gold, science };
@@ -72,7 +83,7 @@ export const calcCityYields = (city, player, hexes) => {
   const cityHex = hexes[city.hexId];
 
   // Start with city center tile yields
-  const centerY = getHexYields(cityHex);
+  const centerY = getHexYields(cityHex, player);
   let food = centerY.food;
   let prod = centerY.production;
   let gold = centerY.gold;
@@ -88,7 +99,7 @@ export const calcCityYields = (city, player, hexes) => {
 
   // Add worked tile yields
   for (const tileId of (city.workedTileIds || [])) {
-    const tileY = getHexYields(hexes[tileId]);
+    const tileY = getHexYields(hexes[tileId], player);
     food += tileY.food;
     prod += tileY.production;
     gold += tileY.gold;
@@ -232,6 +243,8 @@ const directCityHasResource = (city, hexes, resourceType) => {
 
 // Check if a city has access to a strategic resource (includes trade network sharing)
 export const cityHasResource = (city, hexes, resourceType, player) => {
+  // Resource must be discovered first
+  if (player && !isResourceDiscovered(resourceType, player)) return false;
   if (directCityHasResource(city, hexes, resourceType)) return true;
   // Resource sharing: BFS through domestic trade routes
   if (!player) return false;
