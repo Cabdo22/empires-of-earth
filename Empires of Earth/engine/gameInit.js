@@ -80,7 +80,7 @@ export const createInitialState = (playerConfigs) => {
       color: civDef.color,
       colorBg: civDef.colorBg,
       colorLight: civDef.colorLight,
-      gold: 20,
+      gold: 30,
       researchedTechs: ["basic_tools"],
       currentResearch: null,
       type: cfg.type || "human",        // "human" or "ai"
