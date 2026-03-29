@@ -338,7 +338,7 @@ export const applyEndTurn = (state) => {
   g.phase = "MOVEMENT";
   const nextPlayer = g.players[nextIdx];
   refreshUnits(nextPlayer, g);
-  addLogMsg(`Turn ${g.turnNumber} \u2014 ${nextPlayer.name}`, g, null);
+  addLogMsg(`Turn ${g.turnNumber} \u2014 ${nextPlayer.name}`, g, nextPlayer.id);
   checkVictoryState(g);
 
   const events = sfxQ.map(s => ({ type: "sfx", name: s }));
