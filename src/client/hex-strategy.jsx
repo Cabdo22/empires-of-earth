@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect, memo } from "react";
 import { HEX_SIZE, SQRT3, MAP_SIZES, HEX_POINTS, TERRAIN_INFO, RESOURCE_INFO, ERAS, ERA_IDX, ERA_COLORS, TECH_TREE, UNIT_DEFS, DISTRICT_DEFS, CIV_DEFS, BARB_UNITS, CITY_DEF_BONUS, TERRITORIAL_WIN, FOG_SIGHT, UPGRADE_PATHS, hexCenter, hexAt, getNeighbors, hexDist, getHexesInRadius, mulberry32, gameRng, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS, calcCombatPreview, getPlayerMaxEra, calcCityYields, calcPlayerIncome, getAvailableTechs, getAvailableUnits, getAvailableDistricts, canUpgradeUnit, getMoveCost, getMoveBlockReason, getReachableHexes, getRangedTargets, getVisibleHexes, checkVictoryState, buildMapConfig, createInitialState, processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg, aiExecuteTurn, applyMoveUnit, applyAttack, applyLaunchNuke, applySelectResearch, applySetProduction, applyUpgradeUnit, applyFoundCity, applyCancelProduction, applyEndTurn } from '../engine/index.js';
-import { SFX, ensureAudio } from './sfx.js';
+import { SFX, ensureAudio, MenuMusic } from './sfx.js';
 
 // ============================================================
 // PROCEDURAL VISUALS
@@ -244,6 +244,11 @@ export default function HexStrategyGame({ onlineMode, onShowOnline }){
   const[,forceRender]=useState(0); // bump to force re-render during panel drag
   const victoryPlayed=useRef(false);
   const prevCpId=useRef(null);
+
+  // Stop menu music when game starts
+  useEffect(() => {
+    if (gameStarted && gs) MenuMusic.stop();
+  }, [gameStarted, gs]);
 
   // === ONLINE MODE: sync server state into local gs ===
   useEffect(()=>{
@@ -785,7 +790,7 @@ export default function HexStrategyGame({ onlineMode, onShowOnline }){
   // === MODE SELECTION SCREEN (skip in online mode) ===
   if(!isOnline&&!gameMode){
     const modeBtn = (label, desc, icon, mode) => (
-      <div onClick={()=>{SFX.click();setGameMode(mode);}}
+      <div onClick={()=>{SFX.click();MenuMusic.play();setGameMode(mode);}}
         style={{padding:"24px 36px",borderRadius:8,cursor:"pointer",background:"rgba(30,40,20,.6)",
           border:"1px solid rgba(100,140,50,.4)",minWidth:220,textAlign:"center",
           transition:"background .2s"}}
@@ -936,7 +941,7 @@ export default function HexStrategyGame({ onlineMode, onShowOnline }){
       <h1 style={{color:w?.color||"#fff",fontSize:36,letterSpacing:6,marginBottom:8,textTransform:"uppercase"}}>{w?.name}</h1>
       <div style={{color:"#c8d8a0",fontSize:20,letterSpacing:3,marginBottom:4}}>{gs.victoryStatus.type} Victory</div>
       <div style={{color:"#6a7a50",fontSize:14}}>Turn {turnNumber}</div>
-      <button onClick={()=>{setGs(null);setGameStarted(false);setGameMode(null);setMapSizePick(null);setSelU(null);setSelH(null);setAiThinking(false);setTutorialOn(true);setTutorialDismissed({});victoryPlayed.current=false;techPosRef.current={x:null,y:95};cityPosRef.current={x:null,y:95};setTechCollapsed(false);setCityCollapsed(false);setCivPickStep(1);setTurnTransition(null);setTurnPopups([]);turnPopupShownRef.current=null;prevCpId.current=null;}} style={{...btnStyle(true),marginTop:24,fontSize:14,padding:"8px 24px"}}>New Game</button>
+      <button onClick={()=>{setGs(null);setGameStarted(false);setGameMode(null);setMapSizePick(null);setSelU(null);setSelH(null);setAiThinking(false);setTutorialOn(true);setTutorialDismissed({});victoryPlayed.current=false;techPosRef.current={x:null,y:95};cityPosRef.current={x:null,y:95};setTechCollapsed(false);setCityCollapsed(false);setCivPickStep(1);setTurnTransition(null);setTurnPopups([]);turnPopupShownRef.current=null;prevCpId.current=null;MenuMusic.play();}} style={{...btnStyle(true),marginTop:24,fontSize:14,padding:"8px 24px"}}>New Game</button>
     </div>);}
 
   return(

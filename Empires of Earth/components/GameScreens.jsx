@@ -8,12 +8,12 @@ import { CIV_DEFS } from '../data/civs.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { createInitialState, AI_DIFFICULTY } from '../engine/gameInit.js';
 import { btnStyle } from '../styles.js';
-import { SFX } from '../sfx.js';
+import { SFX, MenuMusic } from '../sfx.js';
 
 // === MODE SELECTION SCREEN ===
 export function ModeSelectScreen({ setGameMode }) {
   const modeBtn = (label, desc, icon, mode) => (
-    <div onClick={() => { SFX.click(); setGameMode(mode); }}
+    <div onClick={() => { SFX.click(); MenuMusic.play(); setGameMode(mode); }}
       style={{ padding: "24px 36px", borderRadius: 8, cursor: "pointer", background: "rgba(30,40,20,.6)",
         border: "1px solid rgba(100,140,50,.4)", minWidth: 220, textAlign: "center", transition: "background .2s" }}
       onMouseEnter={e => e.currentTarget.style.background = "rgba(100,160,50,.25)"}

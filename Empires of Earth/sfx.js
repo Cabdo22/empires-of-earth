@@ -36,6 +36,53 @@ const playNoise = (noiseOpts, dur, vol, disposeAfter = 400) => {
   } catch (e) {}
 };
 
+// ============================================================
+// MENU MUSIC
+// ============================================================
+
+let menuAudio = null;
+let menuMusicFading = false;
+
+export const MenuMusic = {
+  play: () => {
+    if (menuAudio && !menuAudio.paused) return;
+    if (!menuAudio) {
+      menuAudio = new Audio("/empires_of_the_ages_theme.mp3");
+      menuAudio.loop = true;
+      menuAudio.volume = 0.4;
+    }
+    menuMusicFading = false;
+    menuAudio.volume = 0.4;
+    menuAudio.play().catch((err) => {
+      console.error("Menu music play failed:", err.message);
+    });
+  },
+  stop: () => {
+    if (!menuAudio || menuAudio.paused) return;
+    menuMusicFading = true;
+    // Fade out over 800ms
+    const steps = 16;
+    const stepTime = 800 / steps;
+    const startVol = menuAudio.volume;
+    let step = 0;
+    const fade = setInterval(() => {
+      step++;
+      if (!menuMusicFading || !menuAudio || step >= steps) {
+        clearInterval(fade);
+        if (menuAudio && menuMusicFading) {
+          menuAudio.pause();
+          menuAudio.currentTime = 0;
+          menuAudio.volume = 0.4;
+        }
+        menuMusicFading = false;
+        return;
+      }
+      menuAudio.volume = startVol * (1 - step / steps);
+    }, stepTime);
+  },
+  isPlaying: () => menuAudio && !menuAudio.paused && !menuMusicFading,
+};
+
 export const SFX = {
   click: () => playTone(
     { oscillator: { type: "triangle" }, envelope: { attack: 0.005, decay: 0.08, sustain: 0, release: 0.05 } },

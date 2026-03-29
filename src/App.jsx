@@ -1,16 +1,24 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import HexStrategy from './client/hex-strategy.jsx';
 import Lobby from './client/lobby.jsx';
 import OnlineGame from './client/online-game.jsx';
+import { MenuMusic } from './client/sfx.js';
 
 export default function App() {
   const [onlineRoom, setOnlineRoom] = useState(null);
   const [playerName, setPlayerName] = useState(null);
   const [showLobby, setShowLobby] = useState(false);
 
+  const handleBackToMenu = useCallback(() => {
+    setOnlineRoom(null);
+    setPlayerName(null);
+    setShowLobby(false);
+    MenuMusic.play();
+  }, []);
+
   // Online game in progress
   if (onlineRoom) {
-    return <OnlineGame roomId={onlineRoom} playerName={playerName} onBack={() => { setOnlineRoom(null); setPlayerName(null); }} />;
+    return <OnlineGame roomId={onlineRoom} playerName={playerName} onBack={handleBackToMenu} />;
   }
 
   // Online lobby
@@ -18,7 +26,7 @@ export default function App() {
     return (
       <Lobby
         onJoinRoom={(code, name) => { setOnlineRoom(code); setPlayerName(name); }}
-        onBack={() => setShowLobby(false)}
+        onBack={() => { setShowLobby(false); }}
       />
     );
   }

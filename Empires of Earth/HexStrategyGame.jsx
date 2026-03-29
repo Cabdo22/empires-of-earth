@@ -13,7 +13,7 @@ import { checkVictoryState } from './engine/victory.js';
 import { getDisplayColors, checkNewMeetings } from './engine/discovery.js';
 import { createInitialState } from './engine/gameInit.js';
 import { aiExecuteTurn } from './ai/aiEngine.js';
-import { SFX } from './sfx.js';
+import { SFX, MenuMusic } from './sfx.js';
 import { genGrass, genTrees, genMtns, genWaves, genDetail, genCoast, genWaterCoast } from './components/ProceduralVisuals.js';
 import MemoHex from './components/MemoHex.jsx';
 import { btnStyle, panelStyle } from './styles.js';
@@ -76,6 +76,13 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const prevCpId=useRef(null);
   const gsRef=useRef(gs);
   const{startAnimation,animatingUnitId,animVisuals,overlayRef}=useUnitAnimation();
+
+  // Stop menu music when game starts, resume if returning to menus
+  useEffect(() => {
+    if (gameStarted && gs) {
+      MenuMusic.stop();
+    }
+  }, [gameStarted, gs]);
 
   // Derived state (safe when gs is null)
   const hexes=gs?.hexes||[];
