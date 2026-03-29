@@ -331,14 +331,18 @@ export const applyEndTurn = (state) => {
   // If we've looped back to first player, a full round is complete
   if (nextIdx === 0) {
     g.turnNumber++;
-    spawnBarbarians(g);
-    processBarbarians(g);
   }
 
   g.phase = "MOVEMENT";
   const nextPlayer = g.players[nextIdx];
   refreshUnits(nextPlayer, g);
   addLogMsg(`Turn ${g.turnNumber} \u2014 ${nextPlayer.name}`, g, nextPlayer.id);
+
+  // Spawn/process barbarians AFTER turn marker so log reads correctly
+  if (nextIdx === 0) {
+    spawnBarbarians(g);
+    processBarbarians(g);
+  }
   checkVictoryState(g);
 
   const events = sfxQ.map(s => ({ type: "sfx", name: s }));

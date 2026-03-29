@@ -491,14 +491,18 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
         if (nextIdx === 0) {
           state.turnNumber++;
-          spawnBarbarians(state);
-          processBarbarians(state);
         }
 
         state.phase = "MOVEMENT";
         const nextPlayer = state.players[nextIdx];
         refreshUnits(nextPlayer, state);
-        addLogMsg(`Turn ${state.turnNumber} — ${nextPlayer.name}`, state);
+        addLogMsg(`Turn ${state.turnNumber} — ${nextPlayer.name}`, state, nextPlayer.id);
+
+        // Spawn/process barbarians AFTER turn marker so log reads correctly
+        if (nextIdx === 0) {
+          spawnBarbarians(state);
+          processBarbarians(state);
+        }
         checkVictoryState(state);
 
         return state;
