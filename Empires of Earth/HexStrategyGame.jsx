@@ -1041,7 +1041,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
             <text x={-3} y={.5} textAnchor="middle" dominantBaseline="middle" fill="#ffd740" fontSize={8} fontWeight="bold" fontFamily="'Palatino Linotype',serif" style={{letterSpacing:.5}}>{cb.name}</text>
             <circle cx={27} cy={.5} r={7} fill={cb.color} opacity=".8"/>
             <text x={27} y={1} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={7} fontWeight="bold">{cb.pop}</text>
-            {cb.hp<cb.hpMax&&<><rect x={-20} y={-18} width={40} height={3} rx={1} fill="#333" opacity=".7"/><rect x={-20} y={-18} width={40*(cb.hp/cb.hpMax)} height={3} rx={1} fill={cb.hp>cb.hpMax*.5?"#4a4":"#c44"} opacity=".9"/></>}
+            <rect x={-20} y={10} width={40} height={4} rx={1.5} fill="#333" opacity=".7"/><rect x={-20} y={10} width={40*(cb.hp/cb.hpMax)} height={4} rx={1.5} fill={cb.hp>cb.hpMax*.5?"#4a4":"#c44"} opacity=".9"/>
             {cb.prod&&<text x={0} y={-26} textAnchor="middle" fill="#ffd740" fontSize={8}>⚙ {cb.prod.type==="unit"?UNIT_DEFS[cb.prod.itemId]?.name:DISTRICT_DEFS[cb.prod.itemId]?.name}</text>}
           </g>)}
           <UnitAnimationOverlay ref={overlayRef} unitType={animVisuals?.unitType} playerColors={animVisuals||{}} visible={!!animatingUnitId}/>
