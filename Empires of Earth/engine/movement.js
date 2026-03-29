@@ -118,6 +118,8 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
       const neighborKey = `${nc},${nr}`;
       const nh = hexAt(hexes, nc, nr);
       if (!nh) continue;
+      // Block enemy city hexes (can't walk into cities — must attack)
+      if (nh.cityId && nh.ownerPlayerId && nh.ownerPlayerId !== playerId) continue;
       const moveCost = getMoveCost(nh, domain, ability);
       if (moveCost === null) continue;
 
@@ -187,6 +189,8 @@ export const findPath = (startCol, startRow, endCol, endRow, hexes, domain = "la
       const neighborKey = `${nc},${nr}`;
       const nh = hexAt(hexes, nc, nr);
       if (!nh) continue;
+      // Block enemy city hexes (can't walk into cities — must attack)
+      if (nh.cityId && nh.ownerPlayerId && nh.ownerPlayerId !== playerId) continue;
       const moveCost = getMoveCost(nh, domain, ability);
       if (moveCost === null) continue;
       const totalCost = current.cost + moveCost;

@@ -359,7 +359,7 @@ export const processBarbarians = (g) => {
       let moveTarget = null, moveTargetDist = Infinity;
       for (const [nc, nr] of neighbors) {
         const hex = hexAt(g.hexes, nc, nr);
-        if (!hex || hex.terrainType === "water" || hex.terrainType === "mountain") continue;
+        if (!hex || hex.terrainType === "water" || hex.terrainType === "mountain" || hex.cityId) continue;
         const dist = hexDist(nc, nr, bestHex.col, bestHex.row);
         if (dist < moveTargetDist) { moveTargetDist = dist; moveTarget = { col: nc, row: nr }; }
       }

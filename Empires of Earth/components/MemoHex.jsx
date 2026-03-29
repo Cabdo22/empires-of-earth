@@ -152,10 +152,16 @@ const MemoHex = memo(function MemoHex({
       </g>}
 
       {/* Units garrisoned in city */}
-      {unitCount > 0 && city && <g transform="translate(28,-20)" style={{pointerEvents:"none"}}>
-        <circle cx={0} cy={0} r={12} fill={units[0].pBg} stroke={unitSelected ? "#60d0ff" : canAct ? "#a0e060" : units[0].pCol} strokeWidth={unitSelected ? "2" : "1"} strokeDasharray={canAct && !unitSelected ? "3 2" : "none"}/>
-        <UnitIcon unitType={units[0].unitType} x={0} y={0} fg={units[0].pLight || "#fff"} sz={10}/>
-        {unitCount > 1 && <text x={10} y={-8} fill="#ffd740" fontSize={7} fontWeight="bold">+{unitCount - 1}</text>}
+      {unitCount > 0 && city && <g transform="translate(0,-6)" style={{pointerEvents:"none"}} className={canAct && !unitSelected ? "unit-bob" : undefined}>
+        {canAct && !unitSelected && <circle cx={0} cy={0} r={22} fill="none" stroke={units[0].pCol} strokeWidth="2" className="unit-glow"/>}
+        <circle cx={0} cy={0} r={18} fill={units[0].pBg} stroke={unitSelected ? "#60d0ff" : canAct ? "#a0e060" : units[0].pCol} strokeWidth={unitSelected ? "2.5" : canAct ? "2" : "1.5"} strokeDasharray={canAct && !unitSelected ? "4 2" : "none"}/>
+        <UnitIcon unitType={units[0].unitType} x={0} y={0} fg={units[0].pLight || "#fff"} sz={15}/>
+        {unitSelected && <circle cx={0} cy={0} r={20} fill="none" stroke="#60d0ff" strokeWidth="1.5" opacity=".5"/>}
+        {unitCount > 1 && <text x={14} y={-14} textAnchor="middle" fill="#ffd740" fontSize={8} fontWeight="bold" style={{pointerEvents:"none"}}>+{unitCount - 1}</text>}
+        <g transform="translate(0,20)">
+          <rect x={-14} y={0} width={28} height={4} rx={1.5} fill="#222" opacity=".8" stroke="#555" strokeWidth=".5"/>
+          <rect x={-14} y={0} width={28 * (units[0].hpCurrent / (UNIT_DEFS[units[0].unitType]?.hp || 10))} height={4} rx={1.5} fill={units[0].hpCurrent > (UNIT_DEFS[units[0].unitType]?.hp || 10) * .5 ? "#4a4" : "#c44"} opacity=".9"/>
+        </g>
       </g>}
 
       {/* Overlays */}
