@@ -3,6 +3,7 @@ import { HEX_SIZE, SQRT3, COLS, ROWS, HEX_POINTS, hexCenter, hexAt, getNeighbors
 import { TECH_TREE } from './data/techs.js';
 import { RESOURCE_INFO } from './data/terrain.js';
 import { UNIT_DEFS } from './data/units.js';
+import { DISTRICT_DEFS } from './data/districts.js';
 import { CIV_DEFS } from './data/civs.js';
 import { calcCombatPreview } from './engine/combat.js';
 import { calcPlayerIncome, canUpgradeUnit, autoAssignTiles, isWorkableHex } from './engine/economy.js';
@@ -903,6 +904,26 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     return result;
   },[hexes,players,fogVisible,fogExplored,gs?.metPlayers,viewPlayerId]);
 
+  // City banner overlay (rendered above all hexes so banners can extend beyond hex bounds)
+  const cityBannerOverlay=useMemo(()=>{
+    const result=[];
+    for(const p of players){
+      const dc=getDisplayColors(p.id,viewPlayerId,gs);
+      for(const c of p.cities){
+        const h=hexes[c.hexId];if(!h)continue;
+        const uk=`${h.col},${h.row}`;
+        if(!fogVisible.has(uk)&&!fogExplored.has(uk))continue;
+        const fogged=!fogVisible.has(uk);
+        if(fogged)continue; // don't show banners for fogged cities
+        result.push({key:`cb-${c.id}`,x:h.x,y:h.y,name:c.name,pop:c.population,
+          color:dc.color,colorBg:dc.colorBg,
+          hp:c.hp,hpMax:c.hpMax||20,
+          prod:c.currentProduction,});
+      }
+    }
+    return result;
+  },[players,hexes,fogVisible,fogExplored,gs?.metPlayers,viewPlayerId]);
+
   // Tooltip overlay data (rendered above all hexes)
   const tooltipData=useMemo(()=>{
     if(hovH==null||!selU||phase!=="MOVEMENT"||!sud)return null;
@@ -991,6 +1012,15 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
         <g ref={gRef} style={{willChange:"transform"}} onMouseMove={onHexHover} onMouseLeave={onHexLeave} onClick={onHexClick} onContextMenu={onHexCtx}>{renderAll()}
           {/* Territory border overlay — rendered after all hexes so borders are never covered */}
           {borderOverlay.map(b=><g key={b.key} transform={`translate(${b.x},${b.y})`} style={{pointerEvents:"none"}}><polyline points={b.pts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke="#000" strokeWidth={6} strokeLinejoin="round" strokeLinecap="round" opacity={0.3}/><polyline points={b.pts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke={b.color} strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.9}/></g>)}
+          {/* City banner overlay — rendered above all hexes so banners can extend across hex boundaries */}
+          {cityBannerOverlay.map(cb=><g key={cb.key} transform={`translate(${cb.x},${cb.y+30})`} style={{pointerEvents:"none"}}>
+            <rect x={-35} y={-8} width={70} height={15} rx={3} fill={cb.colorBg} stroke={cb.color} strokeWidth="1"/>
+            <text x={-3} y={.5} textAnchor="middle" dominantBaseline="middle" fill="#ffd740" fontSize={8} fontWeight="bold" fontFamily="'Palatino Linotype',serif" style={{letterSpacing:.5}}>{cb.name}</text>
+            <circle cx={27} cy={.5} r={7} fill={cb.color} opacity=".8"/>
+            <text x={27} y={1} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={7} fontWeight="bold">{cb.pop}</text>
+            {cb.hp<cb.hpMax&&<><rect x={-20} y={-18} width={40} height={3} rx={1} fill="#333" opacity=".7"/><rect x={-20} y={-18} width={40*(cb.hp/cb.hpMax)} height={3} rx={1} fill={cb.hp>cb.hpMax*.5?"#4a4":"#c44"} opacity=".9"/></>}
+            {cb.prod&&<text x={0} y={-26} textAnchor="middle" fill="#ffd740" fontSize={8}>⚙ {cb.prod.type==="unit"?UNIT_DEFS[cb.prod.itemId]?.name:DISTRICT_DEFS[cb.prod.itemId]?.name}</text>}
+          </g>)}
           <UnitAnimationOverlay ref={overlayRef} unitType={animVisuals?.unitType} playerColors={animVisuals||{}} visible={!!animatingUnitId}/>
           {combatAnims.map(a=><g key={a.id} transform={`translate(${a.x},${a.y})`} style={{pointerEvents:"none"}}>
             <text x={0} y={-20} textAnchor="middle" fill={a.color} fontSize={18} fontWeight="bold" fontFamily="'Palatino Linotype',serif" stroke="#000" strokeWidth="2" paintOrder="stroke">

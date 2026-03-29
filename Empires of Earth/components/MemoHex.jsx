@@ -135,16 +135,7 @@ const MemoHex = memo(function MemoHex({
           <rect x={12} y={-3} width={10} height={10} fill="#c4a070" stroke="#7a5c3a" strokeWidth=".6" rx=".5"/><rect x={12} y={-3} width={10} height={2.2} fill="#a88050" stroke="#7a5c3a" strokeWidth=".4"/>
           <rect x={15} y={2} width={3.5} height={5} rx="1.3" fill="#2a1808"/>
         </g>
-        <g transform="translate(0,30)">
-          <rect x={-28} y={-8} width={56} height={15} rx={3} fill={player.colorBg} stroke={player.color} strokeWidth="1"/>
-          <text x={-4} y={.5} textAnchor="middle" dominantBaseline="middle" fill="#ffd740" fontSize={9} fontWeight="bold" fontFamily="'Palatino Linotype',serif" style={{pointerEvents:"none",letterSpacing:1.5}}>{city.name}</text>
-          <text x={20} y={.5} textAnchor="middle" dominantBaseline="middle" fill="#ffd740" fontSize={9} fontWeight="bold" style={{pointerEvents:"none"}}>{city.population}</text>
-        </g>
-        {city.hp < city.hpMax && <g transform="translate(0,18)">
-          <rect x={-20} y={0} width={40} height={3} rx={1} fill="#333" opacity=".7"/>
-          <rect x={-20} y={0} width={40 * (city.hp / city.hpMax)} height={3} rx={1} fill={city.hp > city.hpMax * .5 ? "#4a4" : "#c44"} opacity=".9"/>
-        </g>}
-        {city.currentProduction && <text x={0} y={-36} textAnchor="middle" fill="#ffd740" fontSize={8} style={{pointerEvents:"none"}}>⚙ {city.currentProduction.type === "unit" ? UNIT_DEFS[city.currentProduction.itemId]?.name : DISTRICT_DEFS[city.currentProduction.itemId]?.name}</text>}
+        {/* City banner, HP bar, and production label rendered in overlay layer (HexStrategyGame.jsx) */}
       </>}
 
       {/* Units (not in city) */}
