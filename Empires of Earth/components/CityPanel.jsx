@@ -18,7 +18,7 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
   // Food surplus and growth
   const foodConsumed = city.population * 2;
   const surplus = y.food - foodConsumed;
-  const growthThreshold = 5 + city.population * city.population * 2;
+  const growthThreshold = Math.floor(2 + city.population * 3);
 
   // Worked tiles info
   const centerHex = hexes[city.hexId];

@@ -90,6 +90,7 @@ export const calcCityYields = (city, player, hexes) => {
   let science = 2 + centerY.science; // base 2 science per city + tile science
 
   // Base city infrastructure output
+  food += 2;
   prod += 3;
   science += 4;
 

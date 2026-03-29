@@ -202,7 +202,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
   const surplus = yields.food - foodConsumed;
   if (surplus > 0) city.foodAccumulated += surplus;
 
-  const growthThreshold = Math.floor(4 + city.population * city.population * 1.5);
+  const growthThreshold = Math.floor(2 + city.population * 3);
   if (city.foodAccumulated >= growthThreshold) {
     city.population++;
     city.foodAccumulated -= growthThreshold;
@@ -421,7 +421,7 @@ export const rollRandomEvent = (g, sfxQ) => {
       }
       // Check city growth
       for (const city of cp2.cities) {
-        const growthThreshold = Math.floor(4 + city.population * city.population * 1.5);
+        const growthThreshold = Math.floor(2 + city.population * 3);
         if (city.foodAccumulated >= growthThreshold) {
           city.population++;
           city.foodAccumulated -= growthThreshold;
