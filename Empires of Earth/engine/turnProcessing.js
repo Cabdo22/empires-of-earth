@@ -406,31 +406,32 @@ export const rollRandomEvent = (g, sfxQ) => {
     addLogMsg(`🎲 ${cp?.name || 'Unknown'}: ${evt.name} — ${evt.desc}`, g, g.currentPlayerId);
 
     // Immediately apply any threshold completions from event bonuses
-    const cp = g.players.find(p => p.id === g.currentPlayerId);
-    if (cp) {
+    // Re-fetch player (event may have mutated state)
+    const cp2 = g.players.find(p => p.id === g.currentPlayerId);
+    if (cp2) {
       // Check research completion
-      if (cp.currentResearch) {
-        const tech = TECH_TREE[cp.currentResearch.techId];
-        if (tech && cp.currentResearch.progress >= tech.cost) {
-          cp.researchedTechs.push(cp.currentResearch.techId);
-          addLogMsg(`${cp.name} researched ${tech.name}!`, g, cp.id);
-          cp.currentResearch = null;
+      if (cp2.currentResearch) {
+        const tech = TECH_TREE[cp2.currentResearch.techId];
+        if (tech && cp2.currentResearch.progress >= tech.cost) {
+          cp2.researchedTechs.push(cp2.currentResearch.techId);
+          addLogMsg(`${cp2.name} researched ${tech.name}!`, g, cp2.id);
+          cp2.currentResearch = null;
           if (sfxQ) sfxQ.push("research");
         }
       }
       // Check city growth
-      for (const city of cp.cities) {
+      for (const city of cp2.cities) {
         const growthThreshold = Math.floor(4 + city.population * city.population * 1.5);
         if (city.foodAccumulated >= growthThreshold) {
           city.population++;
           city.foodAccumulated -= growthThreshold;
-          addLogMsg(`${city.name} grew to pop ${city.population}!`, g, cp.id);
+          addLogMsg(`${city.name} grew to pop ${city.population}!`, g, cp2.id);
           if (!city.manualTiles) autoAssignTiles(city, g.hexes);
           const workableInBorder = (city.borderHexIds || []).filter(
             hid => hid !== city.hexId && isWorkableHex(g.hexes[hid])
           ).length;
           if (city.population > workableInBorder) {
-            growCityBorder(city, cp, g.hexes);
+            growCityBorder(city, cp2, g.hexes);
           }
         }
       }
