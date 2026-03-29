@@ -7,7 +7,7 @@ import { getAvailableUnits, getAvailableDistricts } from '../engine/economy.js';
 import { TRADE_FOCUS } from '../data/constants.js';
 import { btnStyle, panelStyle } from '../styles.js';
 
-export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityCollapsed, setShowCity, onPanelDown, setProd, cancelProduction, toggleTile, maximizeTiles, setTradeFocus, allCities }) {
+export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityCollapsed, setShowCity, onPanelDown, setProd, cancelProduction, toggleTile, maximizeTiles, setTradeFocus, allCities, discoveredResources }) {
   if (!city) return null;
   const y = calcCityYields(city, cp, hexes);
   const avU = getAvailableUnits(cp, city, hexes);
@@ -70,7 +70,7 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
           <div key={h.id} onClick={() => toggleTile(city.id, h.id)}
             style={{ fontSize: 9, padding: "3px 5px", background: "rgba(80,120,40,.18)", borderRadius: 3, marginBottom: 1, cursor: "pointer", border: "1px solid rgba(100,160,50,.25)", display: "flex", justifyContent: "space-between", alignItems: "center" }}
             title="Click to unassign this tile">
-            <span style={{ color: "#b0c890" }}>{TERRAIN_INFO[h.terrainType]?.label}{h.resource ? ` ${RESOURCE_INFO[h.resource]?.icon}` : ''}</span>
+            <span style={{ color: "#b0c890" }}>{TERRAIN_INFO[h.terrainType]?.label}{h.resource && discoveredResources?.has(h.resource) ? ` ${RESOURCE_INFO[h.resource]?.icon}` : ''}</span>
             <span><span style={{ marginRight: 6 }}>🌾{ty.food} ⚙{ty.production}{ty.science > 0 && <> 🔬{ty.science}</>} 💰{ty.gold}</span><span style={{ color: "#c05050", fontSize: 8, fontWeight: 700 }}>✕</span></span>
           </div>
         ))}
@@ -82,7 +82,7 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
             <div key={h.id} onClick={() => slotsAvailable > 0 ? toggleTile(city.id, h.id) : null}
               style={{ fontSize: 9, padding: "3px 5px", background: "rgba(40,50,30,.3)", borderRadius: 3, marginBottom: 1, cursor: slotsAvailable > 0 ? "pointer" : "default", opacity: slotsAvailable > 0 ? 0.8 : 0.4, display: "flex", justifyContent: "space-between", alignItems: "center" }}
               title={slotsAvailable > 0 ? "Click to assign this tile" : "No available slots"}>
-              <span style={{ color: "#7a8a6a" }}>{TERRAIN_INFO[h.terrainType]?.label}{h.resource ? ` ${RESOURCE_INFO[h.resource]?.icon}` : ''}</span>
+              <span style={{ color: "#7a8a6a" }}>{TERRAIN_INFO[h.terrainType]?.label}{h.resource && discoveredResources?.has(h.resource) ? ` ${RESOURCE_INFO[h.resource]?.icon}` : ''}</span>
               <span>{slotsAvailable > 0 && <span style={{ color: "#90d070", fontSize: 8, fontWeight: 700, marginRight: 6 }}>+</span>}🌾{ty.food} ⚙{ty.production}{ty.science > 0 && <> 🔬{ty.science}</>} 💰{ty.gold}</span>
             </div>
           ))}

@@ -1117,7 +1117,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       {/* City panel */}
       {showCity&&(()=>{const city=cp.cities.find(c=>c.id===showCity);if(!city)return null;
         const cancelProduction=(cityId)=>{if(onlineMode){onlineMode.sendAction({type:"CANCEL_PRODUCTION",cityId});return;}setGs(prev=>{const g=JSON.parse(JSON.stringify(prev));const c=g.players.find(p=>p.id===g.currentPlayerId).cities.find(c2=>c2.id===cityId);if(c){c.currentProduction=null;c.productionProgress=0;}return g;});};
-        return <CityPanel city={city} cp={cp} hexes={hexes} cityPosRef={cityPosRef} cityCollapsed={cityCollapsed} setCityCollapsed={setCityCollapsed} setShowCity={setShowCity} onPanelDown={onPanelDown} setProd={setProd} cancelProduction={cancelProduction} toggleTile={toggleTile} maximizeTiles={maximizeTiles} setTradeFocus={setTradeFocus} allCities={cp.cities}/>;})()}
+        return <CityPanel city={city} cp={cp} hexes={hexes} cityPosRef={cityPosRef} cityCollapsed={cityCollapsed} setCityCollapsed={setCityCollapsed} setShowCity={setShowCity} onPanelDown={onPanelDown} setProd={setProd} cancelProduction={cancelProduction} toggleTile={toggleTile} maximizeTiles={maximizeTiles} setTradeFocus={setTradeFocus} allCities={cp.cities} discoveredResources={discoveredResources}/>;})()}
 
       {/* Legend */}
       <Legend tCounts={tCounts}/>
