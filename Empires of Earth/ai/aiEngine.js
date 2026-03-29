@@ -606,7 +606,8 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemies, addLogFn, smarter, strategy
         const garrison = allEnemyUnits.find(u => u.hexCol === eCH.col && u.hexRow === eCH.row);
         if (!garrison) {
           const isSiege = SIEGE_UNITS.has(unit.unitType);
-          const cityDmg = isSiege ? unitDef.strength * 3 : Math.max(1, Math.floor(unitDef.strength * 0.5));
+          const isRanged = unitDef.range > 0 && !isSiege;
+          const cityDmg = isSiege ? unitDef.strength * 5 : isRanged ? unitDef.strength : unitDef.strength * 3;
           let score = cityDmg;
           if (eCity.hp - cityDmg <= 0) score += 30;
           if (!isSiege && unitDef.range === 0) score -= 10;
@@ -669,13 +670,14 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemies, addLogFn, smarter, strategy
           const defCity = bestTarget.city;
           const cityOwner = enemies.find(e => e.cities.some(c => c.id === defCity.id));
           const isSiege = SIEGE_UNITS.has(unit.unitType);
-          let cityDmg = isSiege ? unitDef.strength * 3 : Math.max(1, Math.floor(unitDef.strength * 0.5));
+          const isRanged = unitDef.range > 0 && !isSiege;
+          let cityDmg = isSiege ? unitDef.strength * 5 : isRanged ? unitDef.strength : unitDef.strength * 3;
           if (unitDef.ability === "city_siege") cityDmg += 3;
           defCity.hp = (defCity.hp || 20) - cityDmg;
           unit.hasAttacked = true;
           if (unitDef.range === 0) unit.movementCurrent = 0;
           if (unitDef.range === 0 && !isSiege) {
-            unit.hpCurrent -= 5;
+            unit.hpCurrent -= 3;
           }
 
           let msg = `AI ${unitDef.name}\u2192${defCity.name}: ${cityDmg}dmg (${Math.max(0, defCity.hp)}HP)`;

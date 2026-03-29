@@ -139,19 +139,19 @@ export const applyAttack = (state, { attackerId, col, row }) => {
     if (isSiege) {
       cityDmg = attDef.strength * 5;
     } else if (isRanged) {
-      cityDmg = Math.max(1, Math.floor(attDef.strength * 0.5));
+      cityDmg = attDef.strength;
     } else {
-      cityDmg = attDef.strength * 2;
+      cityDmg = attDef.strength * 3;
     }
     if (attDef.ability === "city_siege") cityDmg += 3;
     defCity.hp = (defCity.hp || 20) - cityDmg;
     attUnit.hasAttacked = true;
     if (attDef.range === 0) attUnit.movementCurrent = 0;
 
-    // City counter-damage: melee non-siege attackers take 5 damage
+    // City counter-damage: melee non-siege attackers take 3 damage
     let cityCounter = 0;
     if (attDef.range === 0 && !isSiege) {
-      cityCounter = 5;
+      cityCounter = 3;
       attUnit.hpCurrent -= cityCounter;
     }
 

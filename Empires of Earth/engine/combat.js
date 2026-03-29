@@ -70,7 +70,11 @@ export const calcCombatPreview = (attUnit, attDef, defUnit, defDef, defTerrain, 
 
   // Damage formula: attacker deals (str*3 - enemy str), ranged units take no counter-damage
   let attackDmg = Math.max(1, Math.round(attStr * 3 - defStr));
-  const counterDmg = attDef.range > 0 ? 0 : Math.max(1, Math.round(defStr * 2 - attStr));
+  let counterDmg = attDef.range > 0 ? 0 : Math.max(1, Math.round(defStr * 2 - attStr));
+  // Ranged/siege defenders deal less counter-damage when attacked in melee
+  if (defDef.range > 0 && attDef.range === 0) {
+    counterDmg = Math.max(1, Math.floor(counterDmg / 2));
+  }
 
   // Percentage-based defense: city 25% reduction, forest 15% reduction
   if (inCity) {

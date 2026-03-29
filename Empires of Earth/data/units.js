@@ -16,10 +16,10 @@ export const UNIT_DEFS = {
   mech_infantry:    { name: "Mech Infantry",    icon: "🤖",    strength: 9, hp: 36, move: 3, range: 0, cost: 27,  techReq: "ai_governance",    domain: "amphibious" },
 
   // ── Ranged line ──
-  archer:           { name: "Archer",           icon: "🏹",    strength: 2, hp: 12, move: 2, range: 2, cost: 9,   techReq: "archery",          domain: "land" },
-  crossbowman:      { name: "Crossbowman",      icon: "🏹",    strength: 3, hp: 14, move: 2, range: 2, cost: 11,  techReq: "fortification",    domain: "land" },
-  field_cannon:     { name: "Field Cannon",     icon: "💥",    strength: 4, hp: 14, move: 2, range: 2, cost: 14,  techReq: "gunpowder",        domain: "land" },
-  machine_gun:      { name: "Machine Gun",      icon: "🔫",    strength: 6, hp: 18, move: 2, range: 2, cost: 18,  techReq: "electronics",      domain: "land", resourceReq: "oil" },
+  archer:           { name: "Archer",           icon: "🏹",    strength: 2, hp: 10, move: 2, range: 2, cost: 9,   techReq: "archery",          domain: "land" },
+  crossbowman:      { name: "Crossbowman",      icon: "🏹",    strength: 3, hp: 11, move: 2, range: 2, cost: 11,  techReq: "fortification",    domain: "land" },
+  field_cannon:     { name: "Field Cannon",     icon: "💥",    strength: 4, hp: 12, move: 2, range: 2, cost: 14,  techReq: "gunpowder",        domain: "land" },
+  machine_gun:      { name: "Machine Gun",      icon: "🔫",    strength: 6, hp: 15, move: 2, range: 2, cost: 18,  techReq: "electronics",      domain: "land", resourceReq: "oil" },
 
   // ── Cavalry line ──
   horseman:         { name: "Horseman",         icon: "🐴",    strength: 3, hp: 16, move: 3, range: 0, cost: 10,  techReq: "animal_husbandry", domain: "land", resourceReq: "iron" },
@@ -28,11 +28,11 @@ export const UNIT_DEFS = {
   tank:             { name: "Tank",             icon: "🔩",    strength: 7, hp: 30, move: 3, range: 0, cost: 22,  techReq: "electronics",      domain: "land", resourceReq: "oil" },
 
   // ── Siege line ──
-  catapult:         { name: "Catapult",         icon: "🪨",    strength: 3, hp: 10, move: 1, range: 3, cost: 10,  techReq: "masonry",          domain: "land" },
-  trebuchet:        { name: "Trebuchet",        icon: "🪨",    strength: 4, hp: 12, move: 1, range: 3, cost: 15,  techReq: "guilds",           domain: "land" },
-  cannon:           { name: "Cannon",           icon: "💥",    strength: 5, hp: 14, move: 1, range: 3, cost: 16,  techReq: "machinery",        domain: "land" },
-  artillery:        { name: "Artillery",        icon: "💥",    strength: 6, hp: 18, move: 1, range: 4, cost: 19,  techReq: "ballistics",       domain: "land" },
-  missile_launcher: { name: "Missile Launcher", icon: "🚀",    strength: 7, hp: 16, move: 1, range: 4, cost: 22,  techReq: "quantum_computing", domain: "land", resourceReq: "oil" },
+  catapult:         { name: "Catapult",         icon: "🪨",    strength: 3, hp: 8,  move: 1, range: 3, cost: 10,  techReq: "masonry",          domain: "land" },
+  trebuchet:        { name: "Trebuchet",        icon: "🪨",    strength: 4, hp: 9,  move: 1, range: 3, cost: 15,  techReq: "guilds",           domain: "land" },
+  cannon:           { name: "Cannon",           icon: "💥",    strength: 5, hp: 10, move: 1, range: 3, cost: 16,  techReq: "machinery",        domain: "land" },
+  artillery:        { name: "Artillery",        icon: "💥",    strength: 6, hp: 13, move: 1, range: 4, cost: 19,  techReq: "ballistics",       domain: "land" },
+  missile_launcher: { name: "Missile Launcher", icon: "🚀",    strength: 7, hp: 12, move: 1, range: 4, cost: 22,  techReq: "quantum_computing", domain: "land", resourceReq: "oil" },
 
   // ── Naval line ──
   galley:           { name: "Galley",           icon: "⛵",    strength: 2, hp: 15, move: 3, range: 0, cost: 9,   techReq: "trade",            domain: "sea" },
@@ -78,6 +78,8 @@ export const SIEGE_UNITS = new Set([
 
 // Unit upgrade paths: base unit → upgraded unit
 export const UPGRADE_PATHS = {
+  // Scout → cavalry
+  scout: "horseman",
   // Infantry line
   warrior: "swordsman", swordsman: "man_at_arms", man_at_arms: "musketman",
   musketman: "modern_infantry", modern_infantry: "mech_infantry",
