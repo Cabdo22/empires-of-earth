@@ -9,6 +9,7 @@ import { calcPlayerIncome, canUpgradeUnit, autoAssignTiles, isWorkableHex } from
 import { getMoveBlockReason, getReachableHexes, getRangedTargets, getVisibleHexes, isHexOccupied, findPath } from './engine/movement.js';
 import { processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg, recalcAllTradeRoutes } from './engine/turnProcessing.js';
 import { checkVictoryState } from './engine/victory.js';
+import { getDisplayColors, checkNewMeetings } from './engine/discovery.js';
 import { createInitialState } from './engine/gameInit.js';
 import { aiExecuteTurn } from './ai/aiEngine.js';
 import { SFX } from './sfx.js';
@@ -90,11 +91,11 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const op=enemies[0]; // legacy compat — prefer enemies array
   const inc=useMemo(()=>gs?calcPlayerIncome(cp,hexes):{food:0,production:0,science:0,gold:0},[cp,hexes,gs]);
   const visData=useMemo(()=>hexes.map(h=>{const grass=genGrass(h.id);return{blades:grass.blades,flowers:grass.flowers,rocks:grass.rocks,detail:genDetail(h.id),trees:h.terrainType==="forest"?genTrees(h.id):{trunks:"",canopy:"",undergrowth:""},mtns:h.terrainType==="mountain"?genMtns(h.id):{peaks:"",snow:"",shadow:"",rocks:""},waves:h.terrainType==="water"?genWaves(h.id):{waves:"",foam:"",shimmer:""},coast:genCoast(h,hexes),waterCoast:genWaterCoast(h,hexes)};}),[hexes]);
-  const cityMap=useMemo(()=>{const m={};players.forEach(p=>p.cities.forEach(c=>{m[c.hexId]={city:c,player:p};}));return m;},[players]);
+  const cityMap=useMemo(()=>{const m={};players.forEach(p=>{const dc=getDisplayColors(p.id,viewPlayerId,gs);p.cities.forEach(c=>{m[c.hexId]={city:c,player:{...p,color:dc.color,colorBg:dc.colorBg,colorLight:dc.colorLight}};});});return m;},[players,gs,viewPlayerId]);
   const unitMap=useMemo(()=>{const m={};
-    players.forEach(p=>p.units.forEach(u=>{if(u.id===animatingUnitId)return;const k=`${u.hexCol},${u.hexRow}`;if(!m[k])m[k]=[];m[k].push({...u,pid:p.id,pCol:p.color,pBg:p.colorBg,pLight:p.colorLight});}));
+    players.forEach(p=>{const dc=getDisplayColors(p.id,viewPlayerId,gs);p.units.forEach(u=>{if(u.id===animatingUnitId)return;const k=`${u.hexCol},${u.hexRow}`;if(!m[k])m[k]=[];m[k].push({...u,pid:p.id,pCol:dc.color,pBg:dc.colorBg,pLight:dc.colorLight});});});
     barbarians.forEach(b=>{const k=`${b.hexCol},${b.hexRow}`;if(!m[k])m[k]=[];m[k].push({...b,pid:"barb",pCol:"#c05050",pBg:"#4a1010",pLight:"#ff8080"});});
-    return m;},[players,barbarians,animatingUnitId]);
+    return m;},[players,barbarians,animatingUnitId,gs,viewPlayerId]);
   const fogVisible=useMemo(()=>gs?getVisibleHexes(cp,hexes):new Set(),[cp,hexes,gs]);
   const fogExplored=useMemo(()=>{if(!gs)return new Set();return new Set(gs.explored?.[viewPlayerId]||[]);},[gs,viewPlayerId]);
   const discoveredResources=useMemo(()=>{const s=new Set();for(const[type,info]of Object.entries(RESOURCE_INFO)){if(!info.techReq||cp.researchedTechs.includes(info.techReq))s.add(type);}return s;},[cp.researchedTechs]);
@@ -128,7 +129,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // Panel drag
   const { techPosRef, cityPosRef, onPanelDown, onPanelMove, onPanelUp } = usePanelDrag();
   // Minimap
-  const { minimapRef, onMinimapDown, onMinimapMove, onMinimapUp } = useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, minimapRenderRef, zoomRef, panRef, sched });
+  const { minimapRef, onMinimapDown, onMinimapMove, onMinimapUp } = useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, minimapRenderRef, zoomRef, panRef, sched, viewPlayerId });
   // Center camera on player's first city when game starts
   const gameCenteredRef=useRef(false);
   useEffect(()=>{
@@ -153,6 +154,32 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       for(const k of fogVisible){if(!s.has(k)){s.add(k);changed=true;}}
       if(!changed)return prev;return{...prev,explored:{...ex,[viewPlayerId]:[...s]}};});
   },[fogVisible,viewPlayerId]);
+
+  // Civ discovery: detect when we first see another player's units/cities
+  useEffect(()=>{
+    if(!gs||!fogVisible||fogVisible.size===0||!gs.metPlayers)return;
+    const newlyMet=checkNewMeetings(gs,viewPlayerId,fogVisible);
+    if(newlyMet.length===0)return;
+    setGs(prev=>{
+      if(!prev||!prev.metPlayers)return prev;
+      const mp={...prev.metPlayers};
+      const myMet=[...(mp[viewPlayerId]||[])];
+      for(const mid of newlyMet){
+        if(!myMet.includes(mid))myMet.push(mid);
+        // Symmetric: they also meet us
+        const theirMet=[...(mp[mid]||[])];
+        if(!theirMet.includes(viewPlayerId)){theirMet.push(viewPlayerId);mp[mid]=theirMet;}
+      }
+      mp[viewPlayerId]=myMet;
+      return{...prev,metPlayers:mp};
+    });
+    // Show discovery popup for the first newly met civ
+    const metP=gs.players.find(p=>p.id===newlyMet[0]);
+    if(metP){
+      setEventPopup({id:"met",name:"Civilization Discovered!",desc:`You have encountered the ${metP.name}!`});
+      SFX.found?.();
+    }
+  },[fogVisible,viewPlayerId,gs?.metPlayers]);
 
   // === ONLINE MODE: sync server state to local state ===
   // Note: setMapConfig is called in OnlineGame.jsx BEFORE this component mounts
@@ -452,9 +479,6 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     });
   }, []);
 
-  // Keyboard shortcuts (must be after endTurn is defined)
-  useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity, turnTransition, setTurnTransition, upgradeUnit, buildRoad, sud, setShowSaveLoad, setTutorialOn, setTutorialDismissed, zoomRef, wW, wH, setMinimapVisible, hexes });
-
   // --- AI auto-play: when it's an AI player's turn, execute AI and chain through consecutive AI turns ---
   useEffect(() => {
     if (onlineMode) return; // Skip AI processing in online mode
@@ -634,6 +658,9 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     });
     SFX.click();
   }, [onlineMode]);
+
+  // Keyboard shortcuts (must be after upgradeUnit and buildRoad are defined)
+  useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity, turnTransition, setTurnTransition, upgradeUnit, buildRoad, sud, setShowSaveLoad, setTutorialOn, setTutorialDismissed, zoomRef, wW, wH, setMinimapVisible, hexes });
 
   const moveU = useCallback((unitId, targetCol, targetRow, cost) => {
     if(onlineMode){onlineMode.sendAction({type:"MOVE_UNIT",unitId,col:targetCol,row:targetRow});setSelU(null);SFX.move();return;}
@@ -847,6 +874,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       if(!hex.ownerPlayerId)continue;
       const ownerP=hex.ownerPlayerId?players.find(p=>p.id===hex.ownerPlayerId):null;
       if(!ownerP)continue;
+      const dc=getDisplayColors(ownerP.id,viewPlayerId,gs);
       const uk=`${hex.col},${hex.row}`;
       // Only show borders for hexes the current player can see (fix fog leak)
       if(!fogVisible.has(uk)&&!fogExplored.has(uk))continue;
@@ -869,11 +897,11 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       }
       if(cur){if(segments.length>0&&edges[0]){segments[0]=[...cur,...segments[0].slice(1)];}else{segments.push(cur);}}
       for(let si=0;si<segments.length;si++){
-        result.push({key:`${hex.id}-${si}`,x:hex.x,y:hex.y,pts:segments[si],color:ownerP.color});
+        result.push({key:`${hex.id}-${si}`,x:hex.x,y:hex.y,pts:segments[si],color:dc.color});
       }
     }
     return result;
-  },[hexes,players,fogVisible,fogExplored]);
+  },[hexes,players,fogVisible,fogExplored,gs?.metPlayers,viewPlayerId]);
 
   // Tooltip overlay data (rendered above all hexes)
   const tooltipData=useMemo(()=>{
@@ -1042,10 +1070,10 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       <Legend tCounts={tCounts}/>
 
       {/* Log */}
-      <LogPanel log={log} currentPlayerId={viewPlayerId} currentPlayerTechs={cp.researchedTechs}/>
+      <LogPanel log={log} currentPlayerId={viewPlayerId} currentPlayerTechs={cp.researchedTechs} gs={gs}/>
 
       {/* Bottom info */}
-      <BottomInfo selH={selH} hexes={hexes} unitMap={unitMap} players={players} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} moveMsg={moveMsg} buildRoad={buildRoad} cp={cp}/>
+      <BottomInfo selH={selH} hexes={hexes} unitMap={unitMap} players={players} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} moveMsg={moveMsg} buildRoad={buildRoad} cp={cp} gs={gs} viewPlayerId={viewPlayerId}/>
 
       {/* AI thinking overlay */}
       {aiThinking&&<div style={{position:"absolute",inset:0,zIndex:40,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(5,8,3,.6)",pointerEvents:"all"}}><div style={{background:"rgba(15,20,10,.95)",border:"2px solid rgba(100,140,50,.5)",borderRadius:12,padding:"24px 40px",textAlign:"center",boxShadow:"0 0 40px rgba(80,120,40,.2)"}}><div style={{fontSize:28,marginBottom:8,animation:"pulse 1.5s ease-in-out infinite"}}>🤖</div><div style={{color:"#c8d8a0",fontSize:16,fontWeight:600,letterSpacing:3}}>AI is thinking...</div><div style={{color:"#8a9a70",fontSize:12,marginTop:6}}>The AI plots its next move</div></div></div>}
