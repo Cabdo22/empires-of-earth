@@ -63,6 +63,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[aiThinking,setAiThinking]=useState(false);
   const[turnTransition,setTurnTransition]=useState(null); // null or {playerName, playerColor, playerColorLight}
   const[tutorialOn,setTutorialOn]=useState(true);
+  const[minimapVisible,setMinimapVisible]=useState(true);
   const[tutorialDismissed,setTutorialDismissed]=useState({}); // keyed by tip id
   const[techCollapsed,setTechCollapsed]=useState(false);
   const[cityCollapsed,setCityCollapsed]=useState(false);
@@ -452,7 +453,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   }, []);
 
   // Keyboard shortcuts (must be after endTurn is defined)
-  useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity, turnTransition, setTurnTransition });
+  useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity, turnTransition, setTurnTransition, upgradeUnit, buildRoad, sud, setShowSaveLoad, setTutorialOn, setTutorialDismissed, zoomRef, wW, wH, setMinimapVisible, hexes });
 
   // --- AI auto-play: when it's an AI player's turn, execute AI and chain through consecutive AI turns ---
   useEffect(() => {
@@ -1068,7 +1069,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       <TutorialTips gs={gs} sud={sud} op={op} aiThinking={aiThinking} tutorialOn={tutorialOn} tutorialDismissed={tutorialDismissed} setTutorialDismissed={setTutorialDismissed} setTutorialOn={setTutorialOn}/>
 
       {/* Minimap */}
-      <MinimapDisplay minimapRef={minimapRef} MINIMAP_W={MINIMAP_W} MINIMAP_H={MINIMAP_H} onMinimapDown={onMinimapDown} onMinimapMove={onMinimapMove} onMinimapUp={onMinimapUp}/>
+      {minimapVisible && <MinimapDisplay minimapRef={minimapRef} MINIMAP_W={MINIMAP_W} MINIMAP_H={MINIMAP_H} onMinimapDown={onMinimapDown} onMinimapMove={onMinimapMove} onMinimapUp={onMinimapUp}/>}
 
       </div>{/* close UI overlay */}
     </div>
