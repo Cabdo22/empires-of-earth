@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback, useEffect, Suspense } from "react";
+import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { HEX_SIZE, SQRT3, COLS, ROWS, HEX_POINTS, hexCenter, hexAt, getNeighbors, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS } from './data/constants.js';
 import { TECH_TREE } from './data/techs.js';
 import { RESOURCE_INFO } from './data/terrain.js';
@@ -21,9 +21,7 @@ import { usePanZoom } from './hooks/usePanZoom.js';
 import { useMinimap } from './hooks/useMinimap.js';
 import { ModeSelectScreen, MapSizeScreen, LobbyScreen, CivSelectScreen, TurnTransitionScreen, VictoryScreen } from './components/GameScreens.jsx';
 import { MAX_PLAYERS } from './data/constants.js';
-import Lobby from './components/Lobby.jsx';
-// Lazy import to break circular dependency (OnlineGame imports HexStrategyGame)
-const OnlineGame = React.lazy(() => import('./components/OnlineGame.jsx'));
+
 import { TechTreePanel } from './components/TechTreePanel.jsx';
 import { CityPanel } from './components/CityPanel.jsx';
 import { CombatPreview } from './components/CombatPreview.jsx';
@@ -41,9 +39,7 @@ import UnitAnimationOverlay from './components/UnitAnimationOverlay.jsx';
 
 let uidCtr = 0;
 
-export default function HexStrategyGame({ onlineMode } = {}){
-  const[gameMode,setGameMode]=useState(null); // null | "offline" | "online"
-  const[onlineRoomId,setOnlineRoomId]=useState(null); // room ID for online mode
+export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[mapSizePick,setMapSizePick]=useState(null); // null | "small" | "medium" | "large"
   const[playerSlots,setPlayerSlots]=useState(()=>Array.from({length:MAX_PLAYERS-1},(_,i)=>({type:i===0?"ai":"closed",difficulty:"normal"})));
   const[lobbyDone,setLobbyDone]=useState(false);
@@ -553,7 +549,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
       if(!city.currentProduction){popups.push({id:pid++,type:"city",title:`🏛 ${city.name} — Idle`,body:`${city.name} has no production queue. Click it to choose what to build!`,action:"city",cityId:city.id});}
     }
     if(popups.length>0)setTurnPopups(popups);
-  },[gs?.turnNumber,gs?.currentPlayerId,gs?.victoryStatus,turnTransition,gameMode]);
+  },[gs?.turnNumber,gs?.currentPlayerId,gs?.victoryStatus,turnTransition]);
 
   // --- Player action callbacks ---
 
@@ -896,22 +892,9 @@ export default function HexStrategyGame({ onlineMode } = {}){
     if(!gs) return <div style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Palatino Linotype',serif"}}><div style={{color:"#6a7a50",fontSize:14,letterSpacing:3}}>Loading game...</div></div>;
     // Fall through to game board rendering below
   } else {
-  // === ONLINE MODE ROUTING (top-level: user clicked "Online" from menu) ===
-  if(gameMode==="online"&&!onlineRoomId){
-    return <Lobby onJoinRoom={(code)=>setOnlineRoomId(code)} onBack={()=>{setGameMode(null);setOnlineRoomId(null);}}/>;
-  }
-  if(gameMode==="online"&&onlineRoomId){
-    return <Suspense fallback={<div style={{width:"100vw",height:"100vh",background:"radial-gradient(ellipse at center,#1a2a10 0%,#0a0e06 70%)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Palatino Linotype',serif"}}><div style={{color:"#6a7a50",fontSize:14,letterSpacing:3}}>Connecting...</div></div>}><OnlineGame roomId={onlineRoomId} onBack={()=>{setOnlineRoomId(null);setGameMode(null);}}/></Suspense>;
-  }
-
-  // === MODE SELECTION SCREEN ===
-  if(!gameMode){
-    return <ModeSelectScreen setGameMode={setGameMode}/>;
-  }
-
   // === MAP SIZE SELECTION SCREEN ===
-  if(gameMode&&!mapSizePick){
-    return <MapSizeScreen setMapSizePick={setMapSizePick} setGameMode={setGameMode}/>;
+  if(!mapSizePick){
+    return <MapSizeScreen setMapSizePick={setMapSizePick} setGameMode={onBack ? ()=>onBack() : ()=>{}}/>;
   }
 
   // === LOBBY SCREEN (configure player slots) ===
@@ -932,7 +915,7 @@ export default function HexStrategyGame({ onlineMode } = {}){
 
   // Victory
   if(gs.victoryStatus){if(!victoryPlayed.current){victoryPlayed.current=true;SFX.victory();}
-    const onNewGame=()=>{uidCtr=0;setGs(null);setGameStarted(false);setGameMode(null);setMapSizePick(null);setLobbyDone(false);setPlayerSlots(Array.from({length:MAX_PLAYERS-1},()=>({type:"ai",difficulty:"normal"})));setCivPicks({p1:"Rome"});setSelU(null);setSelH(null);setAiThinking(false);setTutorialOn(true);setTutorialDismissed({});victoryPlayed.current=false;techPosRef.current={x:null,y:95};cityPosRef.current={x:null,y:95};setTechCollapsed(false);setCityCollapsed(false);setCivPickStep(1);setTurnTransition(null);setTurnPopups([]);turnPopupShownRef.current=null;prevCpId.current=null;gameCenteredRef.current=false;};
+    const onNewGame=()=>{uidCtr=0;setGs(null);setGameStarted(false);setMapSizePick(null);setLobbyDone(false);setPlayerSlots(Array.from({length:MAX_PLAYERS-1},()=>({type:"ai",difficulty:"normal"})));setCivPicks({p1:"Rome"});setSelU(null);setSelH(null);setAiThinking(false);setTutorialOn(true);setTutorialDismissed({});victoryPlayed.current=false;techPosRef.current={x:null,y:95};cityPosRef.current={x:null,y:95};setTechCollapsed(false);setCityCollapsed(false);setCivPickStep(1);setTurnTransition(null);setTurnPopups([]);turnPopupShownRef.current=null;prevCpId.current=null;gameCenteredRef.current=false;if(onBack)onBack();};
     return <VictoryScreen gs={gs} players={players} turnNumber={turnNumber} onNewGame={onNewGame}/>;}
 
   return(
