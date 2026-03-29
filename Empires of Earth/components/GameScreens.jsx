@@ -171,19 +171,9 @@ export function CivSelectScreen({ mapSizePick, playerSlots, civPicks, setCivPick
   const currentPicker = humanPickers[currentPickerIdx];
   const currentPid = currentPicker ? `p${currentPicker.idx + 1}` : "p1";
 
-  // Civs already picked by previous pickers
-  const takenCivs = new Set();
-  humanPickers.forEach((hp, i) => {
-    if (i < currentPickerIdx) {
-      const pid = `p${hp.idx + 1}`;
-      if (civPicks[pid]) takenCivs.add(civPicks[pid]);
-    }
-  });
-
   const picked = civPicks[currentPid] || null;
 
   const selectCiv = (ck) => {
-    if (takenCivs.has(ck)) return;
     SFX.click();
     setCivPicks(prev => ({ ...prev, [currentPid]: ck }));
   };
@@ -196,25 +186,14 @@ export function CivSelectScreen({ mapSizePick, playerSlots, civPicks, setCivPick
       // Player 1
       configs.push({ civ: civPicks["p1"], type: "human" });
       // Remaining slots
-      const usedCivs = new Set();
-      // Collect all human-picked civs
-      humanPickers.forEach(hp => {
-        const pid = `p${hp.idx + 1}`;
-        if (civPicks[pid]) usedCivs.add(civPicks[pid]);
-      });
-
       const maxPlayers = MAP_SIZES[mapSizePick]?.maxPlayers || 2;
       playerSlots.slice(0, maxPlayers - 1).forEach((slot, i) => {
         if (slot.type === "closed") return;
         const pid = `p${i + 2}`;
         if (slot.type === "human") {
           configs.push({ civ: civPicks[pid], type: "human" });
-          usedCivs.add(civPicks[pid]);
         } else if (slot.type === "ai") {
-          // Random civ for AI (not already taken)
-          const available = civKeys.filter(k => !usedCivs.has(k));
-          const aiCiv = available[Math.floor(Math.random() * available.length)] || civKeys[0];
-          usedCivs.add(aiCiv);
+          const aiCiv = civKeys[Math.floor(Math.random() * civKeys.length)];
           configs.push({ civ: aiCiv, type: "ai", difficulty: slot.difficulty || "normal" });
         }
       });
@@ -226,14 +205,11 @@ export function CivSelectScreen({ mapSizePick, playerSlots, civPicks, setCivPick
       // Advance to next human picker
       SFX.click();
       setCivPickStep(prev => prev + 1);
-      // Pre-select first available civ for next picker
+      // Pre-select first civ for next picker if not already set
       const nextPicker = humanPickers[currentPickerIdx + 1];
       const nextPid = `p${nextPicker.idx + 1}`;
-      const nextTaken = new Set(takenCivs);
-      nextTaken.add(picked);
-      if (!civPicks[nextPid] || nextTaken.has(civPicks[nextPid])) {
-        const avail = civKeys.filter(k => !nextTaken.has(k));
-        setCivPicks(prev => ({ ...prev, [nextPid]: avail[0] || civKeys[0] }));
+      if (!civPicks[nextPid]) {
+        setCivPicks(prev => ({ ...prev, [nextPid]: civKeys[0] }));
       }
     }
   };
@@ -258,12 +234,12 @@ export function CivSelectScreen({ mapSizePick, playerSlots, civPicks, setCivPick
         <div style={{ color: "#6a7a50", fontSize: 12, letterSpacing: 3 }}>{playerLabel}</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 280 }}>
           {civKeys.map(ck => {
-            const cv = CIV_DEFS[ck]; const sel = picked === ck; const taken = takenCivs.has(ck);
+            const cv = CIV_DEFS[ck]; const sel = picked === ck;
             return (
               <div key={ck} onClick={() => selectCiv(ck)}
-                style={{ padding: "6px 16px", borderRadius: 6, cursor: taken ? "not-allowed" : "pointer",
-                  background: sel ? "rgba(100,160,50,.3)" : taken ? "rgba(40,40,40,.3)" : "rgba(30,40,20,.6)",
-                  border: `1px solid ${sel ? cv.color : taken ? "#333" : "#3a4a2a"}`, opacity: taken ? .4 : 1, textAlign: "left" }}>
+                style={{ padding: "6px 16px", borderRadius: 6, cursor: "pointer",
+                  background: sel ? "rgba(100,160,50,.3)" : "rgba(30,40,20,.6)",
+                  border: `1px solid ${sel ? cv.color : "#3a4a2a"}`, textAlign: "left" }}>
                 <div style={{ color: cv.colorLight, fontSize: 11, fontWeight: 600, letterSpacing: 1 }}>{cv.name}</div>
                 <div style={{ color: "#6a7a50", fontSize: 8, marginTop: 1 }}>{cv.bonus}</div>
                 <div style={{ color: "#4a5a3a", fontSize: 7, marginTop: 1 }}>Capital: {cv.capital} {(() => { const uu = Object.values(UNIT_DEFS).find(u => u.civReq === ck); return uu ? <span style={{ color: "#8a9a6a" }}> \u00B7 \u2605 {uu.name}{uu.replaces ? ` (${UNIT_DEFS[uu.replaces]?.name})` : ""}</span> : null; })()}</div>

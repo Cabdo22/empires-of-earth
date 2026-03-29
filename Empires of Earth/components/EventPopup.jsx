@@ -7,6 +7,7 @@ const EVENT_ICONS = {
   eureka:    { symbol: "\uD83D\uDCA1", color: "#60c8f0", glow: "rgba(80,180,240,.3)" },
   harvest:   { symbol: "\uD83C\uDF3E", color: "#c0d060", glow: "rgba(180,200,80,.3)" },
   raid:      { symbol: "\u2694\uFE0F", color: "#e06050", glow: "rgba(220,80,60,.3)" },
+  met:       { symbol: "\uD83E\uDD1D", color: "#ffd740", glow: "rgba(255,215,0,.3)" },
 };
 
 export function EventPopup({ event, onDismiss }) {

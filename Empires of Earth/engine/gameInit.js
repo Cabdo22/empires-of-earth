@@ -134,5 +134,6 @@ export const createInitialState = (playerConfigs) => {
     rngSeed: seed,
     rngCounter: 0,
     explored,
+    metPlayers: Object.fromEntries(players.map(p => [p.id, []])),
   };
 };

@@ -1,7 +1,8 @@
 import { useRef, useCallback, useEffect } from "react";
 import { hexAt } from '../data/constants.js';
+import { getDisplayColors } from '../engine/discovery.js';
 
-export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, minimapRenderRef, zoomRef, panRef, sched }) {
+export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, minimapRenderRef, zoomRef, panRef, sched, viewPlayerId }) {
   const minimapRef = useRef(null);
   const mmDragRef = useRef(false);
   // Store dynamic bounds so minimapNav can use them
@@ -65,14 +66,15 @@ export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH
       ctx.globalAlpha = vis ? 1 : 0.35; ctx.fillStyle = MTC[h.terrainType] || "#444";
       drawMiniHex(ctx, cx2, cy2, r); ctx.fill();
       if (h.ownerPlayerId) {
-        const op2 = players.find(p2 => p2.id === h.ownerPlayerId);
-        if (op2) { ctx.globalAlpha = vis ? 0.3 : 0.15; ctx.fillStyle = op2.color; drawMiniHex(ctx, cx2, cy2, r); ctx.fill(); }
+        const dc = getDisplayColors(h.ownerPlayerId, viewPlayerId, gs);
+        ctx.globalAlpha = vis ? 0.3 : 0.15; ctx.fillStyle = dc.color; drawMiniHex(ctx, cx2, cy2, r); ctx.fill();
       }
     }
 
     // Draw cities
     for (const p of players) {
-      ctx.fillStyle = p.color; ctx.globalAlpha = 1;
+      const dc = getDisplayColors(p.id, viewPlayerId, gs);
+      ctx.fillStyle = dc.color; ctx.globalAlpha = 1;
       for (const c of p.cities) {
         const ch = hexes[c.hexId]; if (!ch) continue;
         const vis2 = fogVisible.has(`${ch.col},${ch.row}`) || fogExplored.has(`${ch.col},${ch.row}`); if (!vis2) continue;
@@ -83,7 +85,8 @@ export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH
 
     // Draw units
     for (const p of players) {
-      ctx.fillStyle = p.colorLight || p.color; ctx.globalAlpha = 0.9;
+      const dc = getDisplayColors(p.id, viewPlayerId, gs);
+      ctx.fillStyle = dc.colorLight || dc.color; ctx.globalAlpha = 0.9;
       for (const u of p.units) {
         const vis2 = fogVisible.has(`${u.hexCol},${u.hexRow}`); if (!vis2) continue;
         const uh = hexAt(hexes, u.hexCol, u.hexRow); if (!uh) continue;
@@ -99,7 +102,7 @@ export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH
     const vpW = window.innerWidth / z, vpH = window.innerHeight / z;
     ctx.strokeStyle = "rgba(255,220,100,.7)"; ctx.lineWidth = 1.5;
     ctx.strokeRect((wl - minX) * dynScaleX, (wt - minY) * dynScaleY, vpW * dynScaleX, vpH * dynScaleY);
-  }, [hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, zoomRef, panRef]);
+  }, [hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, zoomRef, panRef, viewPlayerId]);
 
   useEffect(() => { minimapRenderRef.current = renderMinimap; renderMinimap(); }, [renderMinimap, minimapRenderRef]);
 

@@ -28,7 +28,6 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSl
   );
   const hasPicked = civPicks[myPlayerId];
   const civKeys = Object.keys(CIV_DEFS);
-  const otherPick = civPicks[myPlayerId === "p1" ? "p2" : "p1"];
 
   const cycleSlot = (idx) => {
     SFX.click();
@@ -153,13 +152,12 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSl
             {civKeys.map(ck => {
               const cv = CIV_DEFS[ck];
               const sel = selectedCiv === ck;
-              const taken = otherPick === ck;
               return (
-                <div key={ck} onClick={() => { if (!taken) { SFX.click(); setSelectedCiv(ck); } }}
+                <div key={ck} onClick={() => { SFX.click(); setSelectedCiv(ck); }}
                   style={{
-                    padding: "6px 16px", borderRadius: 6, cursor: taken ? "not-allowed" : "pointer",
-                    background: sel ? "rgba(100,160,50,.3)" : taken ? "rgba(40,40,40,.3)" : "rgba(30,40,20,.6)",
-                    border: `1px solid ${sel ? cv.color : taken ? "#333" : "#3a4a2a"}`, opacity: taken ? .4 : 1, textAlign: "left",
+                    padding: "6px 16px", borderRadius: 6, cursor: "pointer",
+                    background: sel ? "rgba(100,160,50,.3)" : "rgba(30,40,20,.6)",
+                    border: `1px solid ${sel ? cv.color : "#3a4a2a"}`, textAlign: "left",
                   }}>
                   <div style={{ color: cv.colorLight, fontSize: 11, fontWeight: 600, letterSpacing: 1 }}>{cv.name}</div>
                   <div style={{ color: "#6a7a50", fontSize: 8, marginTop: 1 }}>{cv.bonus}</div>
@@ -193,11 +191,6 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSl
           </div>
         )}
 
-        {otherPick && (
-          <div style={{ color: "#4a5a3a", fontSize: 10 }}>
-            Opponent picked: <span style={{ color: CIV_DEFS[otherPick]?.colorLight }}>{CIV_DEFS[otherPick]?.name}</span>
-          </div>
-        )}
       </div>
     </div>
   );

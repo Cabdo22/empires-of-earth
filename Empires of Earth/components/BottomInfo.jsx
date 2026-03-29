@@ -2,8 +2,9 @@ import React from "react";
 import { TERRAIN_INFO, RESOURCE_INFO } from '../data/terrain.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { getHexYields } from '../engine/economy.js';
+import { getDisplayName, getDisplayColors } from '../engine/discovery.js';
 
-export function BottomInfo({ selH, hexes, unitMap, players, settlerM, setSettlerM, nukeM, setNukeM, moveMsg, buildRoad, cp }) {
+export function BottomInfo({ selH, hexes, unitMap, players, settlerM, setSettlerM, nukeM, setNukeM, moveMsg, buildRoad, cp, gs, viewPlayerId }) {
   return (
     <>
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 48, background: "linear-gradient(0deg,rgba(10,14,6,.95) 0%,rgba(10,14,6,0) 100%)", zIndex: 10, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 8, pointerEvents: "none" }}>
@@ -19,7 +20,7 @@ export function BottomInfo({ selH, hexes, unitMap, players, settlerM, setSettler
               {!sd.road && buildRoad && cp && sd.ownerPlayerId === cp.id && cp.researchedTechs.includes("trade") && sd.terrainType !== "water" && sd.terrainType !== "mountain" && cp.gold >= 5 && <span style={{ pointerEvents: "auto", cursor: "pointer", color: "#c8a060", background: "rgba(160,128,96,.2)", borderRadius: 3, padding: "1px 4px" }} onClick={() => buildRoad(sd.id)}>🛣+Road(5g)</span>}
               {si.defBonus > 0 && <span style={{ color: "#60a0d0" }}>+{si.defBonus}def</span>}
               {uH.length > 0 && <span style={{ color: "#ffd740" }}>{uH.map(u => UNIT_DEFS[u.unitType]?.icon).join("")}</span>}
-              {oP && <span style={{ color: oP.colorLight }}>⚑{oP.name.slice(0, 6)}</span>}
+              {oP && (() => { const dc = getDisplayColors(oP.id, viewPlayerId, gs); const dn = getDisplayName(oP.id, viewPlayerId, gs); return <span style={{ color: dc.colorLight }}>⚑{dn.slice(0, 8)}</span>; })()}
             </div>
           );
         })() : (<span style={{ color: "#3a4a2a", fontSize: 9, letterSpacing: 2 }}>Tab=cycle Esc=deselect RightClick=move/attack</span>)}
