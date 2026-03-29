@@ -344,7 +344,7 @@ const aiFindCityLocation = (settler, player, hexes, allPlayers, strategy) => {
     const [col, row] = key.split(",").map(Number);
     const hex = hexAt(hexes, col, row);
     if (!hex || hex.terrainType === "water" || hex.terrainType === "mountain" || hex.cityId) continue;
-    if (allCityCoords.some(([cc, cr]) => hexDist(col, row, cc, cr) < 2)) continue;
+    if (allCityCoords.some(([cc, cr]) => hexDist(col, row, cc, cr) < 3)) continue;
 
     // Score based on actual hex yields instead of just terrain type
     const yields = getHexYields(hex);

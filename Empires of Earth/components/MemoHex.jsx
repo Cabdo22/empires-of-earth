@@ -10,7 +10,7 @@ import { ResourceIcon, UnitIcon } from './Icons.jsx';
 
 const MemoHex = memo(function MemoHex({
   hex, vis, isHovered, isSelected, inMoveRange, inAttackRange, inNukeRange,
-  units, unitCount, city, player, unitSelected, settlerMode, canAct, flash,
+  units, unitCount, city, player, unitSelected, settlerMode, settlerBlocked, canAct, flash,
   isFogged, isExplored, blockReason, discoveredResources
 }) {
   const t = hex.terrainType;
@@ -162,7 +162,8 @@ const MemoHex = memo(function MemoHex({
       {inMoveRange && <polygon points={HEX_POINTS} fill="rgba(96,208,255,.1)" stroke="#60d0ff" strokeWidth="2" opacity=".7"/>}
       {inAttackRange && <polygon points={HEX_POINTS} fill="rgba(255,60,60,.12)" stroke="#ff4040" strokeWidth="2" opacity=".7"/>}
       {inNukeRange && <polygon points={HEX_POINTS} fill="rgba(255,200,0,.15)" stroke="#ffa000" strokeWidth="2.5" opacity=".8" strokeDasharray="4 2"/>}
-      {settlerMode && t !== "water" && t !== "mountain" && !city && <polygon points={HEX_POINTS} fill="rgba(80,255,80,.12)" stroke="#40e040" strokeWidth="2" opacity=".6"/>}
+      {settlerMode && t !== "water" && t !== "mountain" && !city && !settlerBlocked && <polygon points={HEX_POINTS} fill="rgba(80,255,80,.12)" stroke="#40e040" strokeWidth="2" opacity=".6"/>}
+      {settlerMode && t !== "water" && t !== "mountain" && !city && settlerBlocked && <polygon points={HEX_POINTS} fill="rgba(255,60,60,.08)" stroke="#ff4040" strokeWidth="1.5" opacity=".4"/>}
       {isHovered && !isSelected && <polygon points={HEX_POINTS} fill="rgba(255,255,200,.12)" stroke="#e8d860" strokeWidth="2" strokeLinejoin="round"/>}
       {isSelected && <polygon points={HEX_POINTS} fill="rgba(255,255,200,.08)" stroke="#f0e068" strokeWidth="2.5" strokeDasharray="6 3" strokeLinejoin="round"/>}
       {flash && <polygon points={HEX_POINTS} fill={flash === "nuke" ? "rgba(255,200,0,.5)" : flash === "blocked" ? "rgba(255,160,40,.25)" : "rgba(255,80,80,.35)"} stroke={flash === "nuke" ? "#ff8000" : flash === "blocked" ? "#ffa030" : "#ff2020"} strokeWidth={flash === "blocked" ? 2 : 3}>
@@ -174,7 +175,7 @@ const MemoHex = memo(function MemoHex({
   a.isHovered === b.isHovered && a.isSelected === b.isSelected &&
   a.inMoveRange === b.inMoveRange && a.inAttackRange === b.inAttackRange &&
   a.inNukeRange === b.inNukeRange && a.unitSelected === b.unitSelected &&
-  a.settlerMode === b.settlerMode && a.canAct === b.canAct &&
+  a.settlerMode === b.settlerMode && a.settlerBlocked === b.settlerBlocked && a.canAct === b.canAct &&
   a.flash === b.flash && a.isFogged === b.isFogged &&
   a.isExplored === b.isExplored && a.blockReason === b.blockReason &&
   a.unitCount === b.unitCount && a.units === b.units &&

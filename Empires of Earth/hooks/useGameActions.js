@@ -242,10 +242,10 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
       if (unitIdx === -1) return prev;
       const hex = hexAt(g.hexes, col, row);
       if (!hex || hex.terrainType === "water" || hex.terrainType === "mountain" || hex.cityId) return prev;
-      // Must be at least 2 hexes from any existing city
+      // Must be at least 3 hexes from any existing city
       const tooClose = g.players.some(p => p.cities.some(c => {
         const ch = g.hexes[c.hexId];
-        return ch && hexDist(col, row, ch.col, ch.row) < 2;
+        return ch && hexDist(col, row, ch.col, ch.row) < 3;
       }));
       if (tooClose) return prev;
       player.units.splice(unitIdx, 1);
