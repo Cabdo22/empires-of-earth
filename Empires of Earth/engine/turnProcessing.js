@@ -184,7 +184,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
           for (const hid of (city.borderHexIds || [])) {
             const h = g.hexes[hid];
             if (!h || h.terrainType !== "water" || !h.isCoastal) continue;
-            const hy = getHexYields(h);
+            const hy = getHexYields(h, player);
             const total = hy.food + hy.production + hy.gold;
             if (total > bestYield) { bestYield = total; bestPortHex = h; }
           }
@@ -208,7 +208,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
     city.foodAccumulated -= growthThreshold;
     addLogMsg(`${city.name} grew to pop ${city.population}!`, g, player.id);
     // Auto-assign new citizen and check border growth (respect manual override)
-    if (!city.manualTiles) autoAssignTiles(city, g.hexes);
+    if (!city.manualTiles) autoAssignTiles(city, g.hexes, null, player);
     const workableInBorder = (city.borderHexIds || []).filter(
       hid => hid !== city.hexId && isWorkableHex(g.hexes[hid])
     ).length;
@@ -241,7 +241,7 @@ export const initCityBorders = (city, player, hexes) => {
     city.borderHexIds.push(nh.id);
   }
 
-  autoAssignTiles(city, hexes);
+  autoAssignTiles(city, hexes, null, player);
 };
 
 // Grow city border by 1 hex (highest yield adjacent unowned hex)
@@ -256,7 +256,7 @@ export const growCityBorder = (city, player, hexes) => {
       if (nh.terrainType === "mountain") continue;
       if (nh.terrainType === "water" && !nh.isCoastal) continue;
 
-      const y = getHexYields(nh);
+      const y = getHexYields(nh, player);
       const total = y.food + y.production + y.gold;
       if (total > bestTotal) { bestTotal = total; bestHex = nh; }
     }
@@ -266,7 +266,7 @@ export const growCityBorder = (city, player, hexes) => {
     bestHex.cityBorderId = city.id;
     bestHex.ownerPlayerId = player.id;
     city.borderHexIds.push(bestHex.id);
-    if (!city.manualTiles) autoAssignTiles(city, hexes);
+    if (!city.manualTiles) autoAssignTiles(city, hexes, null, player);
     // Log message handled by caller (processCityTurn has access to g)
   }
 };
@@ -426,7 +426,7 @@ export const rollRandomEvent = (g, sfxQ) => {
           city.population++;
           city.foodAccumulated -= growthThreshold;
           addLogMsg(`${city.name} grew to pop ${city.population}!`, g, cp2.id);
-          if (!city.manualTiles) autoAssignTiles(city, g.hexes);
+          if (!city.manualTiles) autoAssignTiles(city, g.hexes, null, cp2);
           const workableInBorder = (city.borderHexIds || []).filter(
             hid => hid !== city.hexId && isWorkableHex(g.hexes[hid])
           ).length;

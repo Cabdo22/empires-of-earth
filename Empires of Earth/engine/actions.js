@@ -34,7 +34,7 @@ const tryCaptureCity = (city, attackerPlayer, defenderPlayer, hex, g) => {
     const bh = g.hexes[hid];
     if (bh) { bh.ownerPlayerId = attackerPlayer.id; bh.cityBorderId = city.id; }
   }
-  autoAssignTiles(city, g.hexes);
+  autoAssignTiles(city, g.hexes, null, attackerPlayer);
   city.tradeRoutes = [];
   recalcAllTradeRoutes(g);
   return `\u{1F3DB}${city.name} captured!`;

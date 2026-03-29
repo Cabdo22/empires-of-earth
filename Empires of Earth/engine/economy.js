@@ -59,11 +59,11 @@ export const isWorkableHex = (hex) => {
 
 // Auto-assign citizens to the highest-yield tiles in city borders
 // priority: null (balanced), "food", "production", "gold", or "science"
-export const autoAssignTiles = (city, hexes, priority = null) => {
+export const autoAssignTiles = (city, hexes, priority = null, player = null) => {
   const workable = (city.borderHexIds || [])
     .filter(hid => hid !== city.hexId && isWorkableHex(hexes[hid]))
     .map(hid => {
-      const y = getHexYields(hexes[hid]);
+      const y = getHexYields(hexes[hid], player);
       return { hid, food: y.food, production: y.production, gold: y.gold, science: y.science,
                total: y.food + y.production + y.gold + y.science };
     })

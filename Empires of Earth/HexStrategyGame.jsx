@@ -497,7 +497,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       const player = g.players.find(p => p.id === g.currentPlayerId);
       const city = player?.cities.find(c => c.id === cityId);
       if (!city) return prev;
-      autoAssignTiles(city, g.hexes, priority);
+      autoAssignTiles(city, g.hexes, priority, player);
       city.manualTiles = false;
       return g;
     });

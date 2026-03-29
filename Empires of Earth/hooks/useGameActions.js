@@ -24,7 +24,7 @@ const tryCaptureCity = (city, attackerPlayer, defenderPlayer, hex, g) => {
     const bh = g.hexes[hid];
     if (bh) { bh.ownerPlayerId = attackerPlayer.id; bh.cityBorderId = city.id; }
   }
-  autoAssignTiles(city, g.hexes);
+  autoAssignTiles(city, g.hexes, null, attackerPlayer);
   return `\u{1F3DB}${city.name} captured!`;
 };
 
@@ -299,7 +299,7 @@ export function useGameActions({ setGs, setSelU, setSelH, setSettlerM, setNukeM,
       const player = g.players.find(p => p.id === g.currentPlayerId);
       const city = player?.cities.find(c => c.id === cityId);
       if (!city) return prev;
-      autoAssignTiles(city, g.hexes, priority);
+      autoAssignTiles(city, g.hexes, priority, player);
       city.manualTiles = false;
       return g;
     });

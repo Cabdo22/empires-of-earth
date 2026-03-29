@@ -347,13 +347,13 @@ const aiFindCityLocation = (settler, player, hexes, allPlayers, strategy) => {
     if (allCityCoords.some(([cc, cr]) => hexDist(col, row, cc, cr) < 3)) continue;
 
     // Score based on actual hex yields instead of just terrain type
-    const yields = getHexYields(hex);
+    const yields = getHexYields(hex, player);
     let score = yields.food + yields.production + yields.gold + yields.science;
 
     for (const [nc, nr] of getNeighbors(col, row)) {
       const nh = hexAt(hexes, nc, nr);
       if (!nh) continue;
-      const ny = getHexYields(nh);
+      const ny = getHexYields(nh, player);
       score += (ny.food + ny.production + ny.gold) * 0.5;
 
       // Strategic resource bonuses
@@ -656,7 +656,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemies, addLogFn, smarter, strategy
                     const bh = g.hexes[hid];
                     if (bh) { bh.ownerPlayerId = aiPlayer.id; bh.cityBorderId = defCity.id; }
                   }
-                  autoAssignTiles(defCity, g.hexes);
+                  autoAssignTiles(defCity, g.hexes, null, aiPlayer);
                   msg += ` \uD83C\uDFDB${defCity.name} captured!`;
                 }
               }
@@ -689,7 +689,7 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemies, addLogFn, smarter, strategy
               const bh = g.hexes[hid];
               if (bh) { bh.ownerPlayerId = aiPlayer.id; bh.cityBorderId = defCity.id; }
             }
-            autoAssignTiles(defCity, g.hexes);
+            autoAssignTiles(defCity, g.hexes, null, aiPlayer);
             if (unitDef.range === 0 && !isHexOccupied(tc, tr, g.players, g.barbarians, unit.id)) { unit.hexCol = tc; unit.hexRow = tr; }
             msg = `AI ${unitDef.name} \uD83C\uDFDBcaptured ${defCity.name}!`;
           }

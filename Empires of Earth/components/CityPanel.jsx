@@ -34,7 +34,7 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
   const slotsAvailable = (city.population || 1) - slotsUsed;
   const unworkedTiles = (city.borderHexIds || [])
     .filter(hid => hid !== city.hexId && !workedSet.has(hid) && isWorkableHex(hexes[hid]))
-    .map(hid => ({ hex: hexes[hid], yields: getHexYields(hexes[hid]) }))
+    .map(hid => ({ hex: hexes[hid], yields: getHexYields(hexes[hid], cp) }))
     .sort((a, b) => (b.yields.food + b.yields.production + b.yields.gold) - (a.yields.food + a.yields.production + a.yields.gold));
 
   return (
