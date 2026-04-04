@@ -17,6 +17,7 @@ export function useMultiplayerGame(roomId, playerName) {
   const [events, setEvents] = useState([]);
   const [playerNames, setPlayerNames] = useState({});
   const socketRef = useRef(null);
+  const lastEventBatchIdRef = useRef(null);
 
   useEffect(() => {
     if (!roomId) return;
@@ -51,7 +52,10 @@ export function useMultiplayerGame(roomId, playerName) {
 
           case "state":
             setGameState(data.state);
-            if (data.events?.length > 0) setEvents(data.events);
+            if (data.events?.length > 0 && data.eventBatchId !== lastEventBatchIdRef.current) {
+              lastEventBatchIdRef.current = data.eventBatchId;
+              setEvents(data.events);
+            }
             break;
 
           case "error":
@@ -87,6 +91,7 @@ export function useMultiplayerGame(roomId, playerName) {
     return () => {
       socket.close();
       socketRef.current = null;
+      lastEventBatchIdRef.current = null;
     };
   }, [roomId, playerName]);
 

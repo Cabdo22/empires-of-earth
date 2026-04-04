@@ -617,6 +617,21 @@ export default function HexStrategyGame({ onlineMode, onShowOnline }){
     if(popups.length>0)setTurnPopups(popups);
   },[gs?.turnNumber,gs?.currentPlayerId,gs?.victoryStatus,turnTransition,gameMode]);
 
+  useEffect(()=>{
+    if(!gs){setTurnPopups([]);return;}
+    const activePlayer=gs.players.find(p=>p.id===gs.currentPlayerId);
+    if(!activePlayer){setTurnPopups([]);return;}
+    setTurnPopups(prev=>prev.filter(popup=>{
+      if(popup.type==="event") return !!gs.eventMsg;
+      if(popup.type==="tech") return !activePlayer.currentResearch;
+      if(popup.type==="city") {
+        const city = activePlayer.cities.find(c=>c.id===popup.cityId);
+        return !!city && !city.currentProduction;
+      }
+      return true;
+    }));
+  },[gs]);
+
   // --- Player action callbacks ---
 
   const selResearch=useCallback((techId)=>{

@@ -6,6 +6,7 @@ import { UNIT_DEFS, TECH_TREE, CIV_DEFS } from './constants.js';
 import { getNeighbors, hexAt, hexDist, getHexesInRadius } from './hex-math.js';
 import { calcCombatPreview, getPlayerMaxEra } from './combat.js';
 import { canUpgradeUnit } from './economy.js';
+import { getReachableHexCost } from './movement.js';
 import { addLogMsg, processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent } from './turn-processing.js';
 import { checkVictoryState } from './victory.js';
 
@@ -23,11 +24,27 @@ const tryCaptureCity = (city, attackerPlayer, defenderPlayer, hex) => {
 
 export const applyMoveUnit = (state, { unitId, col, row }) => {
   const g = clone(state);
-  const unit = g.players.find(p => p.id === g.currentPlayerId).units.find(u => u.id === unitId);
+  const player = g.players.find(p => p.id === g.currentPlayerId);
+  const unit = player?.units.find(u => u.id === unitId);
   if (!unit) return { state, events: [] };
+  const unitDef = UNIT_DEFS[unit.unitType];
+  const moveCost = getReachableHexCost(
+    unit.hexCol,
+    unit.hexRow,
+    col,
+    row,
+    unit.movementCurrent,
+    g.hexes,
+    unitDef?.domain || "land",
+    player?.id,
+    g.players,
+    unitDef?.ability,
+    g.mapConfig
+  );
+  if (moveCost == null) return { state, events: [] };
   unit.hexCol = col;
   unit.hexRow = row;
-  unit.movementCurrent = 0;
+  unit.movementCurrent = Math.max(0, unit.movementCurrent - moveCost);
   return { state: g, events: [{ type: "sfx", name: "move" }] };
 };
 

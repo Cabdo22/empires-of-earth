@@ -67,6 +67,7 @@ const validateAction = (gameState, action, playerId) => {
   }
 
   const player = gameState.players.find(p => p.id === playerId);
+  const opponent = gameState.players.find(p => p.id !== playerId);
   if (!player) return "Player not found";
 
   switch (action.type) {
@@ -74,6 +75,17 @@ const validateAction = (gameState, action, playerId) => {
       const unit = player.units.find(u => u.id === action.unitId);
       if (!unit) return "Unit not found";
       if (unit.movementCurrent <= 0) return "No movement points";
+      if (player.units.some(u => u.id !== unit.id && u.hexCol === action.col && u.hexRow === action.row)) {
+        return "Hex occupied by friendly unit";
+      }
+      if ((opponent?.units || []).some(u => u.hexCol === action.col && u.hexRow === action.row)) {
+        return "Cannot move onto enemy unit";
+      }
+      const enemyCity = opponent?.cities.find(c => {
+        const cityHex = gameState.hexes[c.hexId];
+        return cityHex?.col === action.col && cityHex?.row === action.row;
+      });
+      if (enemyCity) return "Cannot move onto enemy city";
       const unitDef = UNIT_DEFS[unit.unitType];
       const reachable = getReachableHexes(
         unit.hexCol, unit.hexRow, unit.movementCurrent,
@@ -88,6 +100,14 @@ const validateAction = (gameState, action, playerId) => {
       const unit = player.units.find(u => u.id === action.attackerId);
       if (!unit) return "Unit not found";
       if (unit.hasAttacked) return "Already attacked";
+      const hasTarget =
+        (opponent?.units || []).some(u => u.hexCol === action.col && u.hexRow === action.row) ||
+        (gameState.barbarians || []).some(b => b.hexCol === action.col && b.hexRow === action.row) ||
+        (opponent?.cities || []).some(c => {
+          const cityHex = gameState.hexes[c.hexId];
+          return cityHex?.col === action.col && cityHex?.row === action.row;
+        });
+      if (!hasTarget) return "No target there";
       const unitDef = UNIT_DEFS[unit.unitType];
       if (unitDef.range > 0) {
         const targets = getRangedTargets(unit.hexCol, unit.hexRow, unitDef.range, gameState.mapConfig);
@@ -165,6 +185,7 @@ export default class EmpiresServer {
     this.playerNames = {}; // { p1: "Alice", p2: "Bob" }
     this.mapSize = "medium";
     this.disconnected = {}; // { p1: true/false, p2: true/false }
+    this.eventBatchId = 0;
   }
 
   async onStart() {
@@ -177,6 +198,7 @@ export default class EmpiresServer {
       this.civPicks = saved.civPicks;
       this.playerNames = saved.playerNames || {};
       this.mapSize = saved.mapSize || "medium";
+      this.eventBatchId = saved.eventBatchId || 0;
     }
   }
 
@@ -188,6 +210,7 @@ export default class EmpiresServer {
       civPicks: this.civPicks,
       playerNames: this.playerNames,
       mapSize: this.mapSize,
+      eventBatchId: this.eventBatchId,
     });
   }
 
@@ -411,6 +434,8 @@ export default class EmpiresServer {
 
   broadcastState(events = []) {
     if (!this.gameState) return;
+    const hasEvents = Array.isArray(events) && events.length > 0;
+    if (hasEvents) this.eventBatchId += 1;
     for (const conn of this.room.getConnections()) {
       const pid = conn.state?.playerId;
       if (!pid) continue;
@@ -419,6 +444,7 @@ export default class EmpiresServer {
         type: "state",
         state: filtered,
         events: events || [],
+        eventBatchId: hasEvents ? this.eventBatchId : null,
       }));
     }
   }

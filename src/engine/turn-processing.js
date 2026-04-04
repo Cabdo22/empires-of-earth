@@ -9,17 +9,31 @@ export const addLogMsg = (msg, g) => {
   g.log = [...(g.log || []).slice(-30), msg];
 };
 
+const resolveResearchProgress = (player, g, sfxQ) => {
+  if (!player.currentResearch) return;
+  const tech = TECH_TREE[player.currentResearch.techId];
+  if (!tech || player.currentResearch.progress < tech.cost) return;
+  player.researchedTechs.push(player.currentResearch.techId);
+  addLogMsg(`${player.name} researched ${tech.name}!`, g);
+  player.currentResearch = null;
+  if (sfxQ) sfxQ.push("research");
+};
+
+const resolveCityGrowth = (city, g) => {
+  let growthThreshold = city.population * 10;
+  while (city.foodAccumulated >= growthThreshold) {
+    city.population++;
+    city.foodAccumulated -= growthThreshold;
+    addLogMsg(`${city.name} grew to pop ${city.population}!`, g);
+    growthThreshold = city.population * 10;
+  }
+};
+
 export const processResearchAndIncome = (player, g, sfxQ) => {
   const income = calcPlayerIncome(player, g.hexes, g.mapConfig);
   if (player.currentResearch) {
     player.currentResearch.progress += income.science;
-    const tech = TECH_TREE[player.currentResearch.techId];
-    if (tech && player.currentResearch.progress >= tech.cost) {
-      player.researchedTechs.push(player.currentResearch.techId);
-      addLogMsg(`${player.name} researched ${tech.name}!`, g);
-      player.currentResearch = null;
-      if (sfxQ) sfxQ.push("research");
-    }
+    resolveResearchProgress(player, g, sfxQ);
   }
   player.gold += income.gold;
 };
@@ -52,12 +66,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
     }
   }
   city.foodAccumulated += yields.food;
-  const growthThreshold = city.population * 10;
-  if (city.foodAccumulated >= growthThreshold) {
-    city.population++;
-    city.foodAccumulated -= growthThreshold;
-    addLogMsg(`${city.name} grew to pop ${city.population}!`, g);
-  }
+  resolveCityGrowth(city, g);
   if (city.hp < (city.hpMax || 20)) city.hp = Math.min(city.hpMax || 20, city.hp + 2);
 };
 
@@ -187,9 +196,13 @@ const applyEventEffect = (eventId, g) => {
     }
     case "eureka":
       if (cp.currentResearch) cp.currentResearch.progress += 3;
+      resolveResearchProgress(cp, g);
       break;
     case "harvest":
-      cp.cities.forEach(c => c.foodAccumulated += 5);
+      cp.cities.forEach(c => {
+        c.foodAccumulated += 5;
+        resolveCityGrowth(c, g);
+      });
       break;
     case "raid": {
       const empties = g.hexes.filter(h => h.terrainType !== "water" && h.terrainType !== "mountain" && !h.cityId);

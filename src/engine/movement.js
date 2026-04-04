@@ -36,8 +36,7 @@ export const getMoveBlockReason = (hex, unit, unitDef, reachSet, atkRangeSet, ph
   return "Out of movement range";
 };
 
-// Dijkstra-based pathfinding: returns set of hex keys reachable within movePoints
-export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain = "land", playerId = null, allPlayers = null, ability = null, mapConfig = null) => {
+const buildReachability = (startCol, startRow, movePoints, hexes, domain = "land", playerId = null, allPlayers = null, ability = null, mapConfig = null) => {
   const startKey = `${startCol},${startRow}`;
   const reachable = new Set();
   const costTo = { [startKey]: 0 };
@@ -71,6 +70,13 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
     }
   }
 
+  return { reachable, costTo };
+};
+
+// Dijkstra-based pathfinding: returns set of hex keys reachable within movePoints
+export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain = "land", playerId = null, allPlayers = null, ability = null, mapConfig = null) => {
+  const { reachable } = buildReachability(startCol, startRow, movePoints, hexes, domain, playerId, allPlayers, ability, mapConfig);
+
   // Air units can only land on friendly cities
   if (domain === "air" && playerId && allPlayers) {
     const myPlayer = allPlayers.find(p => p.id === playerId);
@@ -83,6 +89,23 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
   }
 
   return reachable;
+};
+
+export const getReachableHexCost = (startCol, startRow, targetCol, targetRow, movePoints, hexes, domain = "land", playerId = null, allPlayers = null, ability = null, mapConfig = null) => {
+  const targetKey = `${targetCol},${targetRow}`;
+  const { reachable, costTo } = buildReachability(startCol, startRow, movePoints, hexes, domain, playerId, allPlayers, ability, mapConfig);
+
+  if (!reachable.has(targetKey)) return null;
+  if (domain === "air" && playerId && allPlayers) {
+    const myPlayer = allPlayers.find(p => p.id === playerId);
+    const canLand = myPlayer?.cities.some(c => {
+      const h = hexes[c.hexId];
+      return h && h.col === targetCol && h.row === targetRow;
+    });
+    if (!canLand) return null;
+  }
+
+  return costTo[targetKey] ?? null;
 };
 
 // All hex keys within ranged-attack distance

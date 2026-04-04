@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import HexStrategy from './client/hex-strategy.jsx';
 import Lobby from './client/lobby.jsx';
 import OnlineGame from './client/online-game.jsx';
@@ -8,6 +8,12 @@ export default function App() {
   const [onlineRoom, setOnlineRoom] = useState(null);
   const [playerName, setPlayerName] = useState(null);
   const [showLobby, setShowLobby] = useState(false);
+
+  useEffect(() => {
+    if (showLobby || onlineRoom) {
+      MenuMusic.stop();
+    }
+  }, [showLobby, onlineRoom]);
 
   const handleBackToMenu = useCallback(() => {
     setOnlineRoom(null);
