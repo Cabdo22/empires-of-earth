@@ -75,6 +75,10 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const victoryPlayed=useRef(false);
   const prevCpId=useRef(null);
   const gsRef=useRef(gs);
+  const hovHRef=useRef(null);
+  const previewKeyRef=useRef(null);
+  const hoverTargetRef=useRef(null);
+  const hoverRafRef=useRef(0);
   const{startAnimation,animatingUnitId,animVisuals,overlayRef}=useUnitAnimation();
 
   // Stop menu music when game starts, resume if returning to menus
@@ -169,6 +173,8 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     sched();
   },[gs,hexes,wW,wH,sched]);
   useEffect(()=>{gsRef.current=gs;},[gs]);
+  useEffect(()=>{hovHRef.current=hovH;},[hovH]);
+  useEffect(()=>() => { if (hoverRafRef.current) cancelAnimationFrame(hoverRafRef.current); },[]);
   useEffect(()=>{if(Object.keys(flashes).length>0){const t=setTimeout(()=>setFlashes({}),800);return()=>clearTimeout(t);}},[flashes]);
   useEffect(()=>{if(combatAnims.length>0){const t=setTimeout(()=>setCombatAnims([]),1200);return()=>clearTimeout(t);}},[combatAnims]);
   useEffect(()=>{if(moveMsg){const t=setTimeout(()=>setMoveMsg(null),1500);return()=>clearTimeout(t);}},[moveMsg]);
@@ -787,11 +793,35 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     const id=+el.dataset.hex,col=+el.dataset.col,row=+el.dataset.row;
     return{id,col,row,hex:hexes[id],uk:`${col},${row}`};},[hexes]);
 
-  // Delegated event handlers (single set on parent <g>, not per-hex)
-  const onHexHover=useCallback(e=>{
-    const h=findHexFromEvent(e);if(!h||isPanRef.current)return;
-    const{hex,uk}=h;const fogged=!fogVisible.has(uk);if(fogged){if(hovH!=null){setHovH(null);setPreview(null);}return;}
-    if(hovH!==hex.id)setHovH(hex.id);
+  const commitPreview=useCallback(nextPreview=>{
+    const nextKey=nextPreview?[
+      nextPreview.an,
+      nextPreview.dn,
+      nextPreview.aDmg,
+      nextPreview.dDmg,
+      nextPreview.ahp,
+      nextPreview.dhp,
+      nextPreview.rapidShot ? 1 : 0,
+    ].join("|"):null;
+    if(previewKeyRef.current===nextKey)return;
+    previewKeyRef.current=nextKey;
+    setPreview(nextPreview);
+  },[]);
+
+  const applyHoveredHex=useCallback(h=>{
+    if(!h||isPanRef.current){
+      if(hovHRef.current!==null){hovHRef.current=null;setHovH(null);}
+      commitPreview(null);
+      return;
+    }
+    const{hex,uk}=h;
+    const fogged=!fogVisible.has(uk);
+    if(fogged){
+      if(hovHRef.current!==null){hovHRef.current=null;setHovH(null);}
+      commitPreview(null);
+      return;
+    }
+    if(hovHRef.current!==hex.id){hovHRef.current=hex.id;setHovH(hex.id);}
     // Combat preview on hover (shows even if unit already attacked)
     if(selU&&phase==="MOVEMENT"&&sud){
       const uH=unitMap[uk]||[];const eU=uH.filter(u=>u.pid!==cpId);const cE=cityMap[hex.id];
@@ -801,12 +831,28 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
         const dP=eu.pid==="barb"?{researchedTechs:[],civilization:"Barbarian"}:players.find(p=>p.id===eu.pid);
         const pv=calcCombatPreview(sud,sud.def,eu,UNIT_DEFS[eu.unitType],hex.terrainType,cp,dP,!!(cE&&cE.player.id!==cpId));
         const effADmg=sud.def.ability==="rapid_shot"?Math.ceil(pv.aDmg*1.5):pv.aDmg;
-        setPreview({...pv,aDmg:effADmg,an:sud.def.name,dn:UNIT_DEFS[eu.unitType]?.name,ahp:sud.hpCurrent,dhp:eu.hpCurrent,rapidShot:sud.def.ability==="rapid_shot"});
-      }else setPreview(null);
-    }else setPreview(null);
-  },[findHexFromEvent,fogVisible,hovH,selU,phase,sud,unitMap,cityMap,cpId,reach,atkRange,players,cp]);
+        commitPreview({...pv,aDmg:effADmg,an:sud.def.name,dn:UNIT_DEFS[eu.unitType]?.name,ahp:sud.hpCurrent,dhp:eu.hpCurrent,rapidShot:sud.def.ability==="rapid_shot"});
+        return;
+      }
+    }
+    commitPreview(null);
+  },[cityMap,commitPreview,cp,cpId,fogVisible,isPanRef,phase,players,selU,sud,unitMap]);
 
-  const onHexLeave=useCallback(()=>{setHovH(null);setPreview(null);},[]);
+  const scheduleHoveredHex=useCallback(h=>{
+    hoverTargetRef.current=h;
+    if(hoverRafRef.current)return;
+    hoverRafRef.current=requestAnimationFrame(()=>{
+      hoverRafRef.current=0;
+      applyHoveredHex(hoverTargetRef.current);
+    });
+  },[applyHoveredHex]);
+
+  // Delegated event handlers (single set on parent <g>, not per-hex)
+  const onHexHover=useCallback(e=>{
+    scheduleHoveredHex(findHexFromEvent(e));
+  },[findHexFromEvent,scheduleHoveredHex]);
+
+  const onHexLeave=useCallback(()=>{scheduleHoveredHex(null);},[scheduleHoveredHex]);
 
   const onHexClick=useCallback(e=>{
     e.stopPropagation();if(animatingUnitId)return;const h=findHexFromEvent(e);if(!h||isPanRef.current)return;
