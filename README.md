@@ -1,16 +1,30 @@
-# React + Vite
+# Empires of Earth Workspace
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This repository is a multi-project game workspace. The GitHub repo stays rooted at `C:\Users\caleb\Downloads\claude game`, but the production web app is the standalone project in `Empires of Earth/`.
 
-Currently, two official plugins are available:
+## Production App
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Production frontend: `Empires of Earth/`
+- Production deploy target on Vercel: `Empires of Earth/`
+- Production branch: `master`
+- Production URL: `https://empires-of-earth.vercel.app`
 
-## React Compiler
+`Empires of Earth/` has its own `package.json`, Vite entrypoint, PartyKit config, and environment settings. Treat it as the source of truth for live gameplay and deployment work.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Repository Layout
 
-## Expanding the ESLint configuration
+- `Empires of Earth/`
+  The active production game.
+- `src/` and `party/`
+  Archived root app from an older deployment setup. Keep for reference and recovery work, but do not treat it as the production app.
+- `Poly+Civ/`
+  Older standalone variant.
+- `_archive/`
+  Historical snapshots and experiments.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Working Rules
+
+- Make production gameplay changes in `Empires of Earth/`.
+- Verify production builds from `Empires of Earth/`, not the repo root.
+- Do not assume the root `src/` app is live just because it is at the repo root.
+- If Vercel deploy behavior looks wrong, check the project root directory first.
