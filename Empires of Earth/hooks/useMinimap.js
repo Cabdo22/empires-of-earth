@@ -5,6 +5,8 @@ import { getDisplayColors } from '../engine/discovery.js';
 export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, minimapRenderRef, zoomRef, panRef, sched, viewPlayerId }) {
   const minimapRef = useRef(null);
   const mmDragRef = useRef(false);
+  const baseCanvasRef = useRef(null);
+  const viewportRafRef = useRef(0);
   // Store dynamic bounds so minimapNav can use them
   const dynBoundsRef = useRef({ minX: 0, minY: 0, scaleX: MINIMAP_W / wW, scaleY: MINIMAP_H / wH });
 
@@ -18,9 +20,38 @@ export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH
     ctx.closePath();
   };
 
+  const drawViewportRect = useCallback(() => {
+    if (!minimapRef.current || !baseCanvasRef.current) return;
+    const ctx = minimapRef.current.getContext("2d");
+    ctx.clearRect(0, 0, MINIMAP_W, MINIMAP_H);
+    ctx.drawImage(baseCanvasRef.current, 0, 0);
+    const { minX, minY, scaleX: dynScaleX, scaleY: dynScaleY } = dynBoundsRef.current;
+    ctx.globalAlpha = 1;
+    const z = zoomRef.current, pan = panRef.current;
+    const vpCx = window.innerWidth / 2, vpCy = window.innerHeight / 2;
+    const wl = ((wW * z) / 2 - pan.x - vpCx) / z, wt = ((wH * z) / 2 - pan.y - vpCy) / z;
+    const vpW = window.innerWidth / z, vpH = window.innerHeight / z;
+    ctx.strokeStyle = "rgba(255,220,100,.7)"; ctx.lineWidth = 1.5;
+    ctx.strokeRect((wl - minX) * dynScaleX, (wt - minY) * dynScaleY, vpW * dynScaleX, vpH * dynScaleY);
+  }, [MINIMAP_W, MINIMAP_H, zoomRef, panRef, wW, wH]);
+
+  const scheduleViewportRender = useCallback(() => {
+    if (viewportRafRef.current) return;
+    viewportRafRef.current = requestAnimationFrame(() => {
+      viewportRafRef.current = 0;
+      drawViewportRect();
+    });
+  }, [drawViewportRect]);
+
   const renderMinimap = useCallback(() => {
     if (!minimapRef.current || !gs) return;
-    const ctx = minimapRef.current.getContext("2d");
+    if (!baseCanvasRef.current) {
+      const canvas = document.createElement("canvas");
+      canvas.width = MINIMAP_W;
+      canvas.height = MINIMAP_H;
+      baseCanvasRef.current = canvas;
+    }
+    const ctx = baseCanvasRef.current.getContext("2d");
     const MTC = { grassland: "#5a9030", forest: "#1e6a38", mountain: "#6a6a5a", water: "#2a5a8a" };
     ctx.fillStyle = "#0a0e06"; ctx.fillRect(0, 0, MINIMAP_W, MINIMAP_H);
 
@@ -94,17 +125,18 @@ export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH
       }
     }
 
-    // Draw viewport rectangle
-    ctx.globalAlpha = 1;
-    const z = zoomRef.current, pan = panRef.current;
-    const vpCx = window.innerWidth / 2, vpCy = window.innerHeight / 2;
-    const wl = ((wW * z) / 2 - pan.x - vpCx) / z, wt = ((wH * z) / 2 - pan.y - vpCy) / z;
-    const vpW = window.innerWidth / z, vpH = window.innerHeight / z;
-    ctx.strokeStyle = "rgba(255,220,100,.7)"; ctx.lineWidth = 1.5;
-    ctx.strokeRect((wl - minX) * dynScaleX, (wt - minY) * dynScaleY, vpW * dynScaleX, vpH * dynScaleY);
-  }, [hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, zoomRef, panRef, viewPlayerId]);
+    drawViewportRect();
+  }, [hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, viewPlayerId, drawViewportRect]);
 
-  useEffect(() => { minimapRenderRef.current = renderMinimap; renderMinimap(); }, [renderMinimap, minimapRenderRef]);
+  useEffect(() => {
+    minimapRenderRef.current = scheduleViewportRender;
+    renderMinimap();
+    return () => {
+      minimapRenderRef.current = null;
+      if (viewportRafRef.current) cancelAnimationFrame(viewportRafRef.current);
+      viewportRafRef.current = 0;
+    };
+  }, [renderMinimap, minimapRenderRef, scheduleViewportRender]);
 
   const minimapNav = useCallback(e => {
     if (!minimapRef.current) return;

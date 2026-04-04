@@ -11,12 +11,20 @@ import { ResourceIcon, UnitIcon } from './Icons.jsx';
 const MemoHex = memo(function MemoHex({
   hex, vis, isHovered, isSelected, inMoveRange, inAttackRange, inNukeRange,
   units, unitCount, city, player, unitSelected, settlerMode, settlerBlocked, canAct, flash,
-  isFogged, isExplored, blockReason, discoveredResources
+  isFogged, isExplored, blockReason, discoveredResources, reducedEffects
 }) {
   const t = hex.terrainType;
 
   // Unexplored: fluffy clouds
   if (isFogged && !isExplored) {
+    if (reducedEffects) {
+      return (
+        <g data-hex={hex.id} data-col={hex.col} data-row={hex.row} transform={`translate(${hex.x},${hex.y})`}>
+          <polygon points={HEX_POINTS} fill="#bcc9d4" stroke="rgba(180,195,210,.35)" strokeWidth="1"/>
+          <polygon points={HEX_POINTS} fill="rgba(255,255,255,.18)"/>
+        </g>
+      );
+    }
     const s = hex.id * 137 + 29;
     const r = (i) => ((s * (i + 1) * 9301 + 49297) % 233280) / 233280;
     return (
@@ -51,61 +59,61 @@ const MemoHex = memo(function MemoHex({
       {/* Terrain rendering */}
       {t === "grassland" && <>
         <polygon points={HEX_POINTS} fill="url(#gradGrass)"/>
-        <polygon points={HEX_POINTS} fill="url(#varGrass)" opacity={.2 + (hex.id % 5) * .04}/>
-        <path d={vis.detail} stroke="#3a5818" strokeWidth="1.5" fill="none" opacity=".25"/>
+        {!reducedEffects && <polygon points={HEX_POINTS} fill="url(#varGrass)" opacity={.2 + (hex.id % 5) * .04}/>}
+        {!reducedEffects && <path d={vis.detail} stroke="#3a5818" strokeWidth="1.5" fill="none" opacity=".25"/>}
         <path d={vis.blades} stroke="#5a9830" strokeWidth="1" fill="none" opacity=".55"/>
-        <path d={vis.blades} stroke="#78c040" strokeWidth=".5" fill="none" opacity=".3" transform="translate(0.5,-0.5)"/>
-        <path d={vis.flowers} fill={hex.id % 3 === 0 ? "#e8d040" : hex.id % 3 === 1 ? "#e07060" : "#d080c0"} stroke="none" opacity=".6"/>
-        <path d={vis.rocks} fill="#8a8a78" stroke="#6a6a5a" strokeWidth=".4" opacity=".35"/>
+        {!reducedEffects && <path d={vis.blades} stroke="#78c040" strokeWidth=".5" fill="none" opacity=".3" transform="translate(0.5,-0.5)"/>}
+        {!reducedEffects && <path d={vis.flowers} fill={hex.id % 3 === 0 ? "#e8d040" : hex.id % 3 === 1 ? "#e07060" : "#d080c0"} stroke="none" opacity=".6"/>}
+        {!reducedEffects && <path d={vis.rocks} fill="#8a8a78" stroke="#6a6a5a" strokeWidth=".4" opacity=".35"/>}
         {vis.coast && <g clipPath="url(#hexClip)">
-          <path d={vis.coast[0]} stroke="#6ab8e0" strokeWidth="2.5" fill="none" opacity=".4" className="coast-wash1"/>
-          <path d={vis.coast[1]} stroke="#88ccee" strokeWidth="2" fill="none" opacity=".35" className="coast-wash2"/>
-          <path d={vis.coast[2]} stroke="#a0d8f4" strokeWidth="1.5" fill="none" opacity=".3" className="coast-wash3"/>
+          <path d={vis.coast[0]} stroke="#6ab8e0" strokeWidth="2.5" fill="none" opacity=".4" className={reducedEffects ? undefined : "coast-wash1"}/>
+          {!reducedEffects && <path d={vis.coast[1]} stroke="#88ccee" strokeWidth="2" fill="none" opacity=".35" className="coast-wash2"/>}
+          {!reducedEffects && <path d={vis.coast[2]} stroke="#a0d8f4" strokeWidth="1.5" fill="none" opacity=".3" className="coast-wash3"/>}
         </g>}
         <polygon points={HEX_POINTS} fill="none" stroke="#1a2e0a" strokeWidth="1" opacity=".5"/>
       </>}
 
       {t === "forest" && <>
         <polygon points={HEX_POINTS} fill="url(#gradForest)"/>
-        <path d={vis.detail} stroke="#1a3a10" strokeWidth="1.5" fill="none" opacity=".2"/>
-        <path d={vis.trees.undergrowth} stroke="#3a7a30" strokeWidth="1.5" fill="none" opacity=".4"/>
+        {!reducedEffects && <path d={vis.detail} stroke="#1a3a10" strokeWidth="1.5" fill="none" opacity=".2"/>}
+        {!reducedEffects && <path d={vis.trees.undergrowth} stroke="#3a7a30" strokeWidth="1.5" fill="none" opacity=".4"/>}
         <path d={vis.trees.trunks} stroke="#5a3a1a" strokeWidth="2" fill="none" opacity=".7"/>
-        <path d={vis.trees.trunks} stroke="#3a2810" strokeWidth="1" fill="none" opacity=".3" transform="translate(1,0)"/>
+        {!reducedEffects && <path d={vis.trees.trunks} stroke="#3a2810" strokeWidth="1" fill="none" opacity=".3" transform="translate(1,0)"/>}
         <path d={vis.trees.canopy} fill="#2a6a30" stroke="#1a5020" strokeWidth=".6" opacity=".8"/>
-        <path d={vis.trees.canopy} fill="#3a8a3a" stroke="none" opacity=".25" transform="translate(-1,-1)"/>
+        {!reducedEffects && <path d={vis.trees.canopy} fill="#3a8a3a" stroke="none" opacity=".25" transform="translate(-1,-1)"/>}
         {vis.coast && <g clipPath="url(#hexClip)">
-          <path d={vis.coast[0]} stroke="#6ab8e0" strokeWidth="2.5" fill="none" opacity=".4" className="coast-wash1"/>
-          <path d={vis.coast[1]} stroke="#88ccee" strokeWidth="2" fill="none" opacity=".35" className="coast-wash2"/>
-          <path d={vis.coast[2]} stroke="#a0d8f4" strokeWidth="1.5" fill="none" opacity=".3" className="coast-wash3"/>
+          <path d={vis.coast[0]} stroke="#6ab8e0" strokeWidth="2.5" fill="none" opacity=".4" className={reducedEffects ? undefined : "coast-wash1"}/>
+          {!reducedEffects && <path d={vis.coast[1]} stroke="#88ccee" strokeWidth="2" fill="none" opacity=".35" className="coast-wash2"/>}
+          {!reducedEffects && <path d={vis.coast[2]} stroke="#a0d8f4" strokeWidth="1.5" fill="none" opacity=".3" className="coast-wash3"/>}
         </g>}
         <polygon points={HEX_POINTS} fill="none" stroke="#0e2a08" strokeWidth="1.2" opacity=".6"/>
       </>}
 
       {t === "mountain" && <>
         <polygon points={HEX_POINTS} fill="url(#gradMountain)"/>
-        <path d={vis.mtns.rocks} fill="#5a5548" stroke="#4a4538" strokeWidth=".5" opacity=".4"/>
+        {!reducedEffects && <path d={vis.mtns.rocks} fill="#5a5548" stroke="#4a4538" strokeWidth=".5" opacity=".4"/>}
         <path d={vis.mtns.peaks} fill="#6a6a6a" stroke="#4a4a4a" strokeWidth=".8" opacity=".85"/>
-        <path d={vis.mtns.shadow} fill="#3a3530" stroke="none" opacity=".3"/>
+        {!reducedEffects && <path d={vis.mtns.shadow} fill="#3a3530" stroke="none" opacity=".3"/>}
         <path d={vis.mtns.snow} fill="#eaeaea" stroke="#d0d0d0" strokeWidth=".4" opacity=".92"/>
-        <path d={vis.mtns.snow} fill="#fff" stroke="none" opacity=".3" transform="translate(-0.5,-0.5)"/>
+        {!reducedEffects && <path d={vis.mtns.snow} fill="#fff" stroke="none" opacity=".3" transform="translate(-0.5,-0.5)"/>}
         {vis.coast && <g clipPath="url(#hexClip)">
-          <path d={vis.coast[0]} stroke="#6ab8e0" strokeWidth="2.5" fill="none" opacity=".4" className="coast-wash1"/>
-          <path d={vis.coast[1]} stroke="#88ccee" strokeWidth="2" fill="none" opacity=".35" className="coast-wash2"/>
-          <path d={vis.coast[2]} stroke="#a0d8f4" strokeWidth="1.5" fill="none" opacity=".3" className="coast-wash3"/>
+          <path d={vis.coast[0]} stroke="#6ab8e0" strokeWidth="2.5" fill="none" opacity=".4" className={reducedEffects ? undefined : "coast-wash1"}/>
+          {!reducedEffects && <path d={vis.coast[1]} stroke="#88ccee" strokeWidth="2" fill="none" opacity=".35" className="coast-wash2"/>}
+          {!reducedEffects && <path d={vis.coast[2]} stroke="#a0d8f4" strokeWidth="1.5" fill="none" opacity=".3" className="coast-wash3"/>}
         </g>}
         <polygon points={HEX_POINTS} fill="none" stroke="#2a2a2a" strokeWidth="1.2" opacity=".55"/>
       </>}
 
-      {t === "water" && <>
+        {t === "water" && <>
         <polygon points={HEX_POINTS} fill="url(#gradWater)"/>
         <g clipPath="url(#hexClip)">
-          <path d={vis.waves.waves} stroke="#5aa8d0" strokeWidth="1.2" fill="none" opacity=".45" className="wave-layer1"/>
-          <path d={vis.waves.waves} stroke="#7ac0e8" strokeWidth=".7" fill="none" opacity=".35" className="wave-layer2"/>
-          <path d={vis.waves.waves} stroke="#90d0f0" strokeWidth=".4" fill="none" opacity=".25" className="wave-layer3"/>
-          <path d={vis.waves.foam} stroke="#c8e8f8" strokeWidth="1.5" fill="none" className="wave-foam"/>
-          <path d={vis.waves.shimmer} stroke="#e0f4ff" strokeWidth=".8" fill="none" className="wave-shimmer"/>
-          {vis.waterCoast && <path d={vis.waterCoast[0]} stroke="#6ab8e0" strokeWidth="2" fill="none" opacity=".3" className="coast-wash1"/>}
-          {vis.waterCoast && <path d={vis.waterCoast[1]} stroke="#88ccee" strokeWidth="1.2" fill="none" opacity=".25" className="coast-wash2"/>}
+          <path d={vis.waves.waves} stroke="#5aa8d0" strokeWidth="1.2" fill="none" opacity=".45" className={reducedEffects ? undefined : "wave-layer1"}/>
+          {!reducedEffects && <path d={vis.waves.waves} stroke="#7ac0e8" strokeWidth=".7" fill="none" opacity=".35" className="wave-layer2"/>}
+          {!reducedEffects && <path d={vis.waves.waves} stroke="#90d0f0" strokeWidth=".4" fill="none" opacity=".25" className="wave-layer3"/>}
+          {!reducedEffects && <path d={vis.waves.foam} stroke="#c8e8f8" strokeWidth="1.5" fill="none" className="wave-foam"/>}
+          {!reducedEffects && <path d={vis.waves.shimmer} stroke="#e0f4ff" strokeWidth=".8" fill="none" className="wave-shimmer"/>}
+          {vis.waterCoast && <path d={vis.waterCoast[0]} stroke="#6ab8e0" strokeWidth="2" fill="none" opacity=".3" className={reducedEffects ? undefined : "coast-wash1"}/>}
+          {!reducedEffects && vis.waterCoast && <path d={vis.waterCoast[1]} stroke="#88ccee" strokeWidth="1.2" fill="none" opacity=".25" className="coast-wash2"/>}
         </g>
         <polygon points={HEX_POINTS} fill="none" stroke="#1a4a6a" strokeWidth="1.2" opacity=".5"/>
       </>}
@@ -139,11 +147,11 @@ const MemoHex = memo(function MemoHex({
       </>}
 
       {/* Units (not in city) */}
-      {unitCount > 0 && !city && <g transform="translate(0,-6)" style={{pointerEvents:"none"}} className={canAct && !unitSelected ? "unit-bob" : undefined}>
-        {canAct && !unitSelected && <circle cx={0} cy={0} r={22} fill="none" stroke={units[0].pCol} strokeWidth="2" className="unit-glow"/>}
+      {unitCount > 0 && !city && <g transform="translate(0,-6)" style={{pointerEvents:"none"}} className={canAct && !unitSelected && !reducedEffects ? "unit-bob" : undefined}>
+        {canAct && !unitSelected && !reducedEffects && <circle cx={0} cy={0} r={22} fill="none" stroke={units[0].pCol} strokeWidth="2" className="unit-glow"/>}
         <circle cx={0} cy={0} r={18} fill={units[0].pBg} stroke={unitSelected ? "#60d0ff" : canAct ? "#a0e060" : units[0].pCol} strokeWidth={unitSelected ? "2.5" : canAct ? "2" : "1.5"} strokeDasharray={canAct && !unitSelected ? "4 2" : "none"}/>
         <UnitIcon unitType={units[0].unitType} x={0} y={0} fg={units[0].pLight || "#fff"} sz={15}/>
-        {unitSelected && <circle cx={0} cy={0} r={20} fill="none" stroke="#60d0ff" strokeWidth="1.5" opacity=".5"/>}
+        {unitSelected && !reducedEffects && <circle cx={0} cy={0} r={20} fill="none" stroke="#60d0ff" strokeWidth="1.5" opacity=".5"/>}
         {unitCount > 1 && <text x={14} y={-14} textAnchor="middle" fill="#ffd740" fontSize={8} fontWeight="bold" style={{pointerEvents:"none"}}>+{unitCount - 1}</text>}
         <g transform="translate(0,20)">
           <rect x={-14} y={0} width={28} height={4} rx={1.5} fill="#222" opacity=".8" stroke="#555" strokeWidth=".5"/>
@@ -152,11 +160,11 @@ const MemoHex = memo(function MemoHex({
       </g>}
 
       {/* Units garrisoned in city */}
-      {unitCount > 0 && city && <g transform="translate(0,-6)" style={{pointerEvents:"none"}} className={canAct && !unitSelected ? "unit-bob" : undefined}>
-        {canAct && !unitSelected && <circle cx={0} cy={0} r={22} fill="none" stroke={units[0].pCol} strokeWidth="2" className="unit-glow"/>}
+      {unitCount > 0 && city && <g transform="translate(0,-6)" style={{pointerEvents:"none"}} className={canAct && !unitSelected && !reducedEffects ? "unit-bob" : undefined}>
+        {canAct && !unitSelected && !reducedEffects && <circle cx={0} cy={0} r={22} fill="none" stroke={units[0].pCol} strokeWidth="2" className="unit-glow"/>}
         <circle cx={0} cy={0} r={18} fill={units[0].pBg} stroke={unitSelected ? "#60d0ff" : canAct ? "#a0e060" : units[0].pCol} strokeWidth={unitSelected ? "2.5" : canAct ? "2" : "1.5"} strokeDasharray={canAct && !unitSelected ? "4 2" : "none"}/>
         <UnitIcon unitType={units[0].unitType} x={0} y={0} fg={units[0].pLight || "#fff"} sz={15}/>
-        {unitSelected && <circle cx={0} cy={0} r={20} fill="none" stroke="#60d0ff" strokeWidth="1.5" opacity=".5"/>}
+        {unitSelected && !reducedEffects && <circle cx={0} cy={0} r={20} fill="none" stroke="#60d0ff" strokeWidth="1.5" opacity=".5"/>}
         {unitCount > 1 && <text x={14} y={-14} textAnchor="middle" fill="#ffd740" fontSize={8} fontWeight="bold" style={{pointerEvents:"none"}}>+{unitCount - 1}</text>}
         <g transform="translate(0,20)">
           <rect x={-14} y={0} width={28} height={4} rx={1.5} fill="#222" opacity=".8" stroke="#555" strokeWidth=".5"/>
@@ -186,7 +194,8 @@ const MemoHex = memo(function MemoHex({
   a.isExplored === b.isExplored && a.blockReason === b.blockReason &&
   a.unitCount === b.unitCount && a.units === b.units &&
   a.city === b.city && a.player === b.player && a.hex === b.hex &&
-  a.discoveredResources === b.discoveredResources
+  a.discoveredResources === b.discoveredResources &&
+  a.reducedEffects === b.reducedEffects
 );
 
 export default MemoHex;

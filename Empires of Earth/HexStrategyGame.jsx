@@ -40,6 +40,7 @@ import useUnitAnimation from './hooks/useUnitAnimation.js';
 import UnitAnimationOverlay from './components/UnitAnimationOverlay.jsx';
 
 let uidCtr = 0;
+const EMPTY_UNIT_BUCKET = { all: [], myUnits: [], enemyUnits: [] };
 
 export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[mapSizePick,setMapSizePick]=useState(null); // null | "small" | "medium" | "large"
@@ -66,6 +67,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[turnTransition,setTurnTransition]=useState(null); // null or {playerName, playerColor, playerColorLight}
   const[tutorialOn,setTutorialOn]=useState(true);
   const[minimapVisible,setMinimapVisible]=useState(true);
+  const[performanceMode,setPerformanceMode]=useState(()=>{try{return localStorage.getItem("eoe_performance_mode")==="1";}catch{return false;}});
   const[tutorialDismissed,setTutorialDismissed]=useState({}); // keyed by tip id
   const[techCollapsed,setTechCollapsed]=useState(false);
   const[cityCollapsed,setCityCollapsed]=useState(false);
@@ -79,6 +81,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const previewKeyRef=useRef(null);
   const hoverTargetRef=useRef(null);
   const hoverRafRef=useRef(0);
+  const visDataCacheRef=useRef(new Map());
   const{startAnimation,animatingUnitId,animVisuals,overlayRef}=useUnitAnimation();
 
   // Stop menu music when game starts, resume if returning to menus
@@ -87,6 +90,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       MenuMusic.stop();
     }
   }, [gameStarted, gs]);
+  useEffect(()=>{try{localStorage.setItem("eoe_performance_mode",performanceMode?"1":"0");}catch{}},[performanceMode]);
 
   // Derived state (safe when gs is null)
   const hexes=gs?.hexes||[];
@@ -102,12 +106,31 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const enemies=players.filter(p=>p.id!==viewPlayerId);
   const op=enemies[0]; // legacy compat — prefer enemies array
   const inc=useMemo(()=>gs?calcPlayerIncome(cp,hexes):{food:0,production:0,science:0,gold:0},[cp,hexes,gs]);
-  const visData=useMemo(()=>hexes.map(h=>{const grass=genGrass(h.id);return{blades:grass.blades,flowers:grass.flowers,rocks:grass.rocks,detail:genDetail(h.id),trees:h.terrainType==="forest"?genTrees(h.id):{trunks:"",canopy:"",undergrowth:""},mtns:h.terrainType==="mountain"?genMtns(h.id):{peaks:"",snow:"",shadow:"",rocks:""},waves:h.terrainType==="water"?genWaves(h.id):{waves:"",foam:"",shimmer:""},coast:genCoast(h,hexes),waterCoast:genWaterCoast(h,hexes)};}),[hexes]);
-  const cityMap=useMemo(()=>{const m={};players.forEach(p=>{const dc=getDisplayColors(p.id,viewPlayerId,gs);p.cities.forEach(c=>{m[c.hexId]={city:c,player:{...p,color:dc.color,colorBg:dc.colorBg,colorLight:dc.colorLight}};});});return m;},[players,gs,viewPlayerId]);
+  const visData=useMemo(()=>{
+    const cache=visDataCacheRef.current;
+    const nextIds=new Set();
+    const result=hexes.map(h=>{
+      nextIds.add(h.id);
+      const neighborSig=getNeighbors(h.col,h.row).map(([c,r])=>hexAt(hexes,c,r)?.terrainType||"void").join("|");
+      const sig=`${h.terrainType}:${neighborSig}`;
+      const cached=cache.get(h.id);
+      if(cached?.sig===sig)return cached.data;
+      const grass=genGrass(h.id);
+      const data={blades:grass.blades,flowers:grass.flowers,rocks:grass.rocks,detail:genDetail(h.id),trees:h.terrainType==="forest"?genTrees(h.id):{trunks:"",canopy:"",undergrowth:""},mtns:h.terrainType==="mountain"?genMtns(h.id):{peaks:"",snow:"",shadow:"",rocks:""},waves:h.terrainType==="water"?genWaves(h.id):{waves:"",foam:"",shimmer:""},coast:genCoast(h,hexes),waterCoast:genWaterCoast(h,hexes)};
+      cache.set(h.id,{sig,data});
+      return data;
+    });
+    for(const id of cache.keys()){if(!nextIds.has(id))cache.delete(id);}
+    return result;
+  },[hexes]);
+  const displayPlayerById=useMemo(()=>{const m={};players.forEach(p=>{const dc=getDisplayColors(p.id,viewPlayerId,gs);m[p.id]={...p,color:dc.color,colorBg:dc.colorBg,colorLight:dc.colorLight};});return m;},[players,gs,viewPlayerId]);
+  const playerById=useMemo(()=>{const m={};players.forEach(p=>{m[p.id]=p;});return m;},[players]);
+  const cityMap=useMemo(()=>{const m={};players.forEach(p=>{const displayPlayer=displayPlayerById[p.id];p.cities.forEach(c=>{m[c.hexId]={city:c,player:displayPlayer};});});return m;},[players,displayPlayerById]);
   const unitMap=useMemo(()=>{const m={};
-    players.forEach(p=>{const dc=getDisplayColors(p.id,viewPlayerId,gs);p.units.forEach(u=>{if(u.id===animatingUnitId)return;const k=`${u.hexCol},${u.hexRow}`;if(!m[k])m[k]=[];m[k].push({...u,pid:p.id,pCol:dc.color,pBg:dc.colorBg,pLight:dc.colorLight});});});
-    barbarians.forEach(b=>{const k=`${b.hexCol},${b.hexRow}`;if(!m[k])m[k]=[];m[k].push({...b,pid:"barb",pCol:"#c05050",pBg:"#4a1010",pLight:"#ff8080"});});
-    return m;},[players,barbarians,animatingUnitId,gs,viewPlayerId]);
+    const getBucket=k=>{if(!m[k])m[k]={all:[],myUnits:[],enemyUnits:[]};return m[k];};
+    players.forEach(p=>{const dc=displayPlayerById[p.id];p.units.forEach(u=>{if(u.id===animatingUnitId)return;const k=`${u.hexCol},${u.hexRow}`;const bucket=getBucket(k);const entry={...u,pid:p.id,pCol:dc.color,pBg:dc.colorBg,pLight:dc.colorLight};bucket.all.push(entry);if(p.id===cpId)bucket.myUnits.push(entry);else bucket.enemyUnits.push(entry);});});
+    barbarians.forEach(b=>{const k=`${b.hexCol},${b.hexRow}`;const bucket=getBucket(k);const entry={...b,pid:"barb",pCol:"#c05050",pBg:"#4a1010",pLight:"#ff8080"};bucket.all.push(entry);bucket.enemyUnits.push(entry);});
+    return m;},[players,barbarians,animatingUnitId,displayPlayerById,cpId]);
   const fogVisible=useMemo(()=>gs?getVisibleHexes(cp,hexes):new Set(),[cp,hexes,gs]);
   const fogExplored=useMemo(()=>{if(!gs)return new Set();return new Set(gs.explored?.[viewPlayerId]||[]);},[gs,viewPlayerId]);
   const discoveredResources=useMemo(()=>{const s=new Set();for(const[type,info]of Object.entries(RESOURCE_INFO)){if(!info.techReq||cp.researchedTechs.includes(info.techReq))s.add(type);}return s;},[cp.researchedTechs]);
@@ -824,11 +847,11 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     if(hovHRef.current!==hex.id){hovHRef.current=hex.id;setHovH(hex.id);}
     // Combat preview on hover (shows even if unit already attacked)
     if(selU&&phase==="MOVEMENT"&&sud){
-      const uH=unitMap[uk]||[];const eU=uH.filter(u=>u.pid!==cpId);const cE=cityMap[hex.id];
+      const bucket=unitMap[uk]||EMPTY_UNIT_BUCKET;const eU=bucket.enemyUnits;const cE=cityMap[hex.id];
       const dist=hexDist(sud.hexCol,sud.hexRow,hex.col,hex.row);
       const inRange=sud.def?.range>0?dist<=sud.def.range:dist<=1;
       if(inRange&&eU.length>0){const eu=eU[0];
-        const dP=eu.pid==="barb"?{researchedTechs:[],civilization:"Barbarian"}:players.find(p=>p.id===eu.pid);
+        const dP=eu.pid==="barb"?{researchedTechs:[],civilization:"Barbarian"}:playerById[eu.pid];
         const pv=calcCombatPreview(sud,sud.def,eu,UNIT_DEFS[eu.unitType],hex.terrainType,cp,dP,!!(cE&&cE.player.id!==cpId));
         const effADmg=sud.def.ability==="rapid_shot"?Math.ceil(pv.aDmg*1.5):pv.aDmg;
         commitPreview({...pv,aDmg:effADmg,an:sud.def.name,dn:UNIT_DEFS[eu.unitType]?.name,ahp:sud.hpCurrent,dhp:eu.hpCurrent,rapidShot:sud.def.ability==="rapid_shot"});
@@ -836,7 +859,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       }
     }
     commitPreview(null);
-  },[cityMap,commitPreview,cp,cpId,fogVisible,isPanRef,phase,players,selU,sud,unitMap]);
+  },[cityMap,commitPreview,cp,cpId,fogVisible,isPanRef,phase,playerById,selU,sud,unitMap]);
 
   const scheduleHoveredHex=useCallback(h=>{
     hoverTargetRef.current=h;
@@ -857,8 +880,8 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const onHexClick=useCallback(e=>{
     e.stopPropagation();if(animatingUnitId)return;const h=findHexFromEvent(e);if(!h||isPanRef.current)return;
     const{hex,uk}=h;if(!fogVisible.has(uk))return;
-    const uH=unitMap[uk]||[];const myU=uH.filter(u=>u.pid===cpId);
-    const eU=uH.filter(u=>u.pid!==cpId);const cE=cityMap[hex.id];const isMy=myU.length>0;
+    const bucket=unitMap[uk]||EMPTY_UNIT_BUCKET;const myU=bucket.myUnits;
+    const eU=bucket.enemyUnits;const cE=cityMap[hex.id];const isMy=myU.length>0;
     const uSel2=selU&&isMy&&myU.some(u=>u.id===selU);
     const hasTgt=eU.length>0||(cE&&cE.player.id!==cpId);
     const inNk=nukeM&&nukeR.has(uk);
@@ -891,8 +914,8 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const onHexCtx=useCallback(e=>{
     e.preventDefault();e.stopPropagation();if(animatingUnitId||isPanRef.current||phase!=="MOVEMENT")return;
     const h=findHexFromEvent(e);if(!h)return;const{hex,uk}=h;
-    const uH=unitMap[uk]||[];const myU=uH.filter(u=>u.pid===cpId);
-    const eU=uH.filter(u=>u.pid!==cpId);const cE=cityMap[hex.id];
+    const bucket=unitMap[uk]||EMPTY_UNIT_BUCKET;const myU=bucket.myUnits;
+    const eU=bucket.enemyUnits;const cE=cityMap[hex.id];
     const uSel2=selU&&myU.some(u=>u.id===selU);
     const hasTgt=eU.length>0||(cE&&cE.player.id!==cpId);
     const inMv=selU&&!uSel2&&reach.has(uk)&&eU.length===0&&!(cE&&cE.player.id!==cpId);
@@ -909,8 +932,8 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     const isVisible=fogVisible.has(uk);
     const isExplored2=fogExplored.has(uk);
     const fogged=!isVisible;
-    const uH=unitMap[uk]||[];const myU=uH.filter(u=>u.pid===cpId);
-    const eU=uH.filter(u=>u.pid!==cpId);const cE=cityMap[hex.id];const isMy=myU.length>0;
+    const bucket=unitMap[uk]||EMPTY_UNIT_BUCKET;const uH=bucket.all;const myU=bucket.myUnits;
+    const eU=bucket.enemyUnits;const cE=cityMap[hex.id];const isMy=myU.length>0;
     const uSel=selU&&isMy&&myU.some(u=>u.id===selU);
     const hasTgt=eU.length>0||(cE&&cE.player.id!==cpId);
     const inMv=selU&&!uSel&&reach.has(uk)&&phase==="MOVEMENT"&&eU.length===0&&!(cE&&cE.player.id!==cpId);
@@ -918,14 +941,14 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     const inRng=selU&&phase==="MOVEMENT"&&sud&&sud.def?.range>0&&!sud.hasAttacked&&atkRange.has(uk)&&!uSel&&hasTgt;
     const inNk=nukeM&&nukeR.has(uk);
     const canA=phase==="MOVEMENT"&&isMy&&myU.some(u=>actable.has(u.id));
-    const ownerP=hex.ownerPlayerId?players.find(p=>p.id===hex.ownerPlayerId):null;
-    const blkReason=selU&&phase==="MOVEMENT"&&sud&&!uSel&&!fogged?getMoveBlockReason(hex,sud,sud.def,reach,atkRange,phase,cpId,players):null;
+    const ownerP=hex.ownerPlayerId?displayPlayerById[hex.ownerPlayerId]:null;
+    const blkReason=hovH===hex.id&&selU&&phase==="MOVEMENT"&&sud&&!uSel&&!fogged?getMoveBlockReason(hex,sud,sud.def,reach,atkRange,phase,cpId,players):null;
 
     return <MemoHex key={hex.id} hex={hex} vis={visData[i]}
       isHovered={hovH===hex.id} isSelected={selH===hex.id} inMoveRange={inMv} inAttackRange={!!(inMelee||inRng)} inNukeRange={!!inNk}
       unitSelected={!!uSel} units={fogged?null:uH} unitCount={fogged?0:uH.length}
-      city={fogged?null:(cE?.city||null)} player={cE?.player||ownerP} settlerMode={!!settlerM} settlerBlocked={settlerBlocked.has(uk)} canAct={!!canA} flash={flashes[uk]||null} isFogged={fogged} isExplored={isExplored2} blockReason={blkReason} discoveredResources={discoveredResources}/>;
-  }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,settlerBlocked,actable,nukeM,nukeR,flashes,fogVisible,fogExplored,discoveredResources]);
+      city={fogged?null:(cE?.city||null)} player={cE?.player||ownerP} settlerMode={!!settlerM} settlerBlocked={settlerBlocked.has(uk)} canAct={!!canA} flash={flashes[uk]||null} isFogged={fogged} isExplored={isExplored2} blockReason={blkReason} discoveredResources={discoveredResources} reducedEffects={performanceMode}/>;
+  }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,settlerBlocked,actable,nukeM,nukeR,flashes,fogVisible,fogExplored,discoveredResources,displayPlayerById,performanceMode]);
 
   // City border overlay (rendered above all hexes so no hex can cover borders)
   const borderOverlay=useMemo(()=>{
@@ -942,7 +965,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     const result=[];
     for(const hex of hexes){
       if(!hex.ownerPlayerId)continue;
-      const ownerP=hex.ownerPlayerId?players.find(p=>p.id===hex.ownerPlayerId):null;
+      const ownerP=hex.ownerPlayerId?playerById[hex.ownerPlayerId]:null;
       if(!ownerP)continue;
       const dc=getDisplayColors(ownerP.id,viewPlayerId,gs);
       const uk=`${hex.col},${hex.row}`;
@@ -971,7 +994,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       }
     }
     return result;
-  },[hexes,players,fogVisible,fogExplored,gs?.metPlayers,viewPlayerId]);
+  },[hexes,playerById,fogVisible,fogExplored,gs?.metPlayers,viewPlayerId]);
 
   // City banner overlay (rendered above all hexes so banners can extend beyond hex bounds)
   const cityBannerOverlay=useMemo(()=>{
@@ -996,18 +1019,32 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // Tooltip overlay data (rendered above all hexes)
   const tooltipData=useMemo(()=>{
     if(hovH==null||!selU||phase!=="MOVEMENT"||!sud)return null;
-    const hex=hexes.find(h2=>h2.id===hovH);if(!hex)return null;
+    const hex=hexes[hovH];if(!hex||hex.id!==hovH)return null;
     const uk2=hex.uk;const fogged=!fogVisible.has(uk2);if(fogged)return null;
-    const uH=unitMap[uk2]||[];const myU=uH.filter(u=>u.pid===cpId);
+    const bucket=unitMap[uk2]||EMPTY_UNIT_BUCKET;const myU=bucket.myUnits;
     const uSel=myU.some(u=>u.id===selU);if(uSel)return null;
     const blk=getMoveBlockReason(hex,sud,sud.def,reach,atkRange,phase,cpId,players);
     if(!blk)return null;
     return{x:hex.x,y:hex.y,text:blk};
   },[hovH,selU,phase,sud,hexes,fogVisible,unitMap,cpId,reach,atkRange,players]);
 
-  const tCounts=useMemo(()=>{const c={grassland:0,forest:0,mountain:0,water:0};hexes.forEach(h=>c[h.terrainType]++);return c;},[hexes]);
-  const landOwned=useMemo(()=>{const o={};players.forEach(p=>{o[p.id]=hexes.filter(h=>h.ownerPlayerId===p.id).length;});return o;},[hexes,players]);
-  const totalLand=useMemo(()=>hexes.filter(h=>h.terrainType!=="water").length,[hexes]);
+  const boardStats=useMemo(()=>{
+    const terrainCounts={grassland:0,forest:0,mountain:0,water:0};
+    const ownedByPlayer={};
+    players.forEach(p=>{ownedByPlayer[p.id]=0;});
+    let landCount=0;
+    for(const h of hexes){
+      terrainCounts[h.terrainType]=(terrainCounts[h.terrainType]||0)+1;
+      if(h.terrainType!=="water")landCount++;
+      if(h.ownerPlayerId){
+        ownedByPlayer[h.ownerPlayerId]=(ownedByPlayer[h.ownerPlayerId]||0)+1;
+      }
+    }
+    return { terrainCounts, ownedByPlayer, landCount };
+  },[hexes,players]);
+  const tCounts=boardStats.terrainCounts;
+  const landOwned=boardStats.ownedByPlayer;
+  const totalLand=boardStats.landCount;
 
   // === ONLINE MODE: when rendered by OnlineGame with onlineMode prop, skip all menu screens ===
   // Wait for server game state to arrive before rendering the board
@@ -1120,7 +1157,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       <PlayerPanel cp={cp} hexes={hexes} landOwned={landOwned} totalLand={totalLand} barbarians={barbarians}/>
 
       {/* Action bar */}
-      <ActionBar showTech={showTech} setShowTech={setShowTech} showSaveLoad={showSaveLoad} setShowSaveLoad={setShowSaveLoad} tutorialOn={tutorialOn} setTutorialOn={setTutorialOn} setTutorialDismissed={setTutorialDismissed} sud={sud} selU={selU} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} upgradeUnit={upgradeUnit} cp={cp} actable={actable}/>
+      <ActionBar showTech={showTech} setShowTech={setShowTech} showSaveLoad={showSaveLoad} setShowSaveLoad={setShowSaveLoad} tutorialOn={tutorialOn} setTutorialOn={setTutorialOn} setTutorialDismissed={setTutorialDismissed} performanceMode={performanceMode} setPerformanceMode={setPerformanceMode} sud={sud} selU={selU} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} upgradeUnit={upgradeUnit} cp={cp} actable={actable}/>
 
       {/* Save/Load modal */}
       {showSaveLoad && <div style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5,8,3,.5)", pointerEvents: "all" }} onClick={e => { if (e.target === e.currentTarget) setShowSaveLoad(false); }}>

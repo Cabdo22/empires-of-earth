@@ -9,7 +9,7 @@ export function BottomInfo({ selH, hexes, unitMap, players, settlerM, setSettler
     <>
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 48, background: "linear-gradient(0deg,rgba(10,14,6,.95) 0%,rgba(10,14,6,0) 100%)", zIndex: 10, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 8, pointerEvents: "none" }}>
         {selH != null && hexes[selH] ? (() => {
-          const sd = hexes[selH], si = TERRAIN_INFO[sd.terrainType]; const uH = unitMap[`${sd.col},${sd.row}`] || []; const oP = sd.ownerPlayerId ? players.find(p => p.id === sd.ownerPlayerId) : null;
+          const sd = hexes[selH], si = TERRAIN_INFO[sd.terrainType]; const bucket = unitMap[`${sd.col},${sd.row}`]; const uH = bucket?.all || []; const oP = sd.ownerPlayerId ? players.find(p => p.id === sd.ownerPlayerId) : null;
           return (
             <div style={{ background: "rgba(15,25,10,.9)", border: "1px solid rgba(100,140,50,.3)", borderRadius: 8, padding: "5px 16px", color: "#a0b880", fontSize: 9, letterSpacing: 1, display: "flex", gap: 10, alignItems: "center" }}>
               <span style={{ color: "#c8d8a0", fontWeight: 600 }}>({sd.col},{sd.row})</span><span style={{ color: si.color }}>{si.label}</span>
