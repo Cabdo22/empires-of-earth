@@ -83,7 +83,7 @@ HexStrategyGame.jsx
 - `utils/cloneState.js`: deep clone helper with `structuredClone` fallback
 - `utils/saveGames.js`: save serialization, migration, and localStorage helpers
 - `tests/engine-regression.test.js`: regression checks for explicit map config and core engine actions
-- `tests/multiplayer-parity.test.js`: local/online continuity checks for shared gameplay action dispatch
+- `tests/multiplayer-parity.test.js`: local/online continuity checks for shared gameplay action dispatch, multi-action sequences, and fog-filtered player views
 
 ## Common Tasks
 
@@ -92,6 +92,7 @@ HexStrategyGame.jsx
 - Change end-turn behavior: update `engine/turnProcessing.js` and any related action wrappers
 - Adjust UI layout or panels: work inside `components/GameViewport.jsx`, `components/GameHud.jsx`, or `components/GameModals.jsx`
 - Change multiplayer rules: update `engine/actionValidation.js`, `engine/gameplayActionApplier.js`, and the parity tests before changing `party/server.js`
+- Any gameplay feature is not done until engine behavior, shared validation, shared action dispatch, and parity tests are all updated together
 
 ## Known Technical Debt
 
