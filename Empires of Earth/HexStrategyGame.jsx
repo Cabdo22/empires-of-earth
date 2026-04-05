@@ -958,6 +958,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     isExplored: tile.isExplored,
     player: tile.player,
     city: tile.city,
+    reducedEffects: tile.reducedEffects,
   })),[boardHexes]);
   const entityCanvasTiles=useMemo(()=>boardHexes.map(tile=>({
     key: tile.key,
@@ -971,6 +972,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     discoveredResources: tile.discoveredResources,
     unitSelected: tile.unitSelected,
     canAct: tile.canAct,
+    reducedEffects: tile.reducedEffects,
   })),[boardHexes]);
   const overlayCanvasTiles=useMemo(()=>boardHexes.map(tile=>({
     key: tile.key,
@@ -984,6 +986,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     isHovered: tile.isHovered,
     isSelected: tile.isSelected,
     flash: tile.flash,
+    reducedEffects: tile.reducedEffects,
   })),[boardHexes]);
 
   // City border overlay (rendered above all hexes so no hex can cover borders)
