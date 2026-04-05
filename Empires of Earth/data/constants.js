@@ -19,11 +19,56 @@ export const MAX_PLAYERS = 6;
 // Current map size key (set by setMapConfig)
 export let currentMapSizeKey = "small";
 
+export const getMapConfig = (sizeKey) => {
+  if (sizeKey && typeof sizeKey === "object" && typeof sizeKey.cols === "number" && typeof sizeKey.rows === "number") {
+    return {
+      key: sizeKey.key || sizeKey.mapSizeKey || "custom",
+      label: sizeKey.label || "Custom",
+      desc: sizeKey.desc || `${sizeKey.cols}x${sizeKey.rows}`,
+      maxPlayers: sizeKey.maxPlayers || MAX_PLAYERS,
+      cols: sizeKey.cols,
+      rows: sizeKey.rows,
+    };
+  }
+  const resolvedKey = MAP_SIZES[sizeKey] ? sizeKey : "small";
+  return { key: resolvedKey, ...MAP_SIZES[resolvedKey] };
+};
+
 export const setMapConfig = (sizeKey) => {
-  const cfg = MAP_SIZES[sizeKey] || MAP_SIZES.small;
+  const cfg = getMapConfig(sizeKey);
   COLS = cfg.cols;
   ROWS = cfg.rows;
-  currentMapSizeKey = sizeKey;
+  currentMapSizeKey = cfg.key;
+};
+
+export const getMapDimensionsFromHexes = (hexes) => {
+  if (!Array.isArray(hexes) || hexes.length === 0) {
+    return { cols: COLS, rows: ROWS };
+  }
+  let maxCol = -1;
+  let maxRow = -1;
+  for (const hex of hexes) {
+    if (!hex) continue;
+    if (hex.col > maxCol) maxCol = hex.col;
+    if (hex.row > maxRow) maxRow = hex.row;
+  }
+  return {
+    cols: maxCol + 1 || COLS,
+    rows: maxRow + 1 || ROWS,
+  };
+};
+
+export const getMapDimensions = (source) => {
+  if (!source) return { cols: COLS, rows: ROWS };
+  if (Array.isArray(source)) return getMapDimensionsFromHexes(source);
+  if (source.mapConfig?.cols && source.mapConfig?.rows) {
+    return { cols: source.mapConfig.cols, rows: source.mapConfig.rows };
+  }
+  if (Array.isArray(source.hexes)) return getMapDimensionsFromHexes(source.hexes);
+  if (typeof source.cols === "number" && typeof source.rows === "number") {
+    return { cols: source.cols, rows: source.rows };
+  }
+  return { cols: COLS, rows: ROWS };
 };
 
 // Pre-compute the 6 vertices of a flat-top hexagon
@@ -43,14 +88,18 @@ export const EVEN_COL_NEIGHBORS = [[1, -1], [1, 0], [0, 1], [-1, 0], [-1, -1], [
 export const ODD_COL_NEIGHBORS  = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [0, -1]];
 
 // O(1) hex lookup by col,row (hexes are stored col-major)
-export const hexAt = (hexes, col, row) => hexes[col * ROWS + row];
+export const hexAt = (hexes, col, row, source = hexes) => {
+  const { rows } = getMapDimensions(source);
+  return hexes[col * rows + row];
+};
 
 // Get neighbor coords (clamped to map bounds)
-export const getNeighbors = (col, row) => {
+export const getNeighbors = (col, row, source = null) => {
+  const { cols, rows } = getMapDimensions(source);
   const deltas = col % 2 === 0 ? EVEN_COL_NEIGHBORS : ODD_COL_NEIGHBORS;
   return deltas
     .map(([dc, dr]) => [col + dc, row + dr])
-    .filter(([c, r]) => c >= 0 && c < COLS && r >= 0 && r < ROWS);
+    .filter(([c, r]) => c >= 0 && c < cols && r >= 0 && r < rows);
 };
 
 // Seeded PRNG (Mulberry32)

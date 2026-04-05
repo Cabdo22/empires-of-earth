@@ -6,7 +6,7 @@ import { UNIT_DEFS, BARB_UNITS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
 import { TECH_TREE } from '../data/techs.js';
 import { RANDOM_EVENTS } from '../data/events.js';
-import { COLS, ROWS, hexAt, getNeighbors, hexDist, gameRng, FOG_SIGHT, CITY_HP_BASE, CITY_HP_PER_ERA, CITY_HP_PER_POP, TRADE_FOCUS } from '../data/constants.js';
+import { getMapDimensionsFromHexes, hexAt, getNeighbors, hexDist, gameRng, FOG_SIGHT, CITY_HP_BASE, CITY_HP_PER_ERA, CITY_HP_PER_POP, TRADE_FOCUS } from '../data/constants.js';
 import { calcCityYields, calcPlayerIncome, autoAssignTiles, isWorkableHex, getHexYields } from './economy.js';
 import { isHexOccupied, findOpenNeighbor } from './movement.js';
 import { getPlayerMaxEra } from './combat.js';
@@ -28,7 +28,7 @@ export const recalcAutoRoads = (player, hexes) => {
       for (const hid of (cA.borderHexIds || [])) {
         const bh = hexes[hid];
         if (!bh) continue;
-        for (const [nc, nr] of getNeighbors(bh.col, bh.row)) {
+        for (const [nc, nr] of getNeighbors(bh.col, bh.row, hexes)) {
           const nh = hexAt(hexes, nc, nr);
           if (nh && nh.cityBorderId === cB.id) {
             connected = true;
@@ -82,7 +82,7 @@ export const recalcForeignTradeRoutes = (players, hexes) => {
         for (const hid of (cA.borderHexIds || [])) {
           const bh = hexes[hid];
           if (!bh || !bh.road || bh.ownerPlayerId !== pA.id) continue;
-          for (const [nc, nr] of getNeighbors(bh.col, bh.row)) {
+          for (const [nc, nr] of getNeighbors(bh.col, bh.row, hexes)) {
             const nh = hexAt(hexes, nc, nr);
             if (!nh || nh.ownerPlayerId !== pB.id) continue;
             const cB = pB.cities.find(c => (c.borderHexIds || []).includes(nh.id));
@@ -231,7 +231,7 @@ export const initCityBorders = (city, player, hexes) => {
   cityHex.cityBorderId = city.id;
   cityHex.ownerPlayerId = player.id;
 
-  for (const [nc, nr] of getNeighbors(cityHex.col, cityHex.row)) {
+  for (const [nc, nr] of getNeighbors(cityHex.col, cityHex.row, hexes)) {
     const nh = hexAt(hexes, nc, nr);
     if (!nh) continue;
     if (nh.terrainType === "water" && !nh.isCoastal) continue; // skip deep water
@@ -250,7 +250,7 @@ export const growCityBorder = (city, player, hexes) => {
 
   for (const borderHexId of city.borderHexIds) {
     const bh = hexes[borderHexId];
-    for (const [nc, nr] of getNeighbors(bh.col, bh.row)) {
+    for (const [nc, nr] of getNeighbors(bh.col, bh.row, hexes)) {
       const nh = hexAt(hexes, nc, nr);
       if (!nh || nh.cityBorderId) continue;
       if (nh.terrainType === "mountain") continue;
@@ -311,7 +311,8 @@ export const refreshUnits = (player, g) => {
 // Spawn barbarians periodically
 export const spawnBarbarians = (g) => {
   if (!g.barbarians) g.barbarians = [];
-  const maxBarbs = Math.max(6, Math.floor(COLS * ROWS / 40));
+  const { cols, rows } = getMapDimensionsFromHexes(g.hexes);
+  const maxBarbs = Math.max(6, Math.floor(cols * rows / 40));
   if (g.turnNumber % 3 !== 0 || g.barbarians.length >= maxBarbs) return;
   const emptyHexes = g.hexes.filter(h =>
     h.terrainType !== "water" && h.terrainType !== "mountain" && !h.cityId && !h.ownerPlayerId
@@ -355,7 +356,7 @@ export const processBarbarians = (g) => {
     const { bestHex, bestDist } = findNearestTarget(barb, g.players, g.hexes);
 
     if (bestHex && bestDist > 1) {
-      const neighbors = getNeighbors(barb.hexCol, barb.hexRow);
+      const neighbors = getNeighbors(barb.hexCol, barb.hexRow, g.hexes);
       let moveTarget = null, moveTargetDist = Infinity;
       for (const [nc, nr] of neighbors) {
         const hex = hexAt(g.hexes, nc, nr);

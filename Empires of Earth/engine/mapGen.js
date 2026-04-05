@@ -2,17 +2,18 @@
 // MAP GENERATION
 // ============================================================
 
-import { COLS, ROWS, mulberry32, hexCenter, getNeighbors, hexDist } from '../data/constants.js';
+import { getMapConfig, mulberry32, getNeighbors, hexDist } from '../data/constants.js';
 
 // Grow a blob of terrain using flood-fill from a random seed point
-const growTerrainBlob = (grid, rng, terrain, minSize, maxSize, protectedHexes) => {
+const growTerrainBlob = (grid, rng, terrain, minSize, maxSize, protectedHexes, mapConfig) => {
   const size = minSize + Math.floor(rng() * (maxSize - minSize + 1));
   const key = (c, r) => `${c},${r}`;
+  const { cols, rows } = mapConfig;
 
   let startCol, startRow, attempts = 0;
   do {
-    startCol = Math.floor(rng() * COLS);
-    startRow = Math.floor(rng() * ROWS);
+    startCol = Math.floor(rng() * cols);
+    startRow = Math.floor(rng() * rows);
     attempts++;
   } while ((grid[startCol][startRow].terrain !== "grassland" || protectedHexes.has(key(startCol, startRow))) && attempts < 200);
   if (attempts >= 200) return 0;
@@ -20,7 +21,7 @@ const growTerrainBlob = (grid, rng, terrain, minSize, maxSize, protectedHexes) =
   grid[startCol][startRow].terrain = terrain;
   let placed = 1;
   const visited = new Set([key(startCol, startRow)]);
-  let frontier = getNeighbors(startCol, startRow).filter(
+  let frontier = getNeighbors(startCol, startRow, mapConfig).filter(
     ([c, r]) => grid[c][r].terrain === "grassland" && !visited.has(key(c, r)) && !protectedHexes.has(key(c, r))
   );
 
@@ -34,7 +35,7 @@ const growTerrainBlob = (grid, rng, terrain, minSize, maxSize, protectedHexes) =
     placed++;
     visited.add(key(nc, nr));
 
-    for (const [fc, fr] of getNeighbors(nc, nr)) {
+    for (const [fc, fr] of getNeighbors(nc, nr, mapConfig)) {
       if (!visited.has(key(fc, fr)) && grid[fc][fr].terrain === "grassland" && !protectedHexes.has(key(fc, fr))) {
         frontier.push([fc, fr]);
         visited.add(key(fc, fr));
@@ -45,15 +46,15 @@ const growTerrainBlob = (grid, rng, terrain, minSize, maxSize, protectedHexes) =
 };
 
 // Scatter resources across the map with balanced distribution per player region
-const placeResources = (grid, rng, protectedHexes, spawns) => {
+const placeResources = (grid, rng, protectedHexes, spawns, mapConfig) => {
   const key = (c, r) => `${c},${r}`;
+  const { cols, rows } = mapConfig;
 
   // Assign each land hex to the nearest spawn (player region)
   const regions = spawns.map(() => ({ land: [], workable: [] }));
-  const unowned = [];
 
-  for (let c = 0; c < COLS; c++) {
-    for (let r = 0; r < ROWS; r++) {
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
       if (grid[c][r].terrain === "water") continue;
       if (protectedHexes.has(key(c, r))) continue;
 
@@ -105,15 +106,15 @@ const placeResources = (grid, rng, protectedHexes, spawns) => {
 
   // Place remaining resources randomly across all land (respecting density target)
   const allLand = [];
-  for (let c = 0; c < COLS; c++) {
-    for (let r = 0; r < ROWS; r++) {
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
       if (grid[c][r].terrain === "water" || grid[c][r].resource) continue;
       if (protectedHexes.has(key(c, r))) continue;
       allLand.push([c, r]);
     }
   }
 
-  const totalLand = COLS * ROWS; // approximate
+  const totalLand = cols * rows; // approximate
   const targetResources = Math.round(totalLand * 0.10);
   const alreadyPlaced = spawns.length * (guaranteedResources.length + 1);
   const remaining = Math.max(0, targetResources - alreadyPlaced);
@@ -142,8 +143,8 @@ const placeResources = (grid, rng, protectedHexes, spawns) => {
   }
 
   // Water resources (unchanged — fish and oil on coastal)
-  for (let c = 0; c < COLS; c++) {
-    for (let r = 0; r < ROWS; r++) {
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
       if (grid[c][r].terrain !== "water") continue;
       if (grid[c][r].isCoastal) {
         const roll = rng();
@@ -158,13 +159,14 @@ const placeResources = (grid, rng, protectedHexes, spawns) => {
 };
 
 // Find N valid spawn positions on the completed terrain map, well-spaced apart
-const findSpawnPositions = (grid, rng, numPlayers = 2) => {
+const findSpawnPositions = (grid, rng, numPlayers = 2, mapConfig) => {
+  const { cols, rows } = mapConfig;
   const candidates = [];
   const edgeBuffer = 3; // keep spawns away from map edges so cities have full tile access
-  for (let c = edgeBuffer; c < COLS - edgeBuffer; c++) {
-    for (let r = edgeBuffer; r < ROWS - edgeBuffer; r++) {
+  for (let c = edgeBuffer; c < cols - edgeBuffer; c++) {
+    for (let r = edgeBuffer; r < rows - edgeBuffer; r++) {
       if (grid[c][r].terrain !== "grassland") continue;
-      const neighbors = getNeighbors(c, r);
+      const neighbors = getNeighbors(c, r, mapConfig);
       const grassCount = neighbors.filter(([nc, nr]) => grid[nc][nr].terrain === "grassland").length;
       if (grassCount >= 3) candidates.push({ col: c, row: r });
     }
@@ -177,7 +179,7 @@ const findSpawnPositions = (grid, rng, numPlayers = 2) => {
   }
 
   const spawns = [candidates[0]];
-  const minDist = Math.max(Math.floor(Math.min(COLS, ROWS) * (numPlayers <= 2 ? 0.4 : 0.25)), numPlayers <= 2 ? 6 : 4);
+  const minDist = Math.max(Math.floor(Math.min(cols, rows) * (numPlayers <= 2 ? 0.4 : 0.25)), numPlayers <= 2 ? 6 : 4);
 
   for (let n = 1; n < numPlayers; n++) {
     // Score each candidate by minimum distance to all existing spawns (maximize it)
@@ -210,39 +212,41 @@ const findSpawnPositions = (grid, rng, numPlayers = 2) => {
 };
 
 // Generate the full map grid
-export const generateMap = (seed, numPlayers = 2) => {
+export const generateMap = (seed, numPlayers = 2, inputMapConfig = {}) => {
+  const mapConfig = getMapConfig(inputMapConfig);
+  const { cols, rows } = mapConfig;
   const rng = mulberry32(seed);
   const emptyProtected = new Set();
 
-  const grid = Array.from({ length: COLS }, () =>
-    Array.from({ length: ROWS }, () => ({ terrain: "grassland", resource: null, isCoastal: false }))
+  const grid = Array.from({ length: cols }, () =>
+    Array.from({ length: rows }, () => ({ terrain: "grassland", resource: null, isCoastal: false }))
   );
 
   const growUntil = (terrain, targetTiles, minBlob, maxBlob) => {
     let placed = 0, safety = 0;
     while (placed < targetTiles && safety < 50) {
-      placed += growTerrainBlob(grid, rng, terrain, minBlob, maxBlob, emptyProtected);
+      placed += growTerrainBlob(grid, rng, terrain, minBlob, maxBlob, emptyProtected, mapConfig);
       safety++;
     }
   };
 
-  const totalHexes = COLS * ROWS;
+  const totalHexes = cols * rows;
   const scale = totalHexes / 100;
   growUntil("forest", Math.round(25 * scale), 3, Math.max(7, Math.round(7 * Math.sqrt(scale))));
   growUntil("mountain", Math.round(10 * scale), 2, Math.max(4, Math.round(4 * Math.sqrt(scale))));
   growUntil("water", Math.round(10 * scale), 3, Math.max(6, Math.round(6 * Math.sqrt(scale))));
 
   // Mark coastal water tiles (adjacent to any land)
-  for (let c = 0; c < COLS; c++) {
-    for (let r = 0; r < ROWS; r++) {
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
       if (grid[c][r].terrain === "water") {
-        grid[c][r].isCoastal = getNeighbors(c, r).some(([nc, nr]) => grid[nc][nr].terrain !== "water");
+        grid[c][r].isCoastal = getNeighbors(c, r, mapConfig).some(([nc, nr]) => grid[nc][nr].terrain !== "water");
       }
     }
   }
 
   // Find spawn positions on the completed terrain
-  const spawns = findSpawnPositions(grid, rng, numPlayers);
+  const spawns = findSpawnPositions(grid, rng, numPlayers, mapConfig);
 
   // Force spawn hexes to grassland and clear resources
   const key = (c, r) => `${c},${r}`;
@@ -254,7 +258,7 @@ export const generateMap = (seed, numPlayers = 2) => {
   }
 
   // Place resources, protecting spawn hexes, balanced per player region
-  placeResources(grid, rng, protectedHexes, spawns);
+  placeResources(grid, rng, protectedHexes, spawns, mapConfig);
 
   return { grid, spawns };
 };

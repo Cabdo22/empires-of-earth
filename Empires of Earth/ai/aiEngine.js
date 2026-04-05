@@ -5,7 +5,7 @@
 import { UNIT_DEFS, SIEGE_UNITS } from '../data/units.js';
 import { TECH_TREE } from '../data/techs.js';
 import { CIV_DEFS } from '../data/civs.js';
-import { hexAt, getNeighbors, hexDist, gameRng, COLS, ROWS } from '../data/constants.js';
+import { getMapDimensionsFromHexes, hexAt, getNeighbors, hexDist, gameRng } from '../data/constants.js';
 import { getPlayerMaxEra, calcCombatPreview } from '../engine/combat.js';
 import { getAvailableTechs, getAvailableUnits, getAvailableDistricts, canUpgradeUnit, calcPlayerIncomeWithState } from '../engine/economy.js';
 import { getReachableHexes, getVisibleHexes, isHexOccupied } from '../engine/movement.js';
@@ -322,12 +322,13 @@ const aiPickProduction = (city, player, hexes, enemies, smarter, strategy) => {
   ).length;
   const totalEnemyMilitary = getAllEnemyUnits(enemies).length;
   const settlerCount = player.units.filter(u => u.unitType === "settler").length;
+  const { cols, rows } = getMapDimensionsFromHexes(hexes);
 
   // Civ-aware settler population requirement
   const civBias = CIV_PROD_BIAS[player.civilization];
   const settlerPopReq = civBias?.settlerPopReq ?? 2;
 
-  const maxCities = Math.max(3, Math.floor(COLS * ROWS / 80));
+  const maxCities = Math.max(3, Math.floor(cols * rows / 80));
   if (player.cities.length < maxCities && settlerCount === 0 && (city.population || 1) >= settlerPopReq && availUnits.some(u => u.id === "settler")) {
     return { type: "unit", itemId: "settler" };
   }
@@ -408,7 +409,7 @@ const aiFindCityLocation = (settler, player, hexes, allPlayers, strategy) => {
     const yields = getHexYields(hex, player);
     let score = yields.food + yields.production + yields.gold + yields.science;
 
-    for (const [nc, nr] of getNeighbors(col, row)) {
+    for (const [nc, nr] of getNeighbors(col, row, hexes)) {
       const nh = hexAt(hexes, nc, nr);
       if (!nh) continue;
       const ny = getHexYields(nh, player);
@@ -481,7 +482,8 @@ const aiPlanAndExecuteMoves = (g, aiPlayer, enemies, addLogFn, smarter, strategy
         return ch && hexDist(unit.hexCol, unit.hexRow, ch.col, ch.row) < 2;
       }));
 
-      const maxFoundCities = Math.max(3, Math.floor(COLS * ROWS / 80));
+      const { cols, rows } = getMapDimensionsFromHexes(g.hexes);
+      const maxFoundCities = Math.max(3, Math.floor(cols * rows / 80));
       if (standingGood && !tooClose && aiPlayer.cities.length < maxFoundCities) {
         g.nextCityId = (g.nextCityId || 0) + 1;
         const civNames = CIV_DEFS[aiPlayer.civilization]?.cityNames || ["Colony"];
@@ -913,7 +915,7 @@ const aiBuildRoads = (player, g) => {
 
         // Find best neighbor: owned, land, closest to target
         let bestN = null, bestDist = Infinity;
-        for (const [nc, nr] of getNeighbors(cur.col, cur.row)) {
+        for (const [nc, nr] of getNeighbors(cur.col, cur.row, g.hexes)) {
           const nh = hexAt(g.hexes, nc, nr);
           if (!nh || visited.has(`${nc},${nr}`)) continue;
           if (nh.ownerPlayerId !== player.id) continue;

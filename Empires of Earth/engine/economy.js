@@ -109,7 +109,7 @@ export const calcCityYields = (city, player, hexes) => {
   }
 
   // Coastal adjacency bonus: +1 food if city hex is adjacent to water
-  const neighbors = getNeighbors(cityHex.col, cityHex.row);
+  const neighbors = getNeighbors(cityHex.col, cityHex.row, hexes);
   const adjacentWater = neighbors.some(([nc, nr]) => {
     const nh = hexAt(hexes, nc, nr);
     return nh?.terrainType === "water";

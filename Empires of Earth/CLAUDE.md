@@ -53,7 +53,7 @@ HexStrategyGame.jsx
 - `cloneState()` in [`utils/cloneState.js`](/C:/Users/caleb/Downloads/claude%20game/Empires%20of%20Earth/utils/cloneState.js) is the shared deep-clone utility used in live engine paths.
 - Local saves are versioned through [`utils/saveGames.js`](/C:/Users/caleb/Downloads/claude%20game/Empires%20of%20Earth/utils/saveGames.js). Legacy raw saves are migrated on load.
 - Heavy modal panels are lazy-loaded from `GameModals.jsx`.
-- Map size still relies on mutable module-level config in `data/constants.js`; this is known technical debt and should be treated carefully in tests and multiplayer setup.
+- Live engine paths now read map dimensions from `state.mapConfig` or the current hex array. `setMapConfig()` remains only as a compatibility layer for legacy UI helpers and menu flow.
 
 ## Key Files
 
@@ -79,6 +79,7 @@ HexStrategyGame.jsx
 
 - `utils/cloneState.js`: deep clone helper with `structuredClone` fallback
 - `utils/saveGames.js`: save serialization, migration, and localStorage helpers
+- `tests/engine-regression.test.js`: regression checks for explicit map config and core engine actions
 
 ## Common Tasks
 
@@ -91,7 +92,7 @@ HexStrategyGame.jsx
 ## Known Technical Debt
 
 - `HexStrategyGame.jsx` is still large and remains the primary orchestration file.
-- `data/constants.js` still exposes mutable map-size globals via `setMapConfig()`.
+- Some non-engine UI helpers still retain legacy compatibility with `setMapConfig()`.
 - The project still needs a first-class regression test suite around the engine.
 
 ## Git Notes

@@ -2,7 +2,7 @@
 // GAME INITIALIZATION — create initial game state
 // ============================================================
 
-import { COLS, ROWS, hexCenter, hexAt } from '../data/constants.js';
+import { getMapConfig, hexCenter, hexAt } from '../data/constants.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { generateMap } from './mapGen.js';
@@ -36,16 +36,18 @@ export const AI_DIFFICULTY = {
  * Create initial game state for N players.
  * @param {Array} playerConfigs - Array of { civ, type: "human"|"ai", difficulty?: "easy"|"normal"|"hard" }
  */
-export const createInitialState = (playerConfigs) => {
+export const createInitialState = (playerConfigs, options = {}) => {
   uidCtr = 0;
   const numPlayers = playerConfigs.length;
-  const seed = Date.now() % 2147483647;
-  const { grid: gridData, spawns } = generateMap(seed, numPlayers);
+  const resolvedOptions = typeof options === "string" ? { mapSizeKey: options } : options;
+  const mapConfig = getMapConfig(resolvedOptions.mapConfig || resolvedOptions.mapSizeKey);
+  const seed = resolvedOptions.seed ?? (Date.now() % 2147483647);
+  const { grid: gridData, spawns } = generateMap(seed, numPlayers, mapConfig);
   const hexes = [];
   let id = 0;
 
-  for (let col = 0; col < COLS; col++) {
-    for (let row = 0; row < ROWS; row++) {
+  for (let col = 0; col < mapConfig.cols; col++) {
+    for (let row = 0; row < mapConfig.rows; row++) {
       const { x, y } = hexCenter(col, row);
       const g = gridData[col][row];
       hexes.push({
@@ -71,7 +73,7 @@ export const createInitialState = (playerConfigs) => {
     const pid = `p${i + 1}`;
     const civDef = CIV_DEFS[cfg.civ];
     const spawn = spawns[i];
-    const spawnHex = hexAt(hexes, spawn.col, spawn.row);
+    const spawnHex = hexAt(hexes, spawn.col, spawn.row, mapConfig);
     const scoutSpawn = findOpenNeighbor(spawn.col, spawn.row, hexes, [], []);
 
     const player = {
@@ -122,6 +124,8 @@ export const createInitialState = (playerConfigs) => {
   }
 
   return {
+    mapSizeKey: mapConfig.key,
+    mapConfig: { cols: mapConfig.cols, rows: mapConfig.rows },
     turnNumber: 1,
     currentPlayerId: "p1",
     phase: "MOVEMENT",

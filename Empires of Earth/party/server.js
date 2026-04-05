@@ -3,7 +3,7 @@
 // Room phases: WAITING -> CIV_SELECT -> PLAYING -> FINISHED
 // ============================================================
 
-import { setMapConfig, hexAt, hexDist, MAP_SIZES } from '../data/constants.js';
+import { hexAt, hexDist, MAP_SIZES } from '../data/constants.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { TECH_TREE } from '../data/techs.js';
 import { CIV_DEFS } from '../data/civs.js';
@@ -57,7 +57,7 @@ const validateAction = (gameState, action, playerId) => {
       if (unit.hasAttacked) return "Already attacked";
       const unitDef = UNIT_DEFS[unit.unitType];
       if (unitDef.range > 0) {
-        const targets = getRangedTargets(unit.hexCol, unit.hexRow, unitDef.range);
+        const targets = getRangedTargets(unit.hexCol, unit.hexRow, unitDef.range, gameState.hexes);
         if (!targets.has(`${action.col},${action.row}`)) return "Target not in range";
       } else {
         if (unit.movementCurrent <= 0) return "No movement points for melee";
@@ -71,7 +71,7 @@ const validateAction = (gameState, action, playerId) => {
       if (!nuke) return "Nuke not found";
       if (nuke.unitType !== "nuke" && nuke.unitType !== "icbm") return "Not a nuke";
       const nukeDef = UNIT_DEFS[nuke.unitType];
-      const targets = getRangedTargets(nuke.hexCol, nuke.hexRow, nukeDef?.range || 12);
+      const targets = getRangedTargets(nuke.hexCol, nuke.hexRow, nukeDef?.range || 12, gameState.hexes);
       if (!targets.has(`${action.col},${action.row}`)) return "Target not in range";
       return null;
     }
@@ -562,7 +562,6 @@ export default class EmpiresServer {
       // If both have picked, start the game
       if (this.civPicks.p1 && this.civPicks.p2) {
         // Set map configuration before creating state
-        setMapConfig(this.mapSize);
 
         const playerConfigs = [
           { civ: this.civPicks.p1, type: "human" },
@@ -579,7 +578,7 @@ export default class EmpiresServer {
           playerConfigs.push({ civ: aiCiv, type: "ai", difficulty: slot.difficulty || "normal" });
         }
 
-        this.gameState = createInitialState(playerConfigs);
+        this.gameState = createInitialState(playerConfigs, { mapSizeKey: this.mapSize });
         this.stateVersion = 1;
         this.phase = "PLAYING";
         this.broadcastPhase();

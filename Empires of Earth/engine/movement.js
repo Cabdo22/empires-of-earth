@@ -4,7 +4,7 @@
 
 import { TERRAIN_INFO } from '../data/terrain.js';
 import { UNIT_DEFS } from '../data/units.js';
-import { COLS, ROWS, hexAt, getNeighbors, hexDist, FOG_SIGHT, ROAD_MOVE_COST } from '../data/constants.js';
+import { getMapDimensionsFromHexes, hexAt, getNeighbors, hexDist, FOG_SIGHT, ROAD_MOVE_COST } from '../data/constants.js';
 
 // Calculate movement cost for a hex based on unit domain
 // hex can be a terrain string (backward compat) or a hex object
@@ -114,7 +114,7 @@ export const getReachableHexes = (startCol, startRow, movePoints, hexes, domain 
     // Don't expand from enemy-occupied hexes (can't path through enemies)
     if (enemyOccupied.has(currentKey)) continue;
 
-    for (const [nc, nr] of getNeighbors(current.col, current.row)) {
+    for (const [nc, nr] of getNeighbors(current.col, current.row, hexes)) {
       const neighborKey = `${nc},${nr}`;
       const nh = hexAt(hexes, nc, nr);
       if (!nh) continue;
@@ -185,7 +185,7 @@ export const findPath = (startCol, startRow, endCol, endRow, hexes, domain = "la
     if (costTo[currentKey] < current.cost) continue;
     if (enemyOccupied.has(currentKey) && currentKey !== startKey) continue;
 
-    for (const [nc, nr] of getNeighbors(current.col, current.row)) {
+    for (const [nc, nr] of getNeighbors(current.col, current.row, hexes)) {
       const neighborKey = `${nc},${nr}`;
       const nh = hexAt(hexes, nc, nr);
       if (!nh) continue;
@@ -231,7 +231,7 @@ export const isHexOccupied = (col, row, allPlayers, barbarians, excludeUnitId = 
 
 // Find nearest unoccupied passable neighbor hex
 export const findOpenNeighbor = (col, row, hexes, allPlayers, barbarians) => {
-  for (const [nc, nr] of getNeighbors(col, row)) {
+  for (const [nc, nr] of getNeighbors(col, row, hexes)) {
     const nh = hexAt(hexes, nc, nr);
     if (!nh || nh.terrainType === "water" || nh.terrainType === "mountain") continue;
     if (!isHexOccupied(nc, nr, allPlayers, barbarians)) return { col: nc, row: nr };
@@ -240,10 +240,11 @@ export const findOpenNeighbor = (col, row, hexes, allPlayers, barbarians) => {
 };
 
 // All hex keys within ranged-attack distance
-export const getRangedTargets = (col, row, range) => {
+export const getRangedTargets = (col, row, range, hexes = null) => {
   const targets = new Set();
-  for (let c = 0; c < COLS; c++) {
-    for (let r = 0; r < ROWS; r++) {
+  const { cols, rows } = getMapDimensionsFromHexes(hexes);
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
       if (c === col && r === row) continue;
       if (hexDist(col, row, c, r) <= range) targets.add(`${c},${r}`);
     }

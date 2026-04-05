@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node tests/engine-regression.test.js",
     "preview": "vite preview",
     "party:dev": "npx partykit dev",
     "party:deploy": "npx partykit deploy"

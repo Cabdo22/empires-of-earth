@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { HEX_SIZE, SQRT3, COLS, ROWS, HEX_POINTS, hexCenter, hexAt, getNeighbors, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS } from './data/constants.js';
+import { HEX_SIZE, SQRT3, HEX_POINTS, hexCenter, hexAt, getNeighbors, getMapDimensions, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS } from './data/constants.js';
 import { TECH_TREE } from './data/techs.js';
 import { RESOURCE_INFO } from './data/terrain.js';
 import { UNIT_DEFS } from './data/units.js';
@@ -120,6 +120,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   // Derived state (safe when gs is null)
   const hexes=gs?.hexes||[];
+  const { cols: mapCols, rows: mapRows } = useMemo(() => getMapDimensions(gs || hexes), [gs, hexes]);
   const players=gs?.players||[];
   const turnNumber=gs?.turnNumber||1;
   const cpId=onlineMode?onlineMode.myPlayerId:(gs?.currentPlayerId||"p1");
@@ -172,7 +173,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     const nextIds=new Set();
     const result=hexes.map(h=>{
       nextIds.add(h.id);
-      const neighborSig=getNeighbors(h.col,h.row).map(([c,r])=>hexAt(hexes,c,r)?.terrainType||"void").join("|");
+      const neighborSig=getNeighbors(h.col,h.row,hexes).map(([c,r])=>hexAt(hexes,c,r)?.terrainType||"void").join("|");
       const sig=`${h.terrainType}:${neighborSig}`;
       const cached=cache.get(h.id);
       if(cached?.sig===sig)return cached.data;
@@ -205,13 +206,13 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   const atkRange=useMemo(()=>{
     if(!sud||phase!=="MOVEMENT"||!sud.def?.range||sud.hasAttacked)return new Set();
-    return getRangedTargets(sud.hexCol,sud.hexRow,sud.def.range);
-  },[sud,phase]);
+    return getRangedTargets(sud.hexCol,sud.hexRow,sud.def.range,hexes);
+  },[sud,phase,hexes]);
 
   const nukeR=useMemo(()=>{
     if(!nukeM)return new Set();const nu=cp.units.find(u=>u.id===nukeM);
-    if(!nu)return new Set();const nukeDef=UNIT_DEFS[nu.unitType];return getRangedTargets(nu.hexCol,nu.hexRow,nukeDef?.range||12);
-  },[nukeM,cp]);
+    if(!nu)return new Set();const nukeDef=UNIT_DEFS[nu.unitType];return getRangedTargets(nu.hexCol,nu.hexRow,nukeDef?.range||12,hexes);
+  },[nukeM,cp,hexes]);
 
   const actable=useMemo(()=>{
     if(phase!=="MOVEMENT")return new Set();
@@ -236,7 +237,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   // Pan/zoom
   const MINIMAP_W=160,MINIMAP_H=140;
-  const wW=COLS*1.5*HEX_SIZE+HEX_SIZE*2+100,wH=ROWS*SQRT3*HEX_SIZE+SQRT3*HEX_SIZE+100;
+  const wW=mapCols*1.5*HEX_SIZE+HEX_SIZE*2+100,wH=mapRows*SQRT3*HEX_SIZE+SQRT3*HEX_SIZE+100;
   const { panRef, zoomRef, isPanRef, gRef, svgRef, gameContainerRef, uiOverlayRef, minimapRenderRef, flush, sched, onMD, onMM, onMU, onWh } = usePanZoom({ wW, wH });
   // Panel drag
   const { techPosRef, cityPosRef, onPanelDown, onPanelMove, onPanelUp } = usePanelDrag();
@@ -727,11 +728,11 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     let bestHex=null;
     let bestDistSq=Infinity;
     for(let col=approxCol-1;col<=approxCol+1;col++){
-      if(col<0||col>=COLS)continue;
+      if(col<0||col>=mapCols)continue;
       const baseRow=(worldY-HEX_SIZE-50-(col%2===1?(SQRT3*HEX_SIZE)/2:0))/(SQRT3*HEX_SIZE);
       const approxRow=Math.round(baseRow);
       for(let row=approxRow-1;row<=approxRow+1;row++){
-        if(row<0||row>=ROWS)continue;
+        if(row<0||row>=mapRows)continue;
         const hex=hexAt(hexes,col,row);
         if(!hex)continue;
         const dx=hex.x-worldX;
@@ -748,7 +749,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     }
     if(!bestHex||bestDistSq>HEX_SIZE*HEX_SIZE*1.2)return null;
     return{id:bestHex.id,col:bestHex.col,row:bestHex.row,hex:bestHex,uk:bestHex.uk};
-  },[gameContainerRef,hexes,isPointInHex,panRef,zoomRef,wW,wH]);
+  },[gameContainerRef,hexes,isPointInHex,mapCols,mapRows,panRef,zoomRef,wW,wH]);
 
   const commitPreview=useCallback(nextPreview=>{
     const nextKey=nextPreview?[
@@ -933,7 +934,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     };
   }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,settlerBlocked,actable,nukeM,nukeR,flashes,fogVisible,fogExplored,discoveredResources,displayPlayerById,effectivePerformanceMode]);
 
-  const renderAll=useCallback(()=>boardHexes.map(tile=><MemoHex key={tile.key} {...tile}/>),[boardHexes]);
+  const renderAll=useCallback(()=>boardHexes.map(({ key, ...tile })=><MemoHex key={key} {...tile}/>),[boardHexes]);
   const terrainCanvasTiles=useMemo(()=>boardHexes.map(tile=>({
     key: tile.key,
     hex: tile.hex,
@@ -996,7 +997,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
         const ni=EDGE_TO_NEIGHBOR[edgeIdx];
         const [dc,dr]=deltas[ni];
         const nc=hex.col+dc,nr=hex.row+dr;
-        if(nc<0||nc>=COLS||nr<0||nr>=ROWS)return true;
+        if(nc<0||nc>=mapCols||nr<0||nr>=mapRows)return true;
         const nh=hexAt(hexes,nc,nr);
         return !nh||nh.ownerPlayerId!==hex.ownerPlayerId;
       });
@@ -1013,7 +1014,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       }
     }
     return result;
-  },[hexes,playerById,fogVisible,fogExplored,gs?.metPlayers,viewPlayerId]);
+  },[hexes,mapCols,mapRows,playerById,fogVisible,fogExplored,gs?.metPlayers,viewPlayerId]);
 
   // City banner overlay (rendered above all hexes so banners can extend beyond hex bounds)
   const cityBannerOverlay=useMemo(()=>{

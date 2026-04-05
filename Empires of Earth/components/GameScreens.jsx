@@ -3,7 +3,7 @@
 // ============================================================
 
 import React, { useState } from "react";
-import { MAP_SIZES, setMapConfig, currentMapSizeKey } from '../data/constants.js';
+import { MAP_SIZES } from '../data/constants.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { createInitialState, AI_DIFFICULTY } from '../engine/gameInit.js';
@@ -39,7 +39,7 @@ export function ModeSelectScreen({ setGameMode }) {
 // === MAP SIZE SELECTION SCREEN ===
 export function MapSizeScreen({ setMapSizePick, setGameMode }) {
   const sizeBtn = (key, cfg, icon) => (
-    <div key={key} onClick={() => { SFX.click(); setMapSizePick(key); setMapConfig(key); }}
+    <div key={key} onClick={() => { SFX.click(); setMapSizePick(key); }}
       style={{ padding: "24px 36px", borderRadius: 8, cursor: "pointer", background: "rgba(30,40,20,.6)",
         border: "1px solid rgba(100,140,50,.4)", minWidth: 200, textAlign: "center", transition: "background .2s" }}
       onMouseEnter={e => e.currentTarget.style.background = "rgba(100,160,50,.25)"}
@@ -199,7 +199,7 @@ export function CivSelectScreen({ mapSizePick, playerSlots, civPicks, setCivPick
       });
 
       SFX.found();
-      setGs(createInitialState(configs));
+      setGs(createInitialState(configs, { mapSizeKey: mapSizePick }));
       setGameStarted(true);
     } else {
       // Advance to next human picker

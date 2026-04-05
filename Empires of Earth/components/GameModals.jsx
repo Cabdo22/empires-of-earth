@@ -63,6 +63,7 @@ export function GameModals({ controller }) {
     tutorialDismissed,
     setTutorialDismissed,
     setTutorialOn,
+    gs,
     sud,
     op,
     aiThinking,
