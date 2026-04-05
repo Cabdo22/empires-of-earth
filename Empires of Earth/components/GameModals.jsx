@@ -65,7 +65,6 @@ export function GameModals({ controller }) {
     setTutorialOn,
     gs,
     sud,
-    op,
     aiThinking,
     hexes,
     cityPosRef,
@@ -111,7 +110,7 @@ export function GameModals({ controller }) {
       </Suspense>
       <NotificationCircles turnPopups={turnPopups} setTurnPopups={setTurnPopups} setShowTech={setShowTech} setShowCity={setShowCity}/>
       <Suspense fallback={null}>
-        {tutorialOn && <TutorialTips gs={gs} sud={sud} op={op} aiThinking={aiThinking} tutorialOn={tutorialOn} tutorialDismissed={tutorialDismissed} setTutorialDismissed={setTutorialDismissed} setTutorialOn={setTutorialOn}/>}
+        {tutorialOn && <TutorialTips gs={gs} sud={sud} aiThinking={aiThinking} tutorialOn={tutorialOn} tutorialDismissed={tutorialDismissed} setTutorialDismissed={setTutorialDismissed} setTutorialOn={setTutorialOn}/>}
       </Suspense>
     </>
   );

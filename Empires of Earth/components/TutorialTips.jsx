@@ -2,10 +2,9 @@ import React from "react";
 import { TUTORIAL_TIPS } from '../data/tutorial.js';
 import { hexDist } from '../data/constants.js';
 
-export function TutorialTips({ gs, sud, op, aiThinking, tutorialOn, tutorialDismissed, setTutorialDismissed, setTutorialOn }) {
+export function TutorialTips({ gs, sud, aiThinking, tutorialOn, tutorialDismissed, setTutorialDismissed, setTutorialOn }) {
   if (!tutorialOn || !gs || aiThinking) return null;
 
-  // Check all enemies for nearby units (op is first enemy, but check all for multi-player)
   const allEnemyUnits = gs.players ? gs.players.filter(p => p.id !== gs.currentPlayerId).flatMap(p => p.units) : [];
   const extra = {
     selectedUnitNearEnemy: sud && allEnemyUnits.some(eu => hexDist(sud.hexCol, sud.hexRow, eu.hexCol, eu.hexRow) <= (sud.def?.range || 1)),

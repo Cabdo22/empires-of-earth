@@ -97,7 +97,7 @@ HexStrategyGame.jsx
 ## Known Technical Debt
 
 - `HexStrategyGame.jsx` is still large and remains the primary orchestration file.
-- Some non-engine UI helpers still retain legacy compatibility with `setMapConfig()`.
+- `data/constants.js` still exposes a compatibility fallback for legacy map-size globals, even though active engine paths no longer depend on it.
 - The project still needs broader scenario coverage, but online-supported gameplay actions now have a dedicated parity test path and should stay on it.
 
 ## Git Notes

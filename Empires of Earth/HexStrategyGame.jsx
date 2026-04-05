@@ -42,6 +42,7 @@ import { MAX_PLAYERS } from './data/constants.js';
 import { GameViewport } from './components/GameViewport.jsx';
 import { GameHud } from './components/GameHud.jsx';
 import { GameModals } from './components/GameModals.jsx';
+import { GameErrorBoundary } from './components/GameErrorBoundary.jsx';
 import useUnitAnimation from './hooks/useUnitAnimation.js';
 import { cloneState } from './utils/cloneState.js';
 import { clientPointToWorldPoint, findHexFromWorldPoint } from './utils/boardCoordinates.js';
@@ -89,6 +90,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[turnPopups,setTurnPopups]=useState([]); // [{id,type,title,body,action}] turn-start popups
   const[eventPopup,setEventPopup]=useState(null); // random event popup {id,name,desc}
   const[leaderScene,setLeaderScene]=useState(null);
+  const[uiBoundaryNonce,setUiBoundaryNonce]=useState(0);
   const turnPopupShownRef=useRef(null); // tracks which turn+player combo we've shown popups for
   const victoryPlayed=useRef(false);
   const prevCpId=useRef(null);
@@ -123,7 +125,6 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const barbarians=gs?.barbarians||[];
   const cp=players.find(p=>p.id===viewPlayerId)||{units:[],cities:[],researchedTechs:[],civilization:"Rome",name:"",color:"#888",colorBg:"#444",colorLight:"#aaa",gold:0,science:0};
   const enemies=players.filter(p=>p.id!==viewPlayerId);
-  const op=enemies[0]; // legacy compat — prefer enemies array
   const inc=useMemo(()=>gs?calcPlayerIncomeWithState(cp,gs):{food:0,production:0,science:0,gold:0},[cp,gs]);
   const activeRenderer=useMemo(()=>resolveActiveRenderer(rendererMode, hexes.length),[rendererMode,hexes.length]);
   const effectivePerformanceMode=useMemo(()=>resolvePerformanceMode(performanceModeTouched, performanceMode, hexes.length),[performanceModeTouched, performanceMode, hexes.length]);
@@ -496,9 +497,6 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       },
     });
   }, [dispatchGameplayAction]);
-  // Keep advPhase as alias for compatibility
-  const advPhase = endTurn;
-
   // Toggle a single tile's worked status (manual citizen assignment)
   const toggleTile = useCallback((cityId, hexId) => {
     setGs(prev => {
@@ -1203,7 +1201,6 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     turnPopups,
     setTurnPopups,
     tutorialDismissed,
-    op,
     cityPosRef,
     gameContainerRef,
     onPanelMove,
@@ -1239,14 +1236,20 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   // Victory
   if(gs.victoryStatus){if(!victoryPlayed.current){victoryPlayed.current=true;SFX.victory();}
-    const onNewGame=()=>{uidCtr=0;setGs(null);setGameStarted(false);setMapSizePick(null);setLobbyDone(false);setPlayerSlots(Array.from({length:MAX_PLAYERS-1},()=>({type:"ai",difficulty:"normal"})));setCivPicks({p1:"Rome"});setSelU(null);setSelH(null);setAiThinking(false);setTutorialOn(true);setTutorialDismissed({});victoryPlayed.current=false;techPosRef.current={x:null,y:95};cityPosRef.current={x:null,y:95};setTechCollapsed(false);setCityCollapsed(false);setCivPickStep(1);setTurnTransition(null);setTurnPopups([]);turnPopupShownRef.current=null;prevCpId.current=null;gameCenteredRef.current=false;if(onBack)onBack();};
+    const onNewGame=()=>{uidCtr=0;setGs(null);setGameStarted(false);setMapSizePick(null);setLobbyDone(false);setPlayerSlots(Array.from({length:MAX_PLAYERS-1},()=>({type:"ai",difficulty:"normal"})));setCivPicks({p1:"Rome"});setSelU(null);setSelH(null);setAiThinking(false);setTutorialOn(true);setTutorialDismissed({});victoryPlayed.current=false;techPosRef.current={x:null,y:95};cityPosRef.current={x:null,y:95};setTechCollapsed(false);setCityCollapsed(false);setCivPickStep(1);setTurnTransition(null);setTurnPopups([]);turnPopupShownRef.current=null;prevCpId.current=null;gameCenteredRef.current=false;setUiBoundaryNonce(0);if(onBack)onBack();};
     return <VictoryScreen gs={gs} players={players} turnNumber={turnNumber} onNewGame={onNewGame}/>;}
 
   return(
     <div ref={gameContainerRef} onMouseMove={onPanelMove} onMouseUp={onPanelUp} style={{width:"100vw",height:"100vh",background:"linear-gradient(145deg,#0a0e06 0%,#141e0c 40%,#0e1608 100%)",overflow:"hidden",position:"relative",userSelect:"none",touchAction:"none",fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,serif"}}>
-      <GameViewport controller={controller}/>
-      <GameHud controller={controller}/>
-      <GameModals controller={controller}/>
+      <GameErrorBoundary
+        resetKey={`${uiBoundaryNonce}:${gs?.turnNumber||0}:${gs?.currentPlayerId||"none"}`}
+        onRetry={()=>setUiBoundaryNonce(prev=>prev+1)}
+        onExit={onBack || null}
+      >
+        <GameViewport controller={controller}/>
+        <GameHud controller={controller}/>
+        <GameModals controller={controller}/>
+      </GameErrorBoundary>
     </div>
   );
 }
