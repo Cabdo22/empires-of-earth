@@ -31,6 +31,7 @@ export function GameModals({ controller }) {
     onPanelDown,
     selResearch,
     showDiplomacy,
+    setShowDiplomacy,
     players,
     cpId,
     knownPlayers,

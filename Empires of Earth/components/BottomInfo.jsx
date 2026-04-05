@@ -1,34 +1,150 @@
 import React from "react";
-import { TERRAIN_INFO, RESOURCE_INFO } from '../data/terrain.js';
-import { UNIT_DEFS } from '../data/units.js';
-import { getHexYields } from '../engine/economy.js';
-import { getDisplayName, getDisplayColors } from '../engine/discovery.js';
+import { TERRAIN_INFO, RESOURCE_INFO } from "../data/terrain.js";
+import { UNIT_DEFS } from "../data/units.js";
+import { getHexYields } from "../engine/economy.js";
+import { getDisplayColors, getDisplayName } from "../engine/discovery.js";
+import { hudButtonStyle, hudPanelStyle, hudSectionLabelStyle, hudValueStyle } from "../styles.js";
 
-export function BottomInfo({ selH, hexes, unitMap, players, settlerM, setSettlerM, nukeM, setNukeM, moveMsg, buildRoad, cp, gs, viewPlayerId }) {
+function ActionBanner({ tone = "neutral", children }) {
+  const tones = {
+    success: { background: "rgba(30,68,20,.94)", border: "1px solid rgba(90,210,90,.45)", color: "#b8efb8" },
+    warning: { background: "rgba(88,42,6,.94)", border: "1px solid rgba(255,170,68,.5)", color: "#ffd49a" },
+    danger: { background: "rgba(86,24,14,.94)", border: "1px solid rgba(240,100,60,.6)", color: "#ffb09a" },
+  };
+  const palette = tones[tone];
+  return (
+    <div style={{ position: "absolute", bottom: 70, left: "50%", transform: "translateX(-50%)", zIndex: 20, borderRadius: 12, padding: "10px 18px", pointerEvents: "auto", ...palette }}>
+      {children}
+    </div>
+  );
+}
+
+export function BottomInfo({
+  selH,
+  hexes,
+  unitMap,
+  players,
+  settlerM,
+  setSettlerM,
+  nukeM,
+  setNukeM,
+  moveMsg,
+  buildRoad,
+  cp,
+  gs,
+  viewPlayerId,
+}) {
+  const selectedHex = selH != null ? hexes[selH] : null;
+  const expanded = !!selectedHex;
+
   return (
     <>
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 48, background: "linear-gradient(0deg,rgba(10,14,6,.95) 0%,rgba(10,14,6,0) 100%)", zIndex: 10, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 8, pointerEvents: "none" }}>
-        {selH != null && hexes[selH] ? (() => {
-          const sd = hexes[selH], si = TERRAIN_INFO[sd.terrainType]; const bucket = unitMap[`${sd.col},${sd.row}`]; const uH = bucket?.all || []; const oP = sd.ownerPlayerId ? players.find(p => p.id === sd.ownerPlayerId) : null;
-          return (
-            <div style={{ background: "rgba(15,25,10,.9)", border: "1px solid rgba(100,140,50,.3)", borderRadius: 8, padding: "5px 16px", color: "#a0b880", fontSize: 9, letterSpacing: 1, display: "flex", gap: 10, alignItems: "center" }}>
-              <span style={{ color: "#c8d8a0", fontWeight: 600 }}>({sd.col},{sd.row})</span><span style={{ color: si.color }}>{si.label}</span>
-              {sd.resource && (!RESOURCE_INFO[sd.resource]?.techReq || cp?.researchedTechs?.includes(RESOURCE_INFO[sd.resource].techReq)) && <span>{RESOURCE_INFO[sd.resource].icon}{RESOURCE_INFO[sd.resource].label}</span>}
-              {(() => { const hy = getHexYields(sd, cp); return <><span style={{ color: "#7db840" }}>F{hy.food}</span><span style={{ color: "#b89040" }}>P{hy.production}</span>{hy.gold > 0 && <span style={{ color: "#d0c050" }}>G{hy.gold}</span>}{hy.science > 0 && <span style={{ color: "#60a0d0" }}>S{hy.science}</span>}</>; })()}
-              <span style={{ color: si.moveCost != null ? "#a0b880" : "#c05050" }}>{si.moveCost != null ? `Mv${sd.road ? "0.5" : si.moveCost}` : "—"}</span>
-              {sd.road && <span style={{ color: "#c8a060" }}>🛣Road</span>}
-              {!sd.road && buildRoad && cp && sd.ownerPlayerId === cp.id && cp.researchedTechs.includes("trade") && sd.terrainType !== "water" && sd.terrainType !== "mountain" && cp.gold >= 5 && <span style={{ pointerEvents: "auto", cursor: "pointer", color: "#c8a060", background: "rgba(160,128,96,.2)", borderRadius: 3, padding: "1px 4px" }} onClick={() => buildRoad(sd.id)}>🛣+Road(5g)</span>}
-              {si.defBonus > 0 && <span style={{ color: "#60a0d0" }}>+{si.defBonus}def</span>}
-              {uH.length > 0 && <span style={{ color: "#ffd740" }}>{uH.map(u => UNIT_DEFS[u.unitType]?.icon).join("")}</span>}
-              {oP && (() => { const dc = getDisplayColors(oP.id, viewPlayerId, gs); const dn = getDisplayName(oP.id, viewPlayerId, gs); return <span style={{ color: dc.colorLight }}>⚑{dn.slice(0, 8)}</span>; })()}
-            </div>
-          );
-        })() : (<span style={{ color: "#3a4a2a", fontSize: 9, letterSpacing: 2 }}>Tab=cycle Esc=deselect RightClick=move/attack</span>)}
+      <div style={{ position: "absolute", left: 14, right: 214, bottom: 12, zIndex: 12, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
+        {!expanded ? (
+          <div
+            style={{
+              width: "min(760px, 100%)",
+              padding: "6px 14px",
+              borderRadius: 999,
+              background: "rgba(10,16,8,.55)",
+              border: "1px solid rgba(118,150,75,.22)",
+              color: "#95a67a",
+              fontSize: 12,
+              letterSpacing: 0.2,
+              textAlign: "center",
+              pointerEvents: "auto",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            Click a visible hex for terrain details. Tab cycles ready units.
+          </div>
+        ) : (
+          <div
+            style={{
+              ...hudPanelStyle,
+              width: "min(900px, 100%)",
+              padding: "12px 16px",
+              display: "grid",
+              gridTemplateColumns: "1.25fr 1fr .9fr",
+              gap: 14,
+              pointerEvents: "auto",
+            }}
+          >
+            {(() => {
+              const terrain = TERRAIN_INFO[selectedHex.terrainType];
+              const bucket = unitMap[`${selectedHex.col},${selectedHex.row}`];
+              const unitsHere = bucket?.all || [];
+              const owner = selectedHex.ownerPlayerId ? players.find((p) => p.id === selectedHex.ownerPlayerId) : null;
+              const visibleResource =
+                selectedHex.resource &&
+                (!RESOURCE_INFO[selectedHex.resource]?.techReq || cp?.researchedTechs?.includes(RESOURCE_INFO[selectedHex.resource].techReq))
+                  ? RESOURCE_INFO[selectedHex.resource]
+                  : null;
+              const yields = getHexYields(selectedHex, cp);
+              return (
+                <>
+                  <div>
+                    <div style={{ ...hudSectionLabelStyle, marginBottom: 5 }}>Selected Tile</div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                      <div style={{ ...hudValueStyle, fontSize: 21, color: terrain.color }}>{terrain.label}</div>
+                      <div style={{ color: "#93a679", fontSize: 12 }}>({selectedHex.col}, {selectedHex.row})</div>
+                      {visibleResource && <div style={{ color: "#f1df94", fontSize: 13 }}>{visibleResource.icon} {visibleResource.label}</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                      <span style={{ color: "#9bd56e", fontSize: 13 }}>Food {yields.food}</span>
+                      <span style={{ color: "#d0a46b", fontSize: 13 }}>Prod {yields.production}</span>
+                      {yields.gold > 0 && <span style={{ color: "#eed36a", fontSize: 13 }}>Gold {yields.gold}</span>}
+                      {yields.science > 0 && <span style={{ color: "#89bddb", fontSize: 13 }}>Sci {yields.science}</span>}
+                    </div>
+                    <div style={{ color: "#aebc96", fontSize: 12 }}>
+                      {owner ? (() => {
+                        const colors = getDisplayColors(owner.id, viewPlayerId, gs);
+                        const name = getDisplayName(owner.id, viewPlayerId, gs);
+                        return <span style={{ color: colors.colorLight }}>Owner: {name}</span>;
+                      })() : "Unclaimed territory"}
+                      <span style={{ marginLeft: 12, color: terrain.moveCost != null ? "#d7e2c0" : "#f19a8d" }}>
+                        {terrain.moveCost != null ? `Move ${selectedHex.road ? "0.5" : terrain.moveCost}` : "Impassable"}
+                      </span>
+                      {terrain.defBonus > 0 && <span style={{ marginLeft: 12, color: "#91bde0" }}>Defense +{terrain.defBonus}</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ ...hudSectionLabelStyle, marginBottom: 5 }}>Occupants</div>
+                    <div style={{ minHeight: 74, borderRadius: 12, border: "1px solid rgba(126,154,78,.2)", background: "rgba(18,26,12,.68)", padding: "10px 12px" }}>
+                      {unitsHere.length > 0 ? (
+                        <div style={{ display: "grid", gap: 7 }}>
+                          {unitsHere.slice(0, 3).map((unit) => (
+                            <div key={unit.id} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                              <div style={{ color: unit.pLight || "#dbe7c4", fontSize: 13 }}>{UNIT_DEFS[unit.unitType]?.icon} {UNIT_DEFS[unit.unitType]?.name || unit.unitType}</div>
+                              <div style={{ color: "#97ab7a", fontSize: 12 }}>HP {unit.hpCurrent}/{UNIT_DEFS[unit.unitType]?.hp}</div>
+                            </div>
+                          ))}
+                          {unitsHere.length > 3 && <div style={{ color: "#8fa072", fontSize: 11 }}>+{unitsHere.length - 3} more units</div>}
+                        </div>
+                      ) : <div style={{ color: "#8da06f", fontSize: 12 }}>No units on this tile.</div>}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ ...hudSectionLabelStyle, marginBottom: 5 }}>Context</div>
+                    <div style={{ minHeight: 74, borderRadius: 12, border: "1px solid rgba(126,154,78,.2)", background: "rgba(18,26,12,.68)", padding: "10px 12px", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 8 }}>
+                      {!selectedHex.road && buildRoad && cp && selectedHex.ownerPlayerId === cp.id && cp.researchedTechs.includes("trade") && selectedHex.terrainType !== "water" && selectedHex.terrainType !== "mountain" && cp.gold >= 5 ? (
+                        <button onClick={() => buildRoad(selectedHex.id)} style={{ ...hudButtonStyle(false), width: "100%" }}>🛣 Build Road for 5 gold</button>
+                      ) : (
+                        <div style={{ color: "#a6b593", fontSize: 12 }}>{selectedHex.road ? "This tile already has a road." : "No direct tile action is available."}</div>
+                      )}
+                      <div style={{ color: "#8ea174", fontSize: 12, lineHeight: 1.4 }}>Right-click to move or attack. Esc clears selection.</div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
-      {settlerM && <div style={{ position: "absolute", bottom: 52, left: "50%", transform: "translateX(-50%)", zIndex: 20, background: "rgba(40,80,20,.9)", border: "1px solid #40e040", borderRadius: 6, padding: "6px 16px", color: "#a0f0a0", fontSize: 10, pointerEvents: "auto" }}>🏕 Click land hex to found city · <span style={{ cursor: "pointer", color: "#f08080" }} onClick={() => setSettlerM(null)}>Cancel</span></div>}
-      {nukeM && <div style={{ position: "absolute", bottom: 52, left: "50%", transform: "translateX(-50%)", zIndex: 20, background: "rgba(80,40,0,.9)", border: "1px solid #ffa000", borderRadius: 6, padding: "6px 16px", color: "#ffd080", fontSize: 10, pointerEvents: "auto" }}>☢ Click target for nuclear strike (1-hex blast) · <span style={{ cursor: "pointer", color: "#f08080" }} onClick={() => setNukeM(null)}>Cancel</span></div>}
-      {moveMsg && <div style={{ position: "absolute", bottom: 52, left: "50%", transform: "translateX(-50%)", zIndex: 20, background: "rgba(80,20,10,.92)", border: "1px solid rgba(240,100,60,.6)", borderRadius: 6, padding: "6px 16px", color: "#ffa080", fontSize: 10, pointerEvents: "none" }}>⚠ {moveMsg}</div>}
+      {settlerM && <ActionBanner tone="success">🏕 Click a land hex to found a city. <span style={{ cursor: "pointer", color: "#ffd0d0" }} onClick={() => setSettlerM(null)}>Cancel</span></ActionBanner>}
+      {nukeM && <ActionBanner tone="warning">☢ Select a target for a one-hex nuclear strike. <span style={{ cursor: "pointer", color: "#ffd0d0" }} onClick={() => setNukeM(null)}>Cancel</span></ActionBanner>}
+      {moveMsg && <ActionBanner tone="danger">⚠ {moveMsg}</ActionBanner>}
     </>
   );
 }
