@@ -55,18 +55,10 @@ import { GameHud } from './components/GameHud.jsx';
 import { GameModals } from './components/GameModals.jsx';
 import useUnitAnimation from './hooks/useUnitAnimation.js';
 import { cloneState } from './utils/cloneState.js';
+import { createSavedGameEntry, deserializeGameState, readSavedGames, writeSavedGames } from './utils/saveGames.js';
 
 let uidCtr = 0;
 const EMPTY_UNIT_BUCKET = { all: [], myUnits: [], enemyUnits: [] };
-const SAVES_STORAGE_KEY = "eoe_saves";
-
-const readSavedGames = () => {
-  try {
-    return JSON.parse(localStorage.getItem(SAVES_STORAGE_KEY) || "[]");
-  } catch {
-    return [];
-  }
-};
 
 export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[mapSizePick,setMapSizePick]=useState(null); // null | "small" | "medium" | "large"
@@ -638,7 +630,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity, turnTransition, setTurnTransition, upgradeUnit, buildRoad, sud, setShowSaveLoad, setTutorialOn, setTutorialDismissed, zoomRef, wW, wH, setMinimapVisible, hexes });
 
   const moveU = useCallback((unitId, targetCol, targetRow, cost) => {
-    if(onlineMode){onlineMode.sendAction({type:"MOVE_UNIT",unitId,col:targetCol,row:targetRow});setSelU(null);return;}
+    if(onlineMode){onlineMode.sendAction({type:"MOVE_UNIT",unitId,col:targetCol,row:targetRow});return;}
     if(animatingUnitId)return; // block during animation
 
     const currentGs = gsRef.current;
@@ -679,9 +671,9 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   const saveCurrentGame = useCallback(() => {
     const name = saveName.trim() || `Turn ${turnNumber} - ${cp.name}`;
-    const nextSaves = [{ id: Date.now(), name, date: new Date().toLocaleString(), data: JSON.stringify(gs) }, ...savedGames].slice(0, 20);
+    const nextSaves = [createSavedGameEntry({ name, gameState: gs }), ...savedGames].slice(0, 20);
     try {
-      localStorage.setItem(SAVES_STORAGE_KEY, JSON.stringify(nextSaves));
+      writeSavedGames(nextSaves);
     } catch {}
     setSavedGames(nextSaves);
     setSaveName("");
@@ -689,15 +681,19 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   }, [cp.name, gs, saveName, savedGames, turnNumber]);
 
   const loadSavedGame = useCallback((saveData) => {
-    setGs(JSON.parse(saveData));
-    setShowSaveLoad(false);
-    turnPopupShownRef.current = null;
+    try {
+      setGs(deserializeGameState(saveData));
+      setShowSaveLoad(false);
+      turnPopupShownRef.current = null;
+    } catch {
+      setMoveMsg("Save data is invalid or no longer supported.");
+    }
   }, []);
 
   const deleteSavedGame = useCallback((saveId) => {
     const nextSaves = savedGames.filter((save) => save.id !== saveId);
     try {
-      localStorage.setItem(SAVES_STORAGE_KEY, JSON.stringify(nextSaves));
+      writeSavedGames(nextSaves);
     } catch {}
     setSavedGames(nextSaves);
   }, [savedGames]);
@@ -714,12 +710,19 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     return localX<=HEX_SIZE && localY<=halfHeight && (SQRT3*localX)+localY<=SQRT3*HEX_SIZE;
   },[]);
   const findHexFromClientPoint=useCallback((clientX,clientY)=>{
+    const containerRect=gameContainerRef.current?.getBoundingClientRect();
     const z=zoomRef.current;
     const p=panRef.current;
-    const cx=window.innerWidth/2;
-    const cy=window.innerHeight/2;
-    const worldX=(clientX-(p.x+cx-(wW*z)/2))/z;
-    const worldY=(clientY-(p.y+cy-(wH*z)/2))/z;
+    const viewportWidth=containerRect?.width||window.innerWidth;
+    const viewportHeight=containerRect?.height||window.innerHeight;
+    const viewportLeft=containerRect?.left||0;
+    const viewportTop=containerRect?.top||0;
+    const cx=viewportWidth/2;
+    const cy=viewportHeight/2;
+    const localX=clientX-viewportLeft;
+    const localY=clientY-viewportTop;
+    const worldX=(localX-(p.x+cx-(wW*z)/2))/z;
+    const worldY=(localY-(p.y+cy-(wH*z)/2))/z;
     const approxCol=Math.round((worldX-HEX_SIZE-50)/(1.5*HEX_SIZE));
     let bestHex=null;
     let bestDistSq=Infinity;
@@ -745,7 +748,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     }
     if(!bestHex||bestDistSq>HEX_SIZE*HEX_SIZE*1.2)return null;
     return{id:bestHex.id,col:bestHex.col,row:bestHex.row,hex:bestHex,uk:bestHex.uk};
-  },[hexes,isPointInHex,panRef,zoomRef,wW,wH]);
+  },[gameContainerRef,hexes,isPointInHex,panRef,zoomRef,wW,wH]);
 
   const commitPreview=useCallback(nextPreview=>{
     const nextKey=nextPreview?[

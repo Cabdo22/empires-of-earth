@@ -1,152 +1,101 @@
 # Empires of Earth — Project Blueprint
 
-Hex-based strategy game (Civ-like) built with React + Vite. No framework beyond React — all rendering is SVG, all state lives in a single `gs` (game state) object managed via `useState` in the root component.
+Hex-based strategy game built with React + Vite. The app still uses a single top-level `gs` game state in [`HexStrategyGame.jsx`](/C:/Users/caleb/Downloads/claude%20game/Empires%20of%20Earth/HexStrategyGame.jsx), but gameplay mutations now flow through shared engine action appliers instead of ad hoc UI state edits.
 
-**Deployed at:** empires-of-earth.vercel.app
-**GitHub:** Cabdo22/empires-of-earth (default branch: `master`, NOT `main`)
+**Deployed at:** `empires-of-earth.vercel.app`  
+**GitHub:** `Cabdo22/empires-of-earth`  
+**Default branch:** `master`
 
 ## Quick Start
 
 ```bash
-npm run dev        # Vite dev server
-npm run build      # Production build → dist/
-npm run party:dev  # PartyKit multiplayer server (local)
+npm run dev
+npm run build
+npm run party:dev
 ```
 
 ## Tech Stack
 
-- React 18, Vite 5, no TypeScript
-- Tone.js for audio (sfx.js)
-- PartyKit for multiplayer (party/server.js)
-- All rendering is SVG — no canvas, no WebGL
-- Styled with JS objects (styles.js), no CSS files
+- React 18 + Vite 5
+- PartyKit for multiplayer
+- Tone.js for audio
+- Hybrid board rendering: SVG and canvas paths both exist
+- Plain JS modules and inline style objects, no TypeScript
 
-## Architecture Overview
+## Current Architecture
 
-The game is a single-page React app. `main.jsx` mounts `<HexStrategyGame>`, which is the root component holding all game state and orchestrating the UI.
+`main.jsx` mounts `<HexStrategyGame />`, which handles menu flow, game session orchestration, and composition of the active in-game shell.
 
-```
-HexStrategyGame.jsx  ← Root component (~1000 lines). Holds game state (gs), renders board + all panels.
-│                       State flows down as props. Actions mutate gs via setGs().
-├── engine/          ← Pure game logic. No React, no DOM. Functions take/return game state.
-├── ai/              ← AI opponent logic. Calls engine functions to decide moves.
-├── data/            ← Static config: unit stats, tech tree, civs, terrain, events, tutorial steps.
-├── components/      ← UI components. Receive state as props, call action callbacks.
-├── hooks/           ← Custom React hooks for interaction (camera, pan/zoom, keyboard, minimap).
-├── party/           ← PartyKit multiplayer server (authoritative game state for online mode).
-├── sfx.js           ← Sound effect triggers (uses Tone.js)
-└── styles.js        ← Shared JS style objects (btnStyle, panelStyle)
-```
-
-## Game State Shape
-
-The entire game state is a single JS object (`gs`) with this approximate shape:
-
-```js
-{
-  hexes: [],              // Flat array of hex tiles, indexed as hexes[col * ROWS + row]
-  players: [              // Array of player objects
-    {
-      id, civ, gold, science, techs: [], currentResearch,
-      cities: [{ id, name, col, row, pop, hp, production, borderHexIds, workedTileIds, ... }],
-      units: [{ id, unitType, hexCol, hexRow, movementCurrent, hpCurrent, hasAttacked, ... }],
-      fogMap: {},         // Visibility per hex
-    }
-  ],
-  currentPlayerId,        // Whose turn it is
-  turn,                   // Turn counter
-  phase: "MOVEMENT",      // Single phase (legacy multi-phase removed)
-  rngSeed, rngCounter,    // Deterministic RNG
-  log: [],                // Game event log
-}
+```text
+HexStrategyGame.jsx
+├── engine/           Canonical gameplay rules and turn progression
+├── ai/               AI turn execution built on engine state
+├── data/             Units, techs, civs, terrain, constants, tutorial data
+├── components/
+│   ├── GameViewport  Board renderer, hover/click plumbing, overlays
+│   ├── GameHud       Panels, action bar, minimap, top/bottom HUD
+│   └── GameModals    Tech, diplomacy, city, save/load, leader, tutorial modals
+├── hooks/            Pan/zoom, minimap, keyboard shortcuts, panel drag, PartyKit
+├── party/            Authoritative multiplayer server
+└── utils/            Shared cloning and save helpers
 ```
 
-## Key Files — What Does What
+## Gameplay Mutation Model
 
-### engine/ — Pure game logic (no React)
+- `engine/actions.js` is the shared mutation layer for local play and multiplayer semantics.
+- `HexStrategyGame.jsx` dispatches local actions into those engine functions and handles UI-side event effects like SFX, flashes, and combat numbers.
+- `party/server.js` reuses the same engine turn/action logic for server-authoritative online games.
+- `ai/aiEngine.js` executes AI turns against full game state and then uses the same turn-advance behavior as the rest of the engine.
 
-| File | Exports | Purpose |
-|------|---------|---------|
-| `actions.js` | `applyMoveUnit`, `applyAttack`, `applyFoundCity`, `applyEndTurn`, ... | **Action appliers** — each takes `(state, params)`, deep-clones state, applies changes, returns `{ state, events }`. This is the main mutation layer. |
-| `combat.js` | `calcCombatPreview` | Combat math — damage calculation with terrain/promotion bonuses |
-| `economy.js` | `calcPlayerIncome`, `canUpgradeUnit`, `getAvailableTechs`, `autoAssignTiles` | Resource/gold/production/science calculations |
-| `movement.js` | `getReachableHexes`, `getRangedTargets`, `getVisibleHexes`, `findPath`, `isHexOccupied` | Pathfinding (BFS), movement validation, fog of war visibility |
-| `turnProcessing.js` | `processResearchAndIncome`, `processCityTurn`, `expandTerritory`, `refreshUnits`, `spawnBarbarians`, `rollRandomEvent`, `addLogMsg`, `initCityBorders` | End-of-turn processing pipeline |
-| `gameInit.js` | `createInitialState`, `mkUnit`, `AI_DIFFICULTY` | Creates fresh game state from player configs |
-| `mapGen.js` | `generateMap` | Procedural hex map generation (terrain, resources, continents) |
-| `victory.js` | `checkVictoryState` | Win condition checks |
-| `fog.js` | `filterStateForPlayer` | Strips hidden info for fog of war (used by multiplayer server) |
+## Important Runtime Notes
 
-### data/ — Static configuration
+- Canvas and SVG rendering both exist. Renderer choice is automatic on larger maps unless the player overrides it.
+- `cloneState()` in [`utils/cloneState.js`](/C:/Users/caleb/Downloads/claude%20game/Empires%20of%20Earth/utils/cloneState.js) is the shared deep-clone utility used in live engine paths.
+- Local saves are versioned through [`utils/saveGames.js`](/C:/Users/caleb/Downloads/claude%20game/Empires%20of%20Earth/utils/saveGames.js). Legacy raw saves are migrated on load.
+- Heavy modal panels are lazy-loaded from `GameModals.jsx`.
+- Map size still relies on mutable module-level config in `data/constants.js`; this is known technical debt and should be treated carefully in tests and multiplayer setup.
 
-| File | Main Export | What it defines |
-|------|-------------|-----------------|
-| `constants.js` | `HEX_SIZE`, `COLS`, `ROWS`, `hexCenter`, `hexAt`, `getNeighbors`, `hexDist`, `setMapConfig`, `MAP_SIZES` | Core hex math, grid dimensions, neighbor lookups, seeded RNG |
-| `units.js` | `UNIT_DEFS`, `SIEGE_UNITS` | Unit types with stats (hp, attack, defense, move, cost, range) |
-| `techs.js` | `TECH_TREE` | Tech tree — each tech has era, cost, prereqs, and unlock effects |
-| `civs.js` | `CIV_DEFS` | Civilizations with unique bonuses |
-| `terrain.js` | terrain type definitions | Movement costs, defense bonuses, yields per terrain |
-| `districts.js` | district types | City district definitions |
-| `events.js` | random event definitions | Events with effects and probabilities |
-| `tutorial.js` | tutorial step definitions | Tutorial overlay content |
+## Key Files
 
-### components/ — UI
+### Engine
 
-| File | What it renders |
-|------|-----------------|
-| `GameScreens.jsx` | Pre-game flow: mode select, map size, lobby, civ select, turn transition, victory screen |
-| `MemoHex.jsx` | Individual hex tile (memoized). The core rendering unit of the map. |
-| `ProceduralVisuals.js` | SVG generators for terrain art (grass, trees, mountains, water, coast) |
-| `CityPanel.jsx` | City management: production queue, building list |
-| `TechTreePanel.jsx` | Tech tree display and research selection |
-| `ActionBar.jsx` | Bottom action buttons (move, attack, build, etc.) |
-| `CombatPreview.jsx` | Pre-attack damage preview |
-| `PlayerPanel.jsx` | Player stats: gold, science, resources |
-| `MinimapDisplay.jsx` | Minimap |
-| `LogPanel.jsx` | Game event log |
-| `Lobby.jsx` | Pre-game lobby for setting up player slots |
-| `OnlineGame.jsx` | Online multiplayer wrapper (uses PartyKit) |
-| `UnitAnimationOverlay.jsx` | Unit movement/attack animations |
-| Other | BottomInfo, EventPopup, Icons, Legend, NotificationCircles, TutorialTips |
+- `engine/actions.js`: canonical action appliers such as move, attack, end turn, diplomacy, roads, and production
+- `engine/turnProcessing.js`: income, research, city processing, territory growth, barbarian logic, log helpers
+- `engine/movement.js`: pathfinding, reachability, visibility, occupancy
+- `engine/combat.js`: combat preview math
+- `engine/gameInit.js`: initial state creation
+- `engine/fog.js`: fog filtering for multiplayer clients
 
-### hooks/ — Interaction logic
+### Active game UI
 
-| File | Purpose |
-|------|---------|
-| `useGameActions.js` | Player action handlers (move, attack, found city, etc.) — bridges UI clicks to engine |
-| `useCamera.js` | Camera position and auto-centering |
-| `usePanZoom.js` | Mouse/touch pan and zoom on the map |
-| `useMinimap.js` | Minimap click-to-navigate |
-| `useKeyboardShortcuts.js` | Keyboard hotkeys |
-| `usePanelDrag.js` | Draggable UI panels |
-| `useParty.js` | PartyKit connection hook for online multiplayer |
-| `useUnitAnimation.js` | Unit animation state management |
+- `HexStrategyGame.jsx`: top-level gameplay controller and screen switching
+- `components/GameViewport.jsx`: board rendering and pointer interaction
+- `components/GameHud.jsx`: HUD, minimap, action controls, info panels
+- `components/GameModals.jsx`: save/load, tech, diplomacy, city, event, tutorial, leader scene
+- `components/CanvasBoardRenderer.jsx`: canvas rendering path
+- `components/MemoHex.jsx`: SVG hex rendering path
 
-### party/ — Multiplayer
+### Shared utilities
 
-| File | Purpose |
-|------|---------|
-| `server.js` | PartyKit server — authoritative game state, validates all actions, broadcasts filtered state per player via fog of war. Room phases: WAITING → CIV_SELECT → PLAYING → FINISHED |
-
-## Important Patterns
-
-- **Hex grid uses offset coordinates** (col, row) with flat-top hexagons. Even/odd columns have different neighbor offsets. Hex lookup is O(1) via `hexAt(hexes, col, row)` = `hexes[col * ROWS + row]`.
-- **State is immutable-ish** — `actions.js` deep-clones via `JSON.parse(JSON.stringify(state))` before mutating. No immer or Redux.
-- **Map size is mutable module state** — `COLS`/`ROWS` in constants.js are `let` exports set by `setMapConfig()` before game start. This means they're module-level globals, not part of game state.
-- **Single-phase turns** — The game previously had multiple phases per turn but now uses a single "MOVEMENT" phase.
-- **AI runs synchronously** — `aiExecuteTurn()` in aiEngine.js takes the full game state and returns updated state after all AI decisions.
-- **Multiplayer uses PartyKit** with an authoritative server. The server runs the same engine code. Clients send actions, server validates and broadcasts fog-filtered state.
+- `utils/cloneState.js`: deep clone helper with `structuredClone` fallback
+- `utils/saveGames.js`: save serialization, migration, and localStorage helpers
 
 ## Common Tasks
 
-- **Adding a new unit type:** Add to `data/units.js` UNIT_DEFS, then handle any special abilities in `engine/combat.js` and `engine/actions.js`.
-- **Adding a new tech:** Add to `data/techs.js` TECH_TREE with era, cost, prereqs. Hook up effects in the relevant engine file.
-- **Adding a new civ:** Add to `data/civs.js` CIV_DEFS. Bonuses are applied in economy.js and turnProcessing.js.
-- **Modifying combat:** Core damage math is in `engine/combat.js`. Attack execution is in `engine/actions.js` `applyAttack()`.
-- **Changing map generation:** `engine/mapGen.js` `generateMap()`.
-- **UI changes:** Components in `components/`, wired up in `HexStrategyGame.jsx`.
+- Add or balance a unit: update `data/units.js`, then adjust any rule handling in `engine/actions.js` or `engine/combat.js`
+- Change combat behavior: start in `engine/combat.js` and `engine/actions.js`
+- Change end-turn behavior: update `engine/turnProcessing.js` and any related action wrappers
+- Adjust UI layout or panels: work inside `components/GameViewport.jsx`, `components/GameHud.jsx`, or `components/GameModals.jsx`
+- Change multiplayer rules: keep `party/server.js` aligned with the engine action layer, not a separate rules path
 
-## Git
+## Known Technical Debt
 
-- Default branch is `master` (not `main`)
-- Do NOT create a nested .git inside this folder — the repo root is at `~/Downloads/claude game`
+- `HexStrategyGame.jsx` is still large and remains the primary orchestration file.
+- `data/constants.js` still exposes mutable map-size globals via `setMapConfig()`.
+- The project still needs a first-class regression test suite around the engine.
+
+## Git Notes
+
+- Work in the repo rooted at `C:\Users\caleb\Downloads\claude game`
+- Default branch is `master`
+- Avoid reverting unrelated local workspace files unless the user explicitly asks
