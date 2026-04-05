@@ -7,13 +7,22 @@ import { TECH_TREE } from '../data/techs.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { hexAt, getNeighbors, hexDist, gameRng, COLS, ROWS } from '../data/constants.js';
 import { getPlayerMaxEra, calcCombatPreview } from '../engine/combat.js';
-import { getAvailableTechs, getAvailableUnits, getAvailableDistricts, canUpgradeUnit } from '../engine/economy.js';
+import { getAvailableTechs, getAvailableUnits, getAvailableDistricts, canUpgradeUnit, calcPlayerIncomeWithState } from '../engine/economy.js';
 import { getReachableHexes, getVisibleHexes, isHexOccupied } from '../engine/movement.js';
 import { addLogMsg, processResearchAndIncome, processCityTurn, expandTerritory, healGarrison, initCityBorders, recalcAllTradeRoutes } from '../engine/turnProcessing.js';
 import { ROAD_COST } from '../data/constants.js';
 import { autoAssignTiles, cityHasResource, getHexYields } from '../engine/economy.js';
 import { getHexesInRadius, FOG_SIGHT } from '../data/constants.js';
 import { AI_DIFFICULTY } from '../engine/gameInit.js';
+import {
+  areAtWar,
+  createProposal,
+  declareWar,
+  scoreAiDiplomacyOffer,
+  DIPLOMACY_PROPOSAL_TYPES,
+  getRelation,
+  acceptProposal,
+} from '../engine/diplomacy.js';
 
 // Aggregate all enemy units and cities across all opponents
 const getAllEnemyUnits = (enemies) => enemies.flatMap(e => e.units);
@@ -38,6 +47,51 @@ const calcMilitaryStrength = (player) =>
     if (!def || def.strength === 0) return sum;
     return sum + def.strength * (u.hpCurrent / (def.hp || 10));
   }, 0);
+
+const aiMakeDiplomaticDecisions = (g, aiPlayer, players) => {
+  const others = players.filter((p) => p.id !== aiPlayer.id);
+  const myStrength = calcMilitaryStrength(aiPlayer);
+
+  for (const other of others) {
+    const relation = getRelation(g, aiPlayer.id, other.id);
+    const theirStrength = calcMilitaryStrength(other);
+    const closeBorders = aiPlayer.cities.some((city) => {
+      const cityHex = g.hexes[city.hexId];
+      return other.cities.some((otherCity) => {
+        const otherHex = g.hexes[otherCity.hexId];
+        return cityHex && otherHex && hexDist(cityHex.col, cityHex.row, otherHex.col, otherHex.row) <= 7;
+      });
+    });
+
+    if (relation.status === "war") {
+      if (myStrength < Math.max(8, theirStrength * 0.75)) {
+        if (other.type === "ai" && scoreAiDiplomacyOffer(g, aiPlayer.id, other.id, DIPLOMACY_PROPOSAL_TYPES.PEACE)) {
+          const proposal = createProposal(g, aiPlayer.id, other.id, DIPLOMACY_PROPOSAL_TYPES.PEACE);
+          acceptProposal(g, proposal.id);
+          addLogMsg(`${aiPlayer.name} negotiated peace with ${other.name}.`, g, null);
+        } else if (other.type !== "ai") {
+          createProposal(g, aiPlayer.id, other.id, DIPLOMACY_PROPOSAL_TYPES.PEACE);
+          addLogMsg(`${aiPlayer.name} proposed peace to ${other.name}.`, g, null);
+        }
+      }
+      continue;
+    }
+
+    if (relation.status !== "war" && closeBorders && myStrength > Math.max(10, theirStrength * 1.2) && relation.score < -10) {
+      declareWar(g, aiPlayer.id, other.id);
+      addLogMsg(`${aiPlayer.name} declared war on ${other.name}!`, g, null);
+      continue;
+    }
+
+    if (other.type === "ai" && relation.status === "neutral" && relation.score > 15) {
+      if (scoreAiDiplomacyOffer(g, aiPlayer.id, other.id, DIPLOMACY_PROPOSAL_TYPES.TRADE_PACT)) {
+        const proposal = createProposal(g, aiPlayer.id, other.id, DIPLOMACY_PROPOSAL_TYPES.TRADE_PACT);
+        acceptProposal(g, proposal.id);
+        addLogMsg(`${aiPlayer.name} signed a trade pact with ${other.name}.`, g, null);
+      }
+    }
+  }
+};
 
 const aiAssessStrategy = (player, enemies, hexes) => {
   const myStrength = calcMilitaryStrength(player);
@@ -894,6 +948,9 @@ export const aiExecuteTurn = (gameState) => {
   const isEasy = aiPlayer.difficulty === "easy";
   const strategy = isEasy ? null : aiAssessStrategy(aiPlayer, enemies, g.hexes);
 
+  aiMakeDiplomaticDecisions(g, aiPlayer, g.players);
+  const warEnemies = g.players.filter((p) => p.id !== aiPlayer.id && areAtWar(g, aiPlayer.id, p.id));
+
   // Research
   const techPick = aiPickResearch(aiPlayer, g.hexes, enemies, smarter, strategy);
   if (techPick) {
@@ -909,7 +966,17 @@ export const aiExecuteTurn = (gameState) => {
     }
   }
 
-  processResearchAndIncome(aiPlayer, g);
+  const income = calcPlayerIncomeWithState(aiPlayer, g);
+  if (aiPlayer.currentResearch) {
+    aiPlayer.currentResearch.progress += income.science;
+    const tech = TECH_TREE[aiPlayer.currentResearch.techId];
+    if (tech && aiPlayer.currentResearch.progress >= tech.cost) {
+      aiPlayer.researchedTechs.push(aiPlayer.currentResearch.techId);
+      addLogMsg(`${aiPlayer.name} researched ${tech.name}!`, g, aiPlayer.id);
+      aiPlayer.currentResearch = null;
+    }
+  }
+  aiPlayer.gold += income.gold;
 
   // Apply difficulty bonuses to income
   if (diff.goldBonus !== 0) {
@@ -936,7 +1003,7 @@ export const aiExecuteTurn = (gameState) => {
   aiBuildRoads(aiPlayer, g);
 
   // Movement & combat
-  aiPlanAndExecuteMoves(g, aiPlayer, enemies, addLogMsg, smarter, strategy);
+  aiPlanAndExecuteMoves(g, aiPlayer, warEnemies, addLogMsg, smarter, strategy);
   healGarrison(aiPlayer, g.hexes);
 
   return g;

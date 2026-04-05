@@ -14,6 +14,16 @@ import { canUpgradeUnit, autoAssignTiles } from './economy.js';
 import { calcCityMaxHP, recalcAllTradeRoutes } from './turnProcessing.js';
 import { isHexOccupied } from './movement.js';
 import {
+  applyRelationModifier,
+  areAtWar,
+  declareWar,
+  createProposal,
+  acceptProposal,
+  rejectProposal,
+  tickDiplomacy,
+  DIPLOMACY_PROPOSAL_TYPES,
+} from './diplomacy.js';
+import {
   processResearchAndIncome, processCityTurn, expandTerritory,
   refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent,
   addLogMsg, initCityBorders,
@@ -86,6 +96,13 @@ export const applyAttack = (state, { attackerId, col, row }) => {
   const defHex = hexAt(g.hexes, col, row);
   const defender = defUnit || barbUnit;
 
+  if (!barbUnit && defPlayer && !areAtWar(g, attPlayer.id, defPlayer.id)) {
+    return {
+      state,
+      events: [{ type: "diplomacy_error", message: `You must declare war on ${defPlayer.name} before attacking.` }],
+    };
+  }
+
   if (defender) {
     const defDef = UNIT_DEFS[defender.unitType];
     const defOwner = defUnit ? defPlayer : { researchedTechs: [], civilization: "Barbarian" };
@@ -106,6 +123,7 @@ export const applyAttack = (state, { attackerId, col, row }) => {
     if (defender.hpCurrent <= 0) {
       if (defUnit) defPlayer.units = defPlayer.units.filter(u => u.id !== defUnit.id);
       if (barbUnit) { g.barbarians = g.barbarians.filter(b => b.id !== barbUnit.id); attPlayer.gold += 15; }
+      if (defUnit && defPlayer) applyRelationModifier(g, attPlayer.id, defPlayer.id, -8, "Destroyed unit");
       msg += ` \u2620${barbUnit ? "Barb +15\u{1F4B0} " : ""}${defDef.name}`;
 
       if (attDef.range === 0 && !preview.atkDies && !isHexOccupied(col, row, g.players, g.barbarians, attUnit.id)) {
@@ -161,6 +179,7 @@ export const applyAttack = (state, { attackerId, col, row }) => {
       attPlayer.units = attPlayer.units.filter(u => u.id !== attUnit.id);
       msg += ` \u2620${attDef.name}`;
     } else if (defCity.hp <= 0) {
+      applyRelationModifier(g, attPlayer.id, defPlayer.id, -15, "Captured city");
       msg = `${attDef.name} ${tryCaptureCity(defCity, attPlayer, defPlayer, defHex, g)}`;
       if (attDef.range === 0 && !isHexOccupied(col, row, g.players, g.barbarians, attUnit.id)) {
         attUnit.hexCol = col;
@@ -331,6 +350,7 @@ export const applyEndTurn = (state) => {
   // If we've looped back to first player, a full round is complete
   if (nextIdx === 0) {
     g.turnNumber++;
+    tickDiplomacy(g);
   }
 
   g.phase = "MOVEMENT";
@@ -347,6 +367,48 @@ export const applyEndTurn = (state) => {
 
   const events = sfxQ.map(s => ({ type: "sfx", name: s }));
   return { state: g, events };
+};
+
+export const applyDeclareWar = (state, { targetPlayerId }) => {
+  const g = clone(state);
+  const actorId = g.currentPlayerId;
+  const actor = g.players.find((p) => p.id === actorId);
+  const target = g.players.find((p) => p.id === targetPlayerId);
+  if (!actor || !target || actorId === targetPlayerId) return { state, events: [] };
+  declareWar(g, actorId, targetPlayerId);
+  addLogMsg(`${actor.name} declared war on ${target.name}!`, g, null);
+  return { state: g, events: [{ type: "sfx", name: "combat" }] };
+};
+
+export const applyCreateDiplomacyProposal = (state, { targetPlayerId, proposalType }) => {
+  const g = clone(state);
+  const actorId = g.currentPlayerId;
+  const actor = g.players.find((p) => p.id === actorId);
+  const target = g.players.find((p) => p.id === targetPlayerId);
+  if (!actor || !target || actorId === targetPlayerId) return { state, events: [] };
+  const proposal = createProposal(g, actorId, targetPlayerId, proposalType);
+  addLogMsg(`${actor.name} offered ${proposalType.replace("_", " ")} to ${target.name}.`, g, actor.id);
+  return { state: g, events: [{ type: "proposal_created", proposal }] };
+};
+
+export const applyAcceptDiplomacyProposal = (state, { proposalId }) => {
+  const g = clone(state);
+  const proposal = acceptProposal(g, proposalId);
+  if (!proposal) return { state, events: [] };
+  const from = g.players.find((p) => p.id === proposal.fromPlayerId);
+  const to = g.players.find((p) => p.id === proposal.toPlayerId);
+  addLogMsg(`${to?.name || "A ruler"} accepted ${from?.name || "a rival"}'s ${proposal.type.replace("_", " ")} proposal.`, g, null);
+  return { state: g, events: [{ type: "proposal_resolved", outcome: "accepted", proposalId }] };
+};
+
+export const applyRejectDiplomacyProposal = (state, { proposalId }) => {
+  const g = clone(state);
+  const proposal = rejectProposal(g, proposalId);
+  if (!proposal) return { state, events: [] };
+  const from = g.players.find((p) => p.id === proposal.fromPlayerId);
+  const to = g.players.find((p) => p.id === proposal.toPlayerId);
+  addLogMsg(`${to?.name || "A ruler"} rejected ${from?.name || "a rival"}'s ${proposal.type.replace("_", " ")} proposal.`, g, null);
+  return { state: g, events: [{ type: "proposal_resolved", outcome: "rejected", proposalId }] };
 };
 
 // ---- BUILD ROAD ----

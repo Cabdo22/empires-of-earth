@@ -3,12 +3,13 @@ import { UNIT_DEFS } from '../data/units.js';
 import { canUpgradeUnit } from '../engine/economy.js';
 import { btnStyle } from '../styles.js';
 
-export function ActionBar({ showTech, setShowTech, showSaveLoad, setShowSaveLoad, tutorialOn, setTutorialOn, setTutorialDismissed, performanceMode, setPerformanceMode, sud, selU, settlerM, setSettlerM, nukeM, setNukeM, upgradeUnit, cp, actable }) {
+export function ActionBar({ showTech, setShowTech, showDiplomacy, setShowDiplomacy, showSaveLoad, setShowSaveLoad, tutorialOn, setTutorialOn, setTutorialDismissed, performanceMode, setPerformanceMode, sud, selU, settlerM, setSettlerM, nukeM, setNukeM, upgradeUnit, cp, actable }) {
   return (
     <>
-      {/* Left sidebar buttons (Tech, Save/Load, Tips) */}
+      {/* Left sidebar buttons (Tech, Diplomacy, Save/Load, Tips) */}
       <div style={{ position: "absolute", top: 115, left: 14, zIndex: 10, display: "flex", flexDirection: "column", gap: 6, pointerEvents: "auto" }}>
         <button onClick={() => setShowTech(!showTech)} style={{ ...btnStyle(showTech), marginRight: 0, marginBottom: 0, padding: "8px 22px", fontSize: 13, letterSpacing: 1 }}>🔬 Tech Tree</button>
+        <button onClick={() => setShowDiplomacy(!showDiplomacy)} style={{ ...btnStyle(showDiplomacy), marginRight: 0, marginBottom: 0, padding: "8px 22px", fontSize: 13, letterSpacing: 1 }}>🕊 Diplomacy</button>
         <button onClick={() => setShowSaveLoad(!showSaveLoad)} style={{ ...btnStyle(showSaveLoad), marginRight: 0, marginBottom: 0, padding: "8px 22px", fontSize: 13, letterSpacing: 1 }}>💾 Save/Load</button>
         <button onClick={() => { if (!tutorialOn) { setTutorialOn(true); setTutorialDismissed({}); } else { setTutorialOn(false); } }} style={{ ...btnStyle(tutorialOn), marginRight: 0, marginBottom: 0, padding: "8px 22px", fontSize: 13, letterSpacing: 1 }}>💡 Tips</button>
         <button onClick={() => setPerformanceMode(!performanceMode)} style={{ ...btnStyle(performanceMode), marginRight: 0, marginBottom: 0, padding: "8px 22px", fontSize: 13, letterSpacing: 1 }}>{performanceMode ? "⚡ Reduced FX" : "✨ Full FX"}</button>

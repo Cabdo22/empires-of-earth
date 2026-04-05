@@ -6,12 +6,27 @@ import { UNIT_DEFS } from './data/units.js';
 import { DISTRICT_DEFS } from './data/districts.js';
 import { CIV_DEFS } from './data/civs.js';
 import { calcCombatPreview } from './engine/combat.js';
-import { calcPlayerIncome, canUpgradeUnit, autoAssignTiles, isWorkableHex } from './engine/economy.js';
+import { calcPlayerIncome, calcPlayerIncomeWithState, canUpgradeUnit, autoAssignTiles, isWorkableHex } from './engine/economy.js';
 import { getMoveBlockReason, getReachableHexes, getRangedTargets, getVisibleHexes, isHexOccupied, findPath } from './engine/movement.js';
 import { processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg, recalcAllTradeRoutes } from './engine/turnProcessing.js';
 import { checkVictoryState } from './engine/victory.js';
 import { getDisplayColors, checkNewMeetings } from './engine/discovery.js';
 import { createInitialState } from './engine/gameInit.js';
+import { getLeaderDef } from './data/leaders.js';
+import {
+  applyRelationModifier,
+  areAtWar,
+  createProposal,
+  declareWar,
+  ensureDiplomacyState,
+  getKnownPlayers,
+  getLeaderScenePayload,
+  getRelation,
+  acceptProposal,
+  rejectProposal,
+  tickDiplomacy,
+  scoreAiDiplomacyOffer,
+} from './engine/diplomacy.js';
 import { aiExecuteTurn } from './ai/aiEngine.js';
 import { SFX, MenuMusic } from './sfx.js';
 import { genGrass, genTrees, genMtns, genWaves, genDetail, genCoast, genWaterCoast } from './components/ProceduralVisuals.js';
@@ -36,6 +51,8 @@ import { NotificationCircles } from './components/NotificationCircles.jsx';
 import { TutorialTips } from './components/TutorialTips.jsx';
 import { MinimapDisplay } from './components/MinimapDisplay.jsx';
 import { EventPopup } from './components/EventPopup.jsx';
+import { LeaderMeetingScreen } from './components/LeaderMeetingScreen.jsx';
+import { DiplomacyPanel } from './components/DiplomacyPanel.jsx';
 import useUnitAnimation from './hooks/useUnitAnimation.js';
 import UnitAnimationOverlay from './components/UnitAnimationOverlay.jsx';
 
@@ -54,6 +71,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[selH,setSelH]=useState(null);
   const[selU,setSelU]=useState(null);
   const[showTech,setShowTech]=useState(false);
+  const[showDiplomacy,setShowDiplomacy]=useState(false);
   const[showSaveLoad,setShowSaveLoad]=useState(false);
   const[saveName,setSaveName]=useState("");
   const[showCity,setShowCity]=useState(null);
@@ -73,6 +91,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[cityCollapsed,setCityCollapsed]=useState(false);
   const[turnPopups,setTurnPopups]=useState([]); // [{id,type,title,body,action}] turn-start popups
   const[eventPopup,setEventPopup]=useState(null); // random event popup {id,name,desc}
+  const[leaderScene,setLeaderScene]=useState(null);
   const turnPopupShownRef=useRef(null); // tracks which turn+player combo we've shown popups for
   const victoryPlayed=useRef(false);
   const prevCpId=useRef(null);
@@ -97,15 +116,36 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const players=gs?.players||[];
   const turnNumber=gs?.turnNumber||1;
   const cpId=onlineMode?onlineMode.myPlayerId:(gs?.currentPlayerId||"p1");
-  // For rendering, always show from the human player's perspective (not AI)
-  const viewPlayerId=onlineMode?onlineMode.myPlayerId:(players.find(p=>p.type==="human")?.id||cpId);
+  const humanPlayers=players.filter(p=>p.type==="human");
+  const viewPlayerId=onlineMode?onlineMode.myPlayerId:(humanPlayers.length>1?cpId:(humanPlayers[0]?.id||cpId));
   const phase=gs?.phase||"MOVEMENT";
   const log=gs?.log||[];
   const barbarians=gs?.barbarians||[];
   const cp=players.find(p=>p.id===viewPlayerId)||{units:[],cities:[],researchedTechs:[],civilization:"Rome",name:"",color:"#888",colorBg:"#444",colorLight:"#aaa",gold:0,science:0};
   const enemies=players.filter(p=>p.id!==viewPlayerId);
   const op=enemies[0]; // legacy compat — prefer enemies array
-  const inc=useMemo(()=>gs?calcPlayerIncome(cp,hexes):{food:0,production:0,science:0,gold:0},[cp,hexes,gs]);
+  const inc=useMemo(()=>gs?calcPlayerIncomeWithState(cp,gs):{food:0,production:0,science:0,gold:0},[cp,gs]);
+  const knownPlayers=useMemo(()=>gs?getKnownPlayers(gs,cpId):[],[gs,cpId]);
+  const diplomacyRelations=useMemo(()=>{
+    if(!gs)return {};
+    const out={};
+    for(const p of knownPlayers) out[p.id]=getRelation(gs,cpId,p.id);
+    return out;
+  },[gs,knownPlayers,cpId]);
+  const pendingIncoming=useMemo(()=>{
+    if(!gs?.diplomacy?.pendingProposals)return [];
+    return gs.diplomacy.pendingProposals.filter(p=>p.toPlayerId===cpId).map(p=>({
+      ...p,
+      fromName: players.find(pl=>pl.id===p.fromPlayerId)?.name||p.fromPlayerId,
+    }));
+  },[gs,cpId,players]);
+  const pendingOutgoing=useMemo(()=>{
+    if(!gs?.diplomacy?.pendingProposals)return [];
+    return gs.diplomacy.pendingProposals.filter(p=>p.fromPlayerId===cpId).map(p=>({
+      ...p,
+      toName: players.find(pl=>pl.id===p.toPlayerId)?.name||p.toPlayerId,
+    }));
+  },[gs,cpId,players]);
   const visData=useMemo(()=>{
     const cache=visDataCacheRef.current;
     const nextIds=new Set();
@@ -215,6 +255,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     if(newlyMet.length===0)return;
     setGs(prev=>{
       if(!prev||!prev.metPlayers)return prev;
+      ensureDiplomacyState(prev);
       const mp={...prev.metPlayers};
       const myMet=[...(mp[viewPlayerId]||[])];
       for(const mid of newlyMet){
@@ -222,14 +263,17 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
         // Symmetric: they also meet us
         const theirMet=[...(mp[mid]||[])];
         if(!theirMet.includes(viewPlayerId)){theirMet.push(viewPlayerId);mp[mid]=theirMet;}
+        applyRelationModifier(prev, viewPlayerId, mid, 6, "First contact");
       }
       mp[viewPlayerId]=myMet;
       return{...prev,metPlayers:mp};
     });
-    // Show discovery popup for the first newly met civ
-    const metP=gs.players.find(p=>p.id===newlyMet[0]);
-    if(metP){
-      setEventPopup({id:"met",name:"Civilization Discovered!",desc:`You have encountered the ${metP.name}!`});
+    const metId=newlyMet[0];
+    if(metId){
+      const nextState=JSON.parse(JSON.stringify(gs));
+      ensureDiplomacyState(nextState);
+      const scene=getLeaderScenePayload(nextState, viewPlayerId, metId, "firstMeet");
+      if(scene) setLeaderScene(scene);
       SFX.found?.();
     }
   },[fogVisible,viewPlayerId,gs?.metPlayers]);
@@ -274,6 +318,88 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // addLog and checkVictory delegate to module-level pure functions
   const addLog=addLogMsg;
   const checkVictory=checkVictoryState;
+
+  const openLeaderScene = useCallback((otherPlayerId, context="diplomacy") => {
+    if(!gs) return;
+    const scene = getLeaderScenePayload(gs, cpId, otherPlayerId, context);
+    if(scene) setLeaderScene(scene);
+  }, [gs, cpId]);
+
+  const resolveProposalAgainstAi = useCallback((g, proposal) => {
+    const target = g.players.find((p) => p.id === proposal.toPlayerId);
+    if (!target || target.type !== "ai") return false;
+    const accepted = scoreAiDiplomacyOffer(g, proposal.fromPlayerId, proposal.toPlayerId, proposal.type);
+    if (accepted) {
+      acceptProposal(g, proposal.id);
+      addLog(`${target.name} accepted your ${proposal.type.replace("_", " ")} proposal.`, g, null);
+    } else {
+      rejectProposal(g, proposal.id);
+      addLog(`${target.name} rejected your ${proposal.type.replace("_", " ")} proposal.`, g, null);
+    }
+    return true;
+  }, []);
+
+  const declareWarAction = useCallback((targetPlayerId) => {
+    if(!targetPlayerId || onlineMode) return;
+    setGs(prev => {
+      const g = JSON.parse(JSON.stringify(prev));
+      ensureDiplomacyState(g);
+      const actor = g.players.find((p) => p.id === g.currentPlayerId);
+      const target = g.players.find((p) => p.id === targetPlayerId);
+      if (!actor || !target) return prev;
+      declareWar(g, actor.id, target.id);
+      addLog(`${actor.name} declared war on ${target.name}!`, g, null);
+      return g;
+    });
+    setLeaderScene(null);
+    setShowDiplomacy(true);
+    SFX.combat();
+  }, [onlineMode]);
+
+  const proposeDiplomacyAction = useCallback((targetPlayerId, type) => {
+    if(!targetPlayerId || onlineMode) return;
+    setGs(prev => {
+      const g = JSON.parse(JSON.stringify(prev));
+      ensureDiplomacyState(g);
+      const actor = g.players.find((p) => p.id === g.currentPlayerId);
+      const target = g.players.find((p) => p.id === targetPlayerId);
+      if (!actor || !target) return prev;
+      const proposal = createProposal(g, actor.id, target.id, type);
+      addLog(`${actor.name} proposed ${type.replace("_", " ")} to ${target.name}.`, g, actor.id);
+      resolveProposalAgainstAi(g, proposal);
+      return g;
+    });
+    setShowDiplomacy(true);
+    SFX.click();
+  }, [onlineMode, resolveProposalAgainstAi]);
+
+  const acceptProposalAction = useCallback((proposalId) => {
+    if(onlineMode) return;
+    setGs(prev => {
+      const g = JSON.parse(JSON.stringify(prev));
+      const proposal = acceptProposal(g, proposalId);
+      if (!proposal) return prev;
+      const from = g.players.find((p) => p.id === proposal.fromPlayerId);
+      const to = g.players.find((p) => p.id === proposal.toPlayerId);
+      addLog(`${to?.name || "A ruler"} accepted ${from?.name || "a rival"}'s ${proposal.type.replace("_", " ")} proposal.`, g, null);
+      return g;
+    });
+    SFX.click();
+  }, [onlineMode]);
+
+  const rejectProposalAction = useCallback((proposalId) => {
+    if(onlineMode) return;
+    setGs(prev => {
+      const g = JSON.parse(JSON.stringify(prev));
+      const proposal = rejectProposal(g, proposalId);
+      if (!proposal) return prev;
+      const from = g.players.find((p) => p.id === proposal.fromPlayerId);
+      const to = g.players.find((p) => p.id === proposal.toPlayerId);
+      addLog(`${to?.name || "A ruler"} rejected ${from?.name || "a rival"}'s ${proposal.type.replace("_", " ")} proposal.`, g, null);
+      return g;
+    });
+    SFX.click();
+  }, [onlineMode]);
 
   // === NUKE ===
   const launchNuke=useCallback((nuId,tc,tr)=>{
@@ -354,6 +480,12 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
       const defender = defUnit || barbUnit;
 
+      if (!barbUnit && defPlayer && !areAtWar(g, attPlayer.id, defPlayer.id)) {
+        setMoveMsg(`Declare war on ${defPlayer.name} before attacking`);
+        setFlashes({ [flashKey]: "blocked" });
+        return prev;
+      }
+
       if (defender) {
         // --- Unit vs unit combat ---
         const defDef = UNIT_DEFS[defender.unitType];
@@ -376,6 +508,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
         if (defender.hpCurrent <= 0) {
           if (defUnit) defPlayer.units = defPlayer.units.filter(u => u.id !== defUnit.id);
           if (barbUnit) { g.barbarians = g.barbarians.filter(b => b.id !== barbUnit.id); attPlayer.gold += 5; }
+          if (defUnit && defPlayer) applyRelationModifier(g, attPlayer.id, defPlayer.id, -8, "Destroyed unit");
           msg += ` ☠${barbUnit ? "Barb +5💰 " : ""}${defDef.name}`;
 
           // Melee attacker advances into the hex
@@ -417,6 +550,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
         let msg = `${attDef.name}→${defCity.name} (${Math.max(0, defCity.hp)}HP)`;
         if (defCity.hp <= 0) {
+          applyRelationModifier(g, attPlayer.id, defPlayer.id, -15, "Captured city");
           msg = `${attDef.name} ${tryCaptureCity(defCity, attPlayer, defPlayer, defHex, g)}`;
           if (attDef.range === 0 && !isHexOccupied(defCol, defRow, g.players, g.barbarians, attUnit.id)) { attUnit.hexCol = defCol; attUnit.hexRow = defRow; }
         }
@@ -458,6 +592,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
       // 1. Process research & income for current player
       processResearchAndIncome(currentPlayer, g, sfxQ);
+      currentPlayer.gold += Math.max(0, calcPlayerIncomeWithState(currentPlayer, g).gold - calcPlayerIncome(currentPlayer, g.hexes).gold);
       // 2. Process all city turns (production, growth, healing)
       for (const city of currentPlayer.cities) processCityTurn(city, currentPlayer, g, sfxQ);
       // 3. Expand territory
@@ -473,6 +608,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       // 6. If we've looped back to p1, a full round is complete
       if (nextIdx === 0) {
         g.turnNumber++;
+        tickDiplomacy(g);
         spawnBarbarians(g);
         processBarbarians(g);
       }
@@ -1157,7 +1293,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       <PlayerPanel cp={cp} hexes={hexes} landOwned={landOwned} totalLand={totalLand} barbarians={barbarians}/>
 
       {/* Action bar */}
-      <ActionBar showTech={showTech} setShowTech={setShowTech} showSaveLoad={showSaveLoad} setShowSaveLoad={setShowSaveLoad} tutorialOn={tutorialOn} setTutorialOn={setTutorialOn} setTutorialDismissed={setTutorialDismissed} performanceMode={performanceMode} setPerformanceMode={setPerformanceMode} sud={sud} selU={selU} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} upgradeUnit={upgradeUnit} cp={cp} actable={actable}/>
+      <ActionBar showTech={showTech} setShowTech={setShowTech} showDiplomacy={showDiplomacy} setShowDiplomacy={setShowDiplomacy} showSaveLoad={showSaveLoad} setShowSaveLoad={setShowSaveLoad} tutorialOn={tutorialOn} setTutorialOn={setTutorialOn} setTutorialDismissed={setTutorialDismissed} performanceMode={performanceMode} setPerformanceMode={setPerformanceMode} sud={sud} selU={selU} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} upgradeUnit={upgradeUnit} cp={cp} actable={actable}/>
 
       {/* Save/Load modal */}
       {showSaveLoad && <div style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5,8,3,.5)", pointerEvents: "all" }} onClick={e => { if (e.target === e.currentTarget) setShowSaveLoad(false); }}>
@@ -1197,6 +1333,9 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       {/* Tech tree */}
       {showTech&&<TechTreePanel cp={cp} techPosRef={techPosRef} techCollapsed={techCollapsed} setTechCollapsed={setTechCollapsed} setShowTech={setShowTech} onPanelDown={onPanelDown} selResearch={selResearch}/>}
 
+      {/* Diplomacy panel */}
+      {showDiplomacy&&<DiplomacyPanel currentPlayer={players.find(p=>p.id===cpId)} knownPlayers={knownPlayers} relations={diplomacyRelations} pendingIncoming={pendingIncoming} pendingOutgoing={pendingOutgoing} onClose={()=>setShowDiplomacy(false)} onOpenLeader={(pid)=>openLeaderScene(pid,"diplomacy")} onDeclareWar={declareWarAction} onPropose={proposeDiplomacyAction} onAccept={acceptProposalAction} onReject={rejectProposalAction}/>}
+
       {/* City panel */}
       {showCity&&(()=>{const city=cp.cities.find(c=>c.id===showCity);if(!city)return null;
         const cancelProduction=(cityId)=>{if(onlineMode){onlineMode.sendAction({type:"CANCEL_PRODUCTION",cityId});return;}setGs(prev=>{const g=JSON.parse(JSON.stringify(prev));const c=g.players.find(p=>p.id===g.currentPlayerId).cities.find(c2=>c2.id===cityId);if(c){c.currentProduction=null;c.productionProgress=0;}return g;});};
@@ -1225,6 +1364,9 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
       {/* Random event popup */}
       <EventPopup event={eventPopup} onDismiss={() => setEventPopup(null)}/>
+
+      {/* Leader meeting / diplomacy scene */}
+      <LeaderMeetingScreen scene={leaderScene} onClose={() => setLeaderScene(null)} onDeclareWar={() => leaderScene && declareWarAction(leaderScene.playerId)} onOpenDiplomacy={() => { setLeaderScene(null); setShowDiplomacy(true); }}/>
 
       {/* Turn-start popup queue */}
       <NotificationCircles turnPopups={turnPopups} setTurnPopups={setTurnPopups} setShowTech={setShowTech} setShowCity={setShowCity}/>

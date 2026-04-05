@@ -7,6 +7,7 @@ import { TECH_TREE } from '../data/techs.js';
 import { UNIT_DEFS, MILITARY_REQ_UNITS, UPGRADE_PATHS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
 import { hexAt, getNeighbors, TRADE_FOCUS, TRADE_DISTANCE_BONUS_PER, FOREIGN_TRADE_MULTIPLIER } from '../data/constants.js';
+import { getDiplomacyIncomeBonus } from './diplomacy.js';
 
 // ---- Tile yield helpers ----
 
@@ -214,6 +215,14 @@ export const calcPlayerIncome = (player, hexes) => {
     gold += yields.gold;
   }
   return { food, production, science, gold };
+};
+
+export const calcPlayerIncomeWithState = (player, state) => {
+  const base = calcPlayerIncome(player, state.hexes);
+  return {
+    ...base,
+    gold: base.gold + getDiplomacyIncomeBonus(state, player.id),
+  };
 };
 
 // Techs available for research (supports prereqMin for "N of M" gating)

@@ -8,6 +8,7 @@ import { CIV_DEFS } from '../data/civs.js';
 import { generateMap } from './mapGen.js';
 import { getVisibleHexes, findOpenNeighbor } from './movement.js';
 import { initCityBorders } from './turnProcessing.js';
+import { createInitialDiplomacyState } from './diplomacy.js';
 
 let uidCtr = 0;
 
@@ -135,5 +136,6 @@ export const createInitialState = (playerConfigs) => {
     rngCounter: 0,
     explored,
     metPlayers: Object.fromEntries(players.map(p => [p.id, []])),
+    diplomacy: createInitialDiplomacyState(players, 1),
   };
 };
