@@ -15,13 +15,11 @@ import {
   applyMoveUnit, applyAttack, applyLaunchNuke,
   applySelectResearch, applySetProduction, applyUpgradeUnit,
   applyFoundCity, applyCancelProduction, applyEndTurn,
-  applyBuildRoad, applySetTradeFocus,
+  applyBuildRoad, applySetTradeFocus, advanceToNextPlayerState,
 } from '../engine/actions.js';
 import {
-  addLogMsg, refreshUnits, spawnBarbarians, processBarbarians,
-  rollRandomEvent, recalcAllTradeRoutes,
+  recalcAllTradeRoutes,
 } from '../engine/turnProcessing.js';
-import { checkVictoryState } from '../engine/victory.js';
 import { aiExecuteTurn } from '../ai/aiEngine.js';
 
 // ============================================================
@@ -428,18 +426,15 @@ export default class EmpiresServer {
       this.phase = "FINISHED";
     }
 
-    // Auto-execute consecutive AI turns after END_TURN
-    // NOTE: aiExecuteTurn() already processes research, income, cities, and combat.
-    // We must NOT call applyEndTurn() here as it would double-process income/cities.
-    // Instead we manually handle turn advancement (the parts applyEndTurn does beyond income).
+    // Auto-execute consecutive AI turns after END_TURN.
+    // aiExecuteTurn() performs the AI player's actions, and the shared engine helper
+    // advances the round using the same semantics as local play.
     let allEvents = events || [];
     if (data.type === "END_TURN" && !this.gameState.victoryStatus) {
       let nextPlayer = this.gameState.players.find(p => p.id === this.gameState.currentPlayerId);
       while (nextPlayer && nextPlayer.type === "ai" && !this.gameState.victoryStatus) {
-        // Execute AI decisions (research, production, income, cities, combat, movement)
         this.gameState = aiExecuteTurn(this.gameState);
 
-        // Update explored hexes for AI player
         const aiP = this.gameState.players.find(p => p.id === this.gameState.currentPlayerId);
         if (aiP) {
           const vis = getVisibleHexes(aiP, this.gameState.hexes);
@@ -448,30 +443,11 @@ export default class EmpiresServer {
           this.gameState.explored = { ...this.gameState.explored, [aiP.id]: [...ex] };
         }
 
-        // Advance turn manually (without re-processing income/cities)
         recalcAllTradeRoutes(this.gameState);
         const sfxQ = [];
-        rollRandomEvent(this.gameState, sfxQ);
-
-        const curIdx = this.gameState.players.findIndex(p => p.id === this.gameState.currentPlayerId);
-        const nextIdx = (curIdx + 1) % this.gameState.players.length;
-        this.gameState.currentPlayerId = this.gameState.players[nextIdx].id;
-
-        if (nextIdx === 0) {
-          this.gameState.turnNumber++;
-          spawnBarbarians(this.gameState);
-          processBarbarians(this.gameState);
-        }
-
-        this.gameState.phase = "MOVEMENT";
-        const nextP = this.gameState.players[nextIdx];
-        refreshUnits(nextP, this.gameState);
-        addLogMsg(`Turn ${this.gameState.turnNumber} \u2014 ${nextP.name}`, this.gameState);
-        checkVictoryState(this.gameState);
-
+        advanceToNextPlayerState(this.gameState, sfxQ);
         if (sfxQ.length) allEvents = allEvents.concat(sfxQ.map(s => ({ type: "sfx", name: s })));
 
-        // Check victory after AI turn
         if (this.gameState.victoryStatus) {
           this.phase = "FINISHED";
         }

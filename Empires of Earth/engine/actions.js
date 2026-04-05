@@ -12,7 +12,7 @@ import { CIV_DEFS } from '../data/civs.js';
 import { calcCombatPreview } from './combat.js';
 import { canUpgradeUnit, autoAssignTiles } from './economy.js';
 import { calcCityMaxHP, recalcAllTradeRoutes } from './turnProcessing.js';
-import { isHexOccupied } from './movement.js';
+import { getReachableHexes, isHexOccupied } from './movement.js';
 import {
   applyRelationModifier,
   areAtWar,
@@ -20,6 +20,7 @@ import {
   createProposal,
   acceptProposal,
   rejectProposal,
+  scoreAiDiplomacyOffer,
   tickDiplomacy,
   DIPLOMACY_PROPOSAL_TYPES,
 } from './diplomacy.js';
@@ -31,6 +32,32 @@ import {
 import { checkVictoryState } from './victory.js';
 
 const clone = (state) => JSON.parse(JSON.stringify(state));
+
+export const advanceToNextPlayerState = (g, sfxQ = null) => {
+  rollRandomEvent(g, sfxQ);
+
+  const curIdx = g.players.findIndex(p => p.id === g.currentPlayerId);
+  const nextIdx = (curIdx + 1) % g.players.length;
+  g.currentPlayerId = g.players[nextIdx].id;
+
+  if (nextIdx === 0) {
+    g.turnNumber++;
+    tickDiplomacy(g);
+  }
+
+  g.phase = "MOVEMENT";
+  const nextPlayer = g.players[nextIdx];
+  refreshUnits(nextPlayer, g);
+  addLogMsg(`Turn ${g.turnNumber} \u2014 ${nextPlayer.name}`, g, nextPlayer.id);
+
+  if (nextIdx === 0) {
+    spawnBarbarians(g);
+    processBarbarians(g);
+  }
+
+  checkVictoryState(g);
+  return g;
+};
 
 const tryCaptureCity = (city, attackerPlayer, defenderPlayer, hex, g) => {
   defenderPlayer.cities = defenderPlayer.cities.filter(c => c.id !== city.id);
@@ -57,9 +84,23 @@ export const applyMoveUnit = (state, { unitId, col, row }) => {
   const unit = player?.units.find(u => u.id === unitId);
   if (!unit) return { state, events: [] };
   if (isHexOccupied(col, row, g.players, g.barbarians, unit.id)) return { state, events: [] };
+  const unitDef = UNIT_DEFS[unit.unitType];
+  const { reachable, costMap } = getReachableHexes(
+    unit.hexCol,
+    unit.hexRow,
+    unit.movementCurrent,
+    g.hexes,
+    unitDef?.domain || "land",
+    player.id,
+    g.players,
+    unitDef?.ability,
+    g.barbarians
+  );
+  const moveKey = `${col},${row}`;
+  if (!reachable.has(moveKey)) return { state, events: [] };
   unit.hexCol = col;
   unit.hexRow = row;
-  unit.movementCurrent = 0;
+  unit.movementCurrent = Math.max(0, unit.movementCurrent - (costMap[moveKey] || unit.movementCurrent));
   unit.hasMoved = true;
   return { state: g, events: [{ type: "sfx", name: "move" }] };
 };
@@ -340,30 +381,7 @@ export const applyEndTurn = (state) => {
   for (const city of currentPlayer.cities) processCityTurn(city, currentPlayer, g, sfxQ);
   expandTerritory(currentPlayer, g);
   recalcAllTradeRoutes(g);
-  rollRandomEvent(g, sfxQ);
-
-  // Advance to next player in sequence (N-player cycling)
-  const curIdx = g.players.findIndex(p => p.id === g.currentPlayerId);
-  const nextIdx = (curIdx + 1) % g.players.length;
-  g.currentPlayerId = g.players[nextIdx].id;
-
-  // If we've looped back to first player, a full round is complete
-  if (nextIdx === 0) {
-    g.turnNumber++;
-    tickDiplomacy(g);
-  }
-
-  g.phase = "MOVEMENT";
-  const nextPlayer = g.players[nextIdx];
-  refreshUnits(nextPlayer, g);
-  addLogMsg(`Turn ${g.turnNumber} \u2014 ${nextPlayer.name}`, g, nextPlayer.id);
-
-  // Spawn/process barbarians AFTER turn marker so log reads correctly
-  if (nextIdx === 0) {
-    spawnBarbarians(g);
-    processBarbarians(g);
-  }
-  checkVictoryState(g);
+  advanceToNextPlayerState(g, sfxQ);
 
   const events = sfxQ.map(s => ({ type: "sfx", name: s }));
   return { state: g, events };
@@ -380,7 +398,7 @@ export const applyDeclareWar = (state, { targetPlayerId }) => {
   return { state: g, events: [{ type: "sfx", name: "combat" }] };
 };
 
-export const applyCreateDiplomacyProposal = (state, { targetPlayerId, proposalType }) => {
+export const applyCreateDiplomacyProposal = (state, { targetPlayerId, proposalType, autoResolveAi = false }) => {
   const g = clone(state);
   const actorId = g.currentPlayerId;
   const actor = g.players.find((p) => p.id === actorId);
@@ -388,6 +406,17 @@ export const applyCreateDiplomacyProposal = (state, { targetPlayerId, proposalTy
   if (!actor || !target || actorId === targetPlayerId) return { state, events: [] };
   const proposal = createProposal(g, actorId, targetPlayerId, proposalType);
   addLogMsg(`${actor.name} offered ${proposalType.replace("_", " ")} to ${target.name}.`, g, actor.id);
+  if (autoResolveAi && target.type === "ai") {
+    const accepted = scoreAiDiplomacyOffer(g, actorId, targetPlayerId, proposalType);
+    if (accepted) {
+      acceptProposal(g, proposal.id);
+      addLogMsg(`${target.name} accepted your ${proposalType.replace("_", " ")} proposal.`, g, null);
+      return { state: g, events: [{ type: "sfx", name: "click" }, { type: "proposal_resolved", outcome: "accepted", proposalId: proposal.id }] };
+    }
+    rejectProposal(g, proposal.id);
+    addLogMsg(`${target.name} rejected your ${proposalType.replace("_", " ")} proposal.`, g, null);
+    return { state: g, events: [{ type: "sfx", name: "click" }, { type: "proposal_resolved", outcome: "rejected", proposalId: proposal.id }] };
+  }
   return { state: g, events: [{ type: "proposal_created", proposal }] };
 };
 

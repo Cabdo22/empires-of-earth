@@ -8,24 +8,35 @@ import { CIV_DEFS } from './data/civs.js';
 import { calcCombatPreview } from './engine/combat.js';
 import { calcPlayerIncome, calcPlayerIncomeWithState, canUpgradeUnit, autoAssignTiles, isWorkableHex } from './engine/economy.js';
 import { getMoveBlockReason, getReachableHexes, getRangedTargets, getVisibleHexes, isHexOccupied, findPath } from './engine/movement.js';
-import { processResearchAndIncome, processCityTurn, expandTerritory, refreshUnits, spawnBarbarians, processBarbarians, rollRandomEvent, addLogMsg, recalcAllTradeRoutes } from './engine/turnProcessing.js';
+import { addLogMsg, recalcAllTradeRoutes } from './engine/turnProcessing.js';
 import { checkVictoryState } from './engine/victory.js';
 import { getDisplayColors, checkNewMeetings } from './engine/discovery.js';
 import { createInitialState } from './engine/gameInit.js';
 import { getLeaderDef } from './data/leaders.js';
 import {
+  advanceToNextPlayerState,
+  applyAcceptDiplomacyProposal,
+  applyAttack,
+  applyBuildRoad,
+  applyCancelProduction,
+  applyCreateDiplomacyProposal,
+  applyDeclareWar,
+  applyEndTurn,
+  applyFoundCity,
+  applyLaunchNuke,
+  applyMoveUnit,
+  applyRejectDiplomacyProposal,
+  applySelectResearch,
+  applySetProduction,
+  applySetTradeFocus,
+  applyUpgradeUnit,
+} from './engine/actions.js';
+import {
   applyRelationModifier,
-  areAtWar,
-  createProposal,
-  declareWar,
   ensureDiplomacyState,
   getKnownPlayers,
   getLeaderScenePayload,
   getRelation,
-  acceptProposal,
-  rejectProposal,
-  tickDiplomacy,
-  scoreAiDiplomacyOffer,
 } from './engine/diplomacy.js';
 import { aiExecuteTurn } from './ai/aiEngine.js';
 import { SFX, MenuMusic } from './sfx.js';
@@ -265,18 +276,20 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     if(newlyMet.length===0)return;
     setGs(prev=>{
       if(!prev||!prev.metPlayers)return prev;
-      ensureDiplomacyState(prev);
-      const mp={...prev.metPlayers};
+      const nextState=JSON.parse(JSON.stringify(prev));
+      ensureDiplomacyState(nextState);
+      const mp={...nextState.metPlayers};
       const myMet=[...(mp[viewPlayerId]||[])];
       for(const mid of newlyMet){
         if(!myMet.includes(mid))myMet.push(mid);
         // Symmetric: they also meet us
         const theirMet=[...(mp[mid]||[])];
         if(!theirMet.includes(viewPlayerId)){theirMet.push(viewPlayerId);mp[mid]=theirMet;}
-        applyRelationModifier(prev, viewPlayerId, mid, 6, "First contact");
+        applyRelationModifier(nextState, viewPlayerId, mid, 6, "First contact");
       }
       mp[viewPlayerId]=myMet;
-      return{...prev,metPlayers:mp};
+      nextState.metPlayers=mp;
+      return nextState;
     });
     const metId=newlyMet[0];
     if(metId){
@@ -335,309 +348,110 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     if(scene) setLeaderScene(scene);
   }, [gs, cpId]);
 
-  const resolveProposalAgainstAi = useCallback((g, proposal) => {
-    const target = g.players.find((p) => p.id === proposal.toPlayerId);
-    if (!target || target.type !== "ai") return false;
-    const accepted = scoreAiDiplomacyOffer(g, proposal.fromPlayerId, proposal.toPlayerId, proposal.type);
-    if (accepted) {
-      acceptProposal(g, proposal.id);
-      addLog(`${target.name} accepted your ${proposal.type.replace("_", " ")} proposal.`, g, null);
-    } else {
-      rejectProposal(g, proposal.id);
-      addLog(`${target.name} rejected your ${proposal.type.replace("_", " ")} proposal.`, g, null);
+  const handleLocalEngineEvents = useCallback((events = [], { blockedKey = null } = {}) => {
+    if (!events.length) return;
+
+    const flashMap = {};
+    const anims = [];
+    const now = Date.now();
+    let hadDiplomacyError = false;
+
+    for (const [index, evt] of events.entries()) {
+      if (evt.type === "sfx" && SFX[evt.name]) {
+        setTimeout(() => SFX[evt.name](), index * 150);
+      } else if (evt.type === "flash") {
+        flashMap[evt.key] = evt.kind || "combat";
+      } else if (evt.type === "combat_anim") {
+        if (evt.defender) {
+          const defPos = hexCenter(evt.defender.col, evt.defender.row);
+          anims.push({ id: now + anims.length, x: defPos.x, y: defPos.y, dmg: evt.aDmg, color: "#ff4040", t: now });
+        }
+        if (evt.dDmg > 0 && evt.attacker) {
+          const attPos = hexCenter(evt.attacker.col, evt.attacker.row);
+          anims.push({ id: now + anims.length, x: attPos.x, y: attPos.y, dmg: evt.dDmg, color: "#ff8040", t: now });
+        }
+      } else if (evt.type === "diplomacy_error") {
+        hadDiplomacyError = true;
+        setMoveMsg(evt.message);
+      }
     }
-    return true;
+
+    if (hadDiplomacyError && blockedKey && !flashMap[blockedKey]) {
+      flashMap[blockedKey] = "blocked";
+    }
+    if (Object.keys(flashMap).length > 0) {
+      setFlashes(prev => ({ ...prev, ...flashMap }));
+    }
+    if (anims.length > 0) {
+      setCombatAnims(prev => [...prev, ...anims]);
+    }
   }, []);
+
+  const runLocalEngineAction = useCallback((applyFn, payload, eventOptions) => {
+    let result = { state: gsRef.current, events: [], changed: false };
+    setGs(prev => {
+      if (!prev) return prev;
+      const applied = applyFn(prev, payload);
+      const nextState = applied?.state ?? prev;
+      result = {
+        state: nextState,
+        events: applied?.events || [],
+        changed: nextState !== prev,
+      };
+      return nextState;
+    });
+    handleLocalEngineEvents(result.events, eventOptions);
+    return result;
+  }, [handleLocalEngineEvents]);
 
   const declareWarAction = useCallback((targetPlayerId) => {
     if(!targetPlayerId || onlineMode) return;
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      ensureDiplomacyState(g);
-      const actor = g.players.find((p) => p.id === g.currentPlayerId);
-      const target = g.players.find((p) => p.id === targetPlayerId);
-      if (!actor || !target) return prev;
-      declareWar(g, actor.id, target.id);
-      addLog(`${actor.name} declared war on ${target.name}!`, g, null);
-      return g;
-    });
-    setLeaderScene(null);
-    setShowDiplomacy(true);
-    SFX.combat();
-  }, [onlineMode]);
+    const result = runLocalEngineAction(applyDeclareWar, { targetPlayerId });
+    if (result.changed) {
+      setLeaderScene(null);
+      setShowDiplomacy(true);
+    }
+  }, [onlineMode, runLocalEngineAction]);
 
   const proposeDiplomacyAction = useCallback((targetPlayerId, type) => {
     if(!targetPlayerId || onlineMode) return;
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      ensureDiplomacyState(g);
-      const actor = g.players.find((p) => p.id === g.currentPlayerId);
-      const target = g.players.find((p) => p.id === targetPlayerId);
-      if (!actor || !target) return prev;
-      const proposal = createProposal(g, actor.id, target.id, type);
-      addLog(`${actor.name} proposed ${type.replace("_", " ")} to ${target.name}.`, g, actor.id);
-      resolveProposalAgainstAi(g, proposal);
-      return g;
-    });
+    runLocalEngineAction(applyCreateDiplomacyProposal, { targetPlayerId, proposalType: type, autoResolveAi: true });
     setShowDiplomacy(true);
-    SFX.click();
-  }, [onlineMode, resolveProposalAgainstAi]);
+  }, [onlineMode, runLocalEngineAction]);
 
   const acceptProposalAction = useCallback((proposalId) => {
     if(onlineMode) return;
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const proposal = acceptProposal(g, proposalId);
-      if (!proposal) return prev;
-      const from = g.players.find((p) => p.id === proposal.fromPlayerId);
-      const to = g.players.find((p) => p.id === proposal.toPlayerId);
-      addLog(`${to?.name || "A ruler"} accepted ${from?.name || "a rival"}'s ${proposal.type.replace("_", " ")} proposal.`, g, null);
-      return g;
-    });
-    SFX.click();
-  }, [onlineMode]);
+    runLocalEngineAction(applyAcceptDiplomacyProposal, { proposalId });
+  }, [onlineMode, runLocalEngineAction]);
 
   const rejectProposalAction = useCallback((proposalId) => {
     if(onlineMode) return;
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const proposal = rejectProposal(g, proposalId);
-      if (!proposal) return prev;
-      const from = g.players.find((p) => p.id === proposal.fromPlayerId);
-      const to = g.players.find((p) => p.id === proposal.toPlayerId);
-      addLog(`${to?.name || "A ruler"} rejected ${from?.name || "a rival"}'s ${proposal.type.replace("_", " ")} proposal.`, g, null);
-      return g;
-    });
-    SFX.click();
-  }, [onlineMode]);
+    runLocalEngineAction(applyRejectDiplomacyProposal, { proposalId });
+  }, [onlineMode, runLocalEngineAction]);
 
   // === NUKE ===
   const launchNuke=useCallback((nuId,tc,tr)=>{
     if(onlineMode){onlineMode.sendAction({type:"LAUNCH_NUKE",nukeId:nuId,col:tc,row:tr});setNukeM(null);setSelU(null);return;}
-    setGs(prev=>{const g=JSON.parse(JSON.stringify(prev));const aP=g.players.find(p=>p.id===g.currentPlayerId);
-      const ni=aP.units.findIndex(u=>u.id===nuId);if(ni===-1)return prev;aP.units.splice(ni,1);
-      // Fighter interception: any enemy fighter within 2 hexes of target can intercept
-      const allEnemyUnits=g.players.filter(p=>p.id!==g.currentPlayerId).flatMap(p=>p.units);
-      const interceptor=allEnemyUnits.find(u=>{
-        if(u.unitType!=="fighter"&&u.unitType!=="jet_fighter")return false;
-        const dist=hexDist(u.hexCol,u.hexRow,tc,tr);
-        return dist<=2;
-      });
-      if(interceptor){
-        addLog(`\u2708 ${UNIT_DEFS[interceptor.unitType]?.name||"Fighter"} intercepts nuke at (${tc},${tr})!`,g);
-        interceptor.hasAttacked=true;interceptor.movementCurrent=0;
-        const fl={};fl[`${tc},${tr}`]="combat";setFlashes(fl);
-        SFX.combat();return g;
-      }
-      const blast=getHexesInRadius(tc,tr,1,g.hexes);const fl={};
-      for(const bh of blast){const k=`${bh.col},${bh.row}`;fl[k]="nuke";
-        // Kill all units in blast (all players — friendly fire)
-        for(const p of g.players){p.units=p.units.filter(u=>!(u.hexCol===bh.col&&u.hexRow===bh.row));}
-        g.barbarians=(g.barbarians||[]).filter(b=>!(b.hexCol===bh.col&&b.hexRow===bh.row));
-        // Damage cities of any enemy player
-        for(const p of g.players.filter(pp=>pp.id!==g.currentPlayerId)){
-          const dc=p.cities.find(c=>{const h=g.hexes[c.hexId];return h&&h.col===bh.col&&h.row===bh.row;});
-          if(dc){dc.hp=1;addLog(`\u2622 ${dc.name} hit! (${dc.hp}HP)`,g);}
-        }}
-      addLog(`\u2622 NUCLEAR STRIKE at (${tc},${tr})!`,g);setFlashes(fl);checkVictory(g);return g;});
+    runLocalEngineAction(applyLaunchNuke, { nukeId: nuId, col: tc, row: tr });
     setNukeM(null);setSelU(null);SFX.nuke();
-  },[]);
-
-  // === COMBAT ===
-  // Try to capture a city after killing its garrison (or attacking it directly)
-  const tryCaptureCity = (city, attackerPlayer, defenderPlayer, hex, g) => {
-    defenderPlayer.cities = defenderPlayer.cities.filter(c => c.id !== city.id);
-    city.hp = 10;
-    city.hpMax = 20;
-    city.captured = true; // Track for Ottoman bonus
-    attackerPlayer.cities.push(city);
-    if (hex) hex.ownerPlayerId = attackerPlayer.id;
-    return `🏛${city.name} captured!`;
-  };
+  },[onlineMode, runLocalEngineAction]);
 
   const doCombat = useCallback((attackerId, defCol, defRow) => {
     if(onlineMode){onlineMode.sendAction({type:"ATTACK",attackerId,col:defCol,row:defRow});setSelU(null);setPreview(null);return;}
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const attPlayer = g.players.find(p => p.id === g.currentPlayerId);
-      const allEnemies = g.players.filter(p => p.id !== g.currentPlayerId);
-
-      const attUnit = attPlayer.units.find(u => u.id === attackerId);
-      if (!attUnit) return prev;
-      const attDef = UNIT_DEFS[attUnit.unitType];
-
-      // Find what we're attacking across ALL enemies: enemy unit, barbarian, or undefended city
-      let defUnit = null, defPlayer = null;
-      for (const ep of allEnemies) {
-        const found = ep.units.find(u => u.hexCol === defCol && u.hexRow === defRow);
-        if (found) { defUnit = found; defPlayer = ep; break; }
-      }
-      if (!g.barbarians) g.barbarians = [];
-      const barbUnit = g.barbarians.find(b => b.hexCol === defCol && b.hexRow === defRow);
-      let defCity = null;
-      if (!defPlayer) {
-        // Find city owner
-        for (const ep of allEnemies) {
-          const found = ep.cities.find(c => { const h = g.hexes[c.hexId]; return h.col === defCol && h.row === defRow; });
-          if (found) { defCity = found; defPlayer = ep; break; }
-        }
-      } else {
-        defCity = defPlayer.cities.find(c => { const h = g.hexes[c.hexId]; return h.col === defCol && h.row === defRow; });
-      }
-      if (!defPlayer) defPlayer = allEnemies[0]; // fallback for barbarian combat
-      const defHex = hexAt(g.hexes, defCol, defRow);
-      const flashKey = `${defCol},${defRow}`;
-
-      const defender = defUnit || barbUnit;
-
-      if (!barbUnit && defPlayer && !areAtWar(g, attPlayer.id, defPlayer.id)) {
-        setMoveMsg(`Declare war on ${defPlayer.name} before attacking`);
-        setFlashes({ [flashKey]: "blocked" });
-        return prev;
-      }
-
-      if (defender) {
-        // --- Unit vs unit combat ---
-        const defDef = UNIT_DEFS[defender.unitType];
-        const defOwner = defUnit ? defPlayer : { researchedTechs: [], civilization: "Barbarian" };
-        const preview = calcCombatPreview(attUnit, attDef, defender, defDef, defHex?.terrainType, attPlayer, defOwner, !!defCity);
-
-        // Chu-Ko-Nu rapid shot: 1.5x attack damage
-        const atkDmg = attDef.ability === "rapid_shot" ? Math.ceil(preview.aDmg * 1.5) : preview.aDmg;
-
-        // Apply damage
-        attUnit.hpCurrent = Math.max(0, attUnit.hpCurrent - preview.dDmg);
-        defender.hpCurrent = Math.max(0, defender.hpCurrent - atkDmg);
-        attUnit.hasAttacked = true;
-        attUnit.movementCurrent = 0;
-
-        let msg = `${attDef.name}→${barbUnit ? "Barb " : ""}${defDef.name}: ${atkDmg}dmg${attDef.ability === "rapid_shot" ? " (x1.5)" : ""}`;
-        if (preview.dDmg > 0) msg += ` took ${preview.dDmg}`;
-
-        // Defender killed (use actual HP after damage, not preview which doesn't account for rapid_shot)
-        if (defender.hpCurrent <= 0) {
-          if (defUnit) defPlayer.units = defPlayer.units.filter(u => u.id !== defUnit.id);
-          if (barbUnit) { g.barbarians = g.barbarians.filter(b => b.id !== barbUnit.id); attPlayer.gold += 5; }
-          if (defUnit && defPlayer) applyRelationModifier(g, attPlayer.id, defPlayer.id, -8, "Destroyed unit");
-          msg += ` ☠${barbUnit ? "Barb +5💰 " : ""}${defDef.name}`;
-
-          // Melee attacker advances into the hex
-          if (attDef.range === 0 && !preview.atkDies && !isHexOccupied(defCol, defRow, g.players, g.barbarians, attUnit.id)) {
-            attUnit.hexCol = defCol;
-            attUnit.hexRow = defRow;
-            attUnit.movementCurrent = 0;
-
-            // Damage/capture city if garrison was killed
-            if (defCity && defUnit) {
-              defCity.hp = (defCity.hp || 20) - 5;
-              if (defCity.hp <= 0) msg += ` ${tryCaptureCity(defCity, attPlayer, defPlayer, defHex, g)}`;
-            }
-            // Claim unclaimed barbarian hex
-            if (barbUnit && defHex && !defHex.ownerPlayerId) defHex.ownerPlayerId = attPlayer.id;
-          }
-          // Jaguar Warrior heal on kill
-          if (attDef.ability === "heal_on_kill" && attUnit.hpCurrent > 0) {
-            const healAmt = Math.min(10, UNIT_DEFS[attUnit.unitType].hp - attUnit.hpCurrent);
-            if (healAmt > 0) { attUnit.hpCurrent += healAmt; msg += ` 🐆+${healAmt}HP`; }
-          }
-        }
-
-        // Attacker killed
-        if (preview.atkDies) {
-          attPlayer.units = attPlayer.units.filter(u => u.id !== attUnit.id);
-          msg += ` ☠${attDef.name}`;
-        }
-
-        addLog(msg, g);
-
-      } else if (defCity) {
-        // --- Direct city bombardment (no garrison) ---
-        let cityDmg = attDef.strength * 2;
-        if (attDef.ability === "city_siege") cityDmg += 2; // Great Bombard bonus vs cities
-        defCity.hp = (defCity.hp || 20) - cityDmg;
-        attUnit.hasAttacked = true;
-        attUnit.movementCurrent = 0;
-
-        let msg = `${attDef.name}→${defCity.name} (${Math.max(0, defCity.hp)}HP)`;
-        if (defCity.hp <= 0) {
-          applyRelationModifier(g, attPlayer.id, defPlayer.id, -15, "Captured city");
-          msg = `${attDef.name} ${tryCaptureCity(defCity, attPlayer, defPlayer, defHex, g)}`;
-          if (attDef.range === 0 && !isHexOccupied(defCol, defRow, g.players, g.barbarians, attUnit.id)) { attUnit.hexCol = defCol; attUnit.hexRow = defRow; }
-        }
-
-        addLog(msg, g);
-      }
-
-      setFlashes({ [flashKey]: "combat" });
-      // Spawn floating damage numbers
-      const defPos=hexCenter(defCol,defRow);
-      const anims=[];const now=Date.now();
-      if(defender){
-        const rawPv=calcCombatPreview(attUnit,attDef,defender,UNIT_DEFS[defender.unitType],defHex?.terrainType,attPlayer,defUnit?defPlayer:{researchedTechs:[],civilization:"Barbarian"},!!defCity);
-        const atkDmgShow=attDef.ability==="rapid_shot"?Math.ceil(rawPv.aDmg*1.5):rawPv.aDmg;
-        anims.push({id:now,x:defPos.x,y:defPos.y,dmg:atkDmgShow,color:"#ff4040",t:now});
-        if(rawPv.dDmg>0){const attPos=hexCenter(attUnit.hexCol,attUnit.hexRow);anims.push({id:now+1,x:attPos.x,y:attPos.y,dmg:rawPv.dDmg,color:"#ff8040",t:now});}
-      }else if(defCity){
-        let cd2=attDef.strength*2;if(attDef.ability==="city_siege")cd2+=2;
-        anims.push({id:now,x:defPos.x,y:defPos.y,dmg:cd2,color:"#ff4040",t:now});
-      }
-      if(anims.length>0)setCombatAnims(prev=>[...prev,...anims]);
-      checkVictory(g);
-      return g;
-    });
+    runLocalEngineAction(applyAttack, { attackerId, col: defCol, row: defRow }, { blockedKey: `${defCol},${defRow}` });
 
     setSelU(null);
     setPreview(null);
-    SFX.combat();
-  }, []);
+  }, [onlineMode, runLocalEngineAction]);
 
   // === END TURN (replaces old phase system) ===
   const endTurn = useCallback(() => {
     if(onlineMode){onlineMode.sendAction({type:"END_TURN"});setSelU(null);setSelH(null);setSettlerM(null);setNukeM(null);setPreview(null);return;}
-    let sfxQ = [];
-
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const currentPlayer = g.players.find(p => p.id === g.currentPlayerId);
-
-      // 1. Process research & income for current player
-      processResearchAndIncome(currentPlayer, g, sfxQ);
-      currentPlayer.gold += Math.max(0, calcPlayerIncomeWithState(currentPlayer, g).gold - calcPlayerIncome(currentPlayer, g.hexes).gold);
-      // 2. Process all city turns (production, growth, healing)
-      for (const city of currentPlayer.cities) processCityTurn(city, currentPlayer, g, sfxQ);
-      // 3. Expand territory
-      expandTerritory(currentPlayer, g);
-      // 4. Roll event for current player before advancing
-      rollRandomEvent(g, sfxQ);
-
-      // 5. Advance to next player in sequence
-      const curIdx = g.players.findIndex(p => p.id === g.currentPlayerId);
-      const nextIdx = (curIdx + 1) % g.players.length;
-      g.currentPlayerId = g.players[nextIdx].id;
-
-      // 6. If we've looped back to p1, a full round is complete
-      if (nextIdx === 0) {
-        g.turnNumber++;
-        tickDiplomacy(g);
-        spawnBarbarians(g);
-        processBarbarians(g);
-      }
-
-      // 6. Refresh next player's units and stay in MOVEMENT phase
-      g.phase = "MOVEMENT";
-      const nextPlayer = g.players[nextIdx];
-      refreshUnits(nextPlayer, g);
-      addLog(`Turn ${g.turnNumber} — ${nextPlayer.name}`, g);
-      checkVictory(g);
-
-      return g;
-    });
+    runLocalEngineAction(applyEndTurn);
 
     setSelU(null); setSelH(null); setSettlerM(null); setNukeM(null); setPreview(null);
-    if (sfxQ.length > 0) sfxQ.forEach((s, i) => setTimeout(() => SFX[s]?.(), i * 150));
-    // Reset popup tracker so turn-start popups fire for the new turn
     turnPopupShownRef.current=null;
-  }, []);
+  }, [onlineMode, runLocalEngineAction]);
   // Keep advPhase as alias for compatibility
   const advPhase = endTurn;
 
@@ -678,6 +492,36 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     });
   }, []);
 
+  const runLocalAiTurns = useCallback((state) => {
+    if (!state || state.victoryStatus) return { state, events: [] };
+
+    let nextState = state;
+    const events = [];
+    let safety = (state.players?.length || 0) + 1;
+
+    while (safety-- > 0) {
+      const currentP = nextState.players.find(p => p.id === nextState.currentPlayerId);
+      if (!currentP || currentP.type !== "ai" || nextState.victoryStatus) break;
+
+      nextState = aiExecuteTurn(nextState);
+
+      const aiP = nextState.players.find(p => p.id === nextState.currentPlayerId);
+      if (aiP) {
+        const aiVis = getVisibleHexes(aiP, nextState.hexes);
+        const aiEx = new Set(nextState.explored?.[aiP.id] || []);
+        for (const k of aiVis) aiEx.add(k);
+        nextState.explored = { ...nextState.explored, [aiP.id]: [...aiEx] };
+      }
+
+      recalcAllTradeRoutes(nextState);
+      const sfxQ = [];
+      advanceToNextPlayerState(nextState, sfxQ);
+      events.push(...sfxQ.map(name => ({ type: "sfx", name })));
+    }
+
+    return { state: nextState, events };
+  }, []);
+
   // --- AI auto-play: when it's an AI player's turn, execute AI and chain through consecutive AI turns ---
   useEffect(() => {
     if (onlineMode) return; // Skip AI processing in online mode
@@ -688,56 +532,20 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     setAiThinking(true);
 
     const timer = setTimeout(() => {
-      let sfxQ = [];
+      let aiResult = { state: gsRef.current, events: [] };
       setGs(prev => {
         if (!prev) return prev;
-        let state = prev;
-        const curP = state.players.find(p => p.id === state.currentPlayerId);
-        if (!curP || curP.type !== "ai") return prev;
-
-        // Execute this AI's turn
-        state = aiExecuteTurn(state);
-
-        // Update explored hexes for this AI player
-        const aiP = state.players.find(p => p.id === state.currentPlayerId);
-        if (aiP) {
-          const aiVis = getVisibleHexes(aiP, state.hexes);
-          const aiEx = new Set(state.explored?.[aiP.id] || []);
-          for (const k of aiVis) aiEx.add(k);
-          state.explored = { ...state.explored, [aiP.id]: [...aiEx] };
-        }
-
-        // End AI's turn: roll event for AI, then advance to next player
-        rollRandomEvent(state, sfxQ);
-        const curIdx = state.players.findIndex(p => p.id === state.currentPlayerId);
-        const nextIdx = (curIdx + 1) % state.players.length;
-        state.currentPlayerId = state.players[nextIdx].id;
-
-        if (nextIdx === 0) {
-          state.turnNumber++;
-        }
-
-        state.phase = "MOVEMENT";
-        const nextPlayer = state.players[nextIdx];
-        refreshUnits(nextPlayer, state);
-        addLogMsg(`Turn ${state.turnNumber} — ${nextPlayer.name}`, state, nextPlayer.id);
-
-        // Spawn/process barbarians AFTER turn marker so log reads correctly
-        if (nextIdx === 0) {
-          spawnBarbarians(state);
-          processBarbarians(state);
-        }
-        checkVictoryState(state);
-
-        return state;
+        aiResult = runLocalAiTurns(prev);
+        return aiResult.state;
       });
 
+      handleLocalEngineEvents(aiResult.events);
       setAiThinking(false);
       turnPopupShownRef.current=null;
     }, 600);
 
     return () => clearTimeout(timer);
-  }, [gs?.currentPlayerId, gs?.turnNumber, gs?.victoryStatus]);
+  }, [gs?.currentPlayerId, gs?.turnNumber, gs?.victoryStatus, handleLocalEngineEvents, runLocalAiTurns]);
 
   // --- Turn transition screen for human players in games with multiple humans ---
   useEffect(() => {
@@ -782,87 +590,40 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // --- Player action callbacks ---
 
   const selResearch = useCallback((techId) => {
-    if(onlineMode){onlineMode.sendAction({type:"SELECT_RESEARCH",techId});SFX.click();return;}
-    SFX.click();
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const player = g.players.find(p => p.id === g.currentPlayerId);
-      player.currentResearch = { techId, progress: 0 };
-      addLog(`${player.name} researching ${TECH_TREE[techId].name}`, g);
-      return g;
-    });
-  }, [onlineMode]);
+    if(onlineMode){onlineMode.sendAction({type:"SELECT_RESEARCH",techId});return;}
+    runLocalEngineAction(applySelectResearch, { techId });
+  }, [onlineMode, runLocalEngineAction]);
 
   const upgradeUnit=useCallback((unitId)=>{
-    if(onlineMode){onlineMode.sendAction({type:"UPGRADE_UNIT",unitId});SFX.click();return;}
-    setGs(prev=>{
-      const g=JSON.parse(JSON.stringify(prev));
-      const player=g.players.find(p=>p.id===g.currentPlayerId);
-      const unit=player.units.find(u=>u.id===unitId);
-      if(!unit)return prev;
-      const info=canUpgradeUnit(unit,player);
-      if(!info)return prev;
-      player.gold-=info.cost;
-      const oldDef=UNIT_DEFS[unit.unitType];
-      unit.unitType=info.toType;
-      const newDef=UNIT_DEFS[info.toType];
-      // Scale HP proportionally
-      unit.hpCurrent=Math.ceil((unit.hpCurrent/oldDef.hp)*newDef.hp);
-      unit.movementCurrent=0;unit.hasAttacked=true; // uses the turn
-      addLog(`\u2B06 ${oldDef.name} upgraded to ${newDef.name} (-${info.cost}\u{1F4B0})`,g);
-      return g;
-    });
-    SFX.click();
-  },[onlineMode]);
+    if(onlineMode){onlineMode.sendAction({type:"UPGRADE_UNIT",unitId});return;}
+    runLocalEngineAction(applyUpgradeUnit, { unitId });
+  },[onlineMode, runLocalEngineAction]);
 
   const setProd = useCallback((cityId, type, itemId) => {
     if(onlineMode){onlineMode.sendAction({type:"SET_PRODUCTION",cityId,prodType:type,itemId});return;}
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const city = g.players.find(p => p.id === g.currentPlayerId).cities.find(c => c.id === cityId);
-      if (city) {
-        city.currentProduction = { type, itemId };
-        city.productionProgress = 0;
-      }
-      return g;
-    });
-  }, [onlineMode]);
+    runLocalEngineAction(applySetProduction, { cityId, type, itemId });
+  }, [onlineMode, runLocalEngineAction]);
 
   const setTradeFocus = useCallback((cityId, routeIndex, focus) => {
     if(onlineMode){onlineMode.sendAction({type:"SET_TRADE_FOCUS",cityId,routeIndex,focus});return;}
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const city = g.players.find(p => p.id === g.currentPlayerId).cities.find(c => c.id === cityId);
-      if (city && city.tradeRoutes && city.tradeRoutes[routeIndex]) {
-        city.tradeRoutes[routeIndex].focus = focus;
-      }
-      return g;
-    });
-  }, [onlineMode]);
+    runLocalEngineAction(applySetTradeFocus, { cityId, routeIndex, focus });
+  }, [onlineMode, runLocalEngineAction]);
+
+  const cancelProduction = useCallback((cityId) => {
+    if(onlineMode){onlineMode.sendAction({type:"CANCEL_PRODUCTION",cityId});return;}
+    runLocalEngineAction(applyCancelProduction, { cityId });
+  }, [onlineMode, runLocalEngineAction]);
 
   const buildRoad = useCallback((hexId) => {
     if(onlineMode){onlineMode.sendAction({type:"BUILD_ROAD",hexId});return;}
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const player = g.players.find(p => p.id === g.currentPlayerId);
-      const hex = g.hexes[hexId];
-      if (!hex || hex.road || hex.ownerPlayerId !== player.id) return prev;
-      if (!player.researchedTechs.includes("trade") || player.gold < 5) return prev;
-      if (hex.terrainType === "water" || hex.terrainType === "mountain") return prev;
-      player.gold -= 5;
-      hex.road = true;
-      hex.roadOwner = player.id;
-      recalcAllTradeRoutes(g);
-      return g;
-    });
-    SFX.click();
-  }, [onlineMode]);
+    runLocalEngineAction(applyBuildRoad, { hexId });
+  }, [onlineMode, runLocalEngineAction]);
 
   // Keyboard shortcuts (must be after upgradeUnit and buildRoad are defined)
   useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity, turnTransition, setTurnTransition, upgradeUnit, buildRoad, sud, setShowSaveLoad, setTutorialOn, setTutorialDismissed, zoomRef, wW, wH, setMinimapVisible, hexes });
 
   const moveU = useCallback((unitId, targetCol, targetRow, cost) => {
-    if(onlineMode){onlineMode.sendAction({type:"MOVE_UNIT",unitId,col:targetCol,row:targetRow});setSelU(null);SFX.move();return;}
+    if(onlineMode){onlineMode.sendAction({type:"MOVE_UNIT",unitId,col:targetCol,row:targetRow});setSelU(null);return;}
     if(animatingUnitId)return; // block during animation
 
     const currentGs = gsRef.current;
@@ -885,76 +646,21 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       pBg: player.colorBg, pCol: player.color, pLight: player.colorLight
     };
 
-    SFX.move();
-
     startAnimation(unitId, visuals, waypoints, () => {
-      let remaining = 0;
-      setGs(prev => {
-        const g = JSON.parse(JSON.stringify(prev));
-        const u = g.players.find(p => p.id === g.currentPlayerId)?.units.find(u2 => u2.id === unitId);
-        if (!u) return prev;
-        if (isHexOccupied(targetCol, targetRow, g.players, g.barbarians, u.id)) return prev;
-        u.hexCol = targetCol;
-        u.hexRow = targetRow;
-        u.movementCurrent = Math.max(0, u.movementCurrent - (cost || u.movementCurrent));
-        u.hasMoved = true;
-        remaining = u.movementCurrent;
-        return g;
-      });
-      if (remaining <= 0) setSelU(null);
+      const result = runLocalEngineAction(applyMoveUnit, { unitId, col: targetCol, row: targetRow });
+      const movedUnit = result.state?.players
+        ?.find(p => p.id === result.state.currentPlayerId)
+        ?.units?.find(u => u.id === unitId);
+      if (!movedUnit || movedUnit.movementCurrent <= 0) setSelU(null);
     });
-  }, [animatingUnitId, startAnimation]);
+  }, [animatingUnitId, runLocalEngineAction, startAnimation]);
 
   const foundCity = useCallback((unitId, col, row) => {
-    if(onlineMode){onlineMode.sendAction({type:"FOUND_CITY",unitId,col,row});setSettlerM(null);setSelU(null);SFX.found();return;}
-    setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
-      const player = g.players.find(p => p.id === g.currentPlayerId);
-      const unitIdx = player.units.findIndex(u => u.id === unitId);
-      if (unitIdx === -1) return prev;
-
-      const hex = hexAt(g.hexes, col, row);
-      if (!hex || hex.terrainType === "water" || hex.terrainType === "mountain" || hex.cityId) return prev;
-      // Must be at least 2 hexes from any existing city
-      const tooClose = g.players.some(p => p.cities.some(c => {
-        const ch = g.hexes[c.hexId];
-        return ch && hexDist(col, row, ch.col, ch.row) < 2;
-      }));
-      if (tooClose) return prev;
-
-      // Remove settler
-      player.units.splice(unitIdx, 1);
-
-      // Name the new city from the civ's name list
-      const cityNum = player.cities.length + 1;
-      const civNames = CIV_DEFS[player.civilization]?.cityNames || ["Colony"];
-      const cityName = civNames[cityNum - 1] || `City ${cityNum}`;
-      const cityId = `${player.id}-c${cityNum}`;
-
-      player.cities.push({
-        id: cityId, name: cityName, hexId: hex.id, population: 1,
-        districts: [], currentProduction: null, productionProgress: 0,
-        foodAccumulated: 0, hp: 20, hpMax: 20,
-      });
-
-      hex.cityId = cityId;
-      hex.ownerPlayerId = player.id;
-
-      // Claim adjacent unclaimed land
-      for (const [nc, nr] of getNeighbors(col, row)) {
-        const neighbor = hexAt(g.hexes, nc, nr);
-        if (neighbor && !neighbor.ownerPlayerId && neighbor.terrainType !== "water") {
-          neighbor.ownerPlayerId = player.id;
-        }
-      }
-
-      addLog(`${player.name} founded ${cityName}!`, g);
-      return g;
-    });
+    if(onlineMode){onlineMode.sendAction({type:"FOUND_CITY",unitId,col,row});setSettlerM(null);setSelU(null);return;}
+    runLocalEngineAction(applyFoundCity, { unitId, col, row });
     setSettlerM(null);
     setSelU(null);
-    SFX.found();
-  }, []);
+  }, [onlineMode, runLocalEngineAction]);
 
   // === RENDER HEXES (memoized) ===
   // Helper: find hex from SVG event via data attributes
@@ -1461,7 +1167,6 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
       {/* City panel */}
       {showCity&&(()=>{const city=cp.cities.find(c=>c.id===showCity);if(!city)return null;
-        const cancelProduction=(cityId)=>{if(onlineMode){onlineMode.sendAction({type:"CANCEL_PRODUCTION",cityId});return;}setGs(prev=>{const g=JSON.parse(JSON.stringify(prev));const c=g.players.find(p=>p.id===g.currentPlayerId).cities.find(c2=>c2.id===cityId);if(c){c.currentProduction=null;c.productionProgress=0;}return g;});};
         return <CityPanel city={city} cp={cp} hexes={hexes} cityPosRef={cityPosRef} cityCollapsed={cityCollapsed} setCityCollapsed={setCityCollapsed} setShowCity={setShowCity} onPanelDown={onPanelDown} setProd={setProd} cancelProduction={cancelProduction} toggleTile={toggleTile} maximizeTiles={maximizeTiles} setTradeFocus={setTradeFocus} allCities={cp.cities} discoveredResources={discoveredResources}/>;})()}
 
       {/* Legend */}
