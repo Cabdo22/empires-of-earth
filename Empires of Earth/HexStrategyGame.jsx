@@ -55,6 +55,7 @@ import { GameHud } from './components/GameHud.jsx';
 import { GameModals } from './components/GameModals.jsx';
 import useUnitAnimation from './hooks/useUnitAnimation.js';
 import { cloneState } from './utils/cloneState.js';
+import { clientPointToWorldPoint, findHexFromWorldPoint } from './utils/boardCoordinates.js';
 import { createSavedGameEntry, deserializeGameState, readSavedGames, writeSavedGames } from './utils/saveGames.js';
 
 let uidCtr = 0;
@@ -405,6 +406,22 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     return result;
   }, [handleLocalEngineEvents]);
 
+  const dispatchGameplayAction = useCallback(({ online, localApply, payload, eventOptions, onOnline, onLocal }) => {
+    if (onlineMode && online) {
+      onlineMode.sendAction(online);
+      if (onOnline) onOnline();
+      return { mode: "online", changed: false, state: gsRef.current, events: [] };
+    }
+
+    if (!localApply) {
+      return { mode: "noop", changed: false, state: gsRef.current, events: [] };
+    }
+
+    const result = runLocalEngineAction(localApply, payload, eventOptions);
+    if (onLocal) onLocal(result);
+    return { mode: "local", ...result };
+  }, [onlineMode, runLocalEngineAction]);
+
   const declareWarAction = useCallback((targetPlayerId) => {
     if(!targetPlayerId || onlineMode) return;
     const result = runLocalEngineAction(applyDeclareWar, { targetPlayerId });
@@ -439,27 +456,38 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   // === NUKE ===
   const launchNuke=useCallback((nuId,tc,tr)=>{
-    if(onlineMode){onlineMode.sendAction({type:"LAUNCH_NUKE",nukeId:nuId,col:tc,row:tr});setNukeM(null);setSelU(null);return;}
-    runLocalEngineAction(applyLaunchNuke, { nukeId: nuId, col: tc, row: tr });
-    setNukeM(null);setSelU(null);SFX.nuke();
-  },[onlineMode, runLocalEngineAction]);
+    dispatchGameplayAction({
+      online: { type: "LAUNCH_NUKE", nukeId: nuId, col: tc, row: tr },
+      localApply: applyLaunchNuke,
+      payload: { nukeId: nuId, col: tc, row: tr },
+      onOnline: () => { setNukeM(null); setSelU(null); },
+      onLocal: () => { setNukeM(null); setSelU(null); SFX.nuke(); },
+    });
+  },[dispatchGameplayAction]);
 
   const doCombat = useCallback((attackerId, defCol, defRow) => {
-    if(onlineMode){onlineMode.sendAction({type:"ATTACK",attackerId,col:defCol,row:defRow});setSelU(null);setPreview(null);return;}
-    runLocalEngineAction(applyAttack, { attackerId, col: defCol, row: defRow }, { blockedKey: `${defCol},${defRow}` });
-
-    setSelU(null);
-    setPreview(null);
-  }, [onlineMode, runLocalEngineAction]);
+    dispatchGameplayAction({
+      online: { type: "ATTACK", attackerId, col: defCol, row: defRow },
+      localApply: applyAttack,
+      payload: { attackerId, col: defCol, row: defRow },
+      eventOptions: { blockedKey: `${defCol},${defRow}` },
+      onOnline: () => { setSelU(null); setPreview(null); },
+      onLocal: () => { setSelU(null); setPreview(null); },
+    });
+  }, [dispatchGameplayAction]);
 
   // === END TURN (replaces old phase system) ===
   const endTurn = useCallback(() => {
-    if(onlineMode){onlineMode.sendAction({type:"END_TURN"});setSelU(null);setSelH(null);setSettlerM(null);setNukeM(null);setPreview(null);return;}
-    runLocalEngineAction(applyEndTurn);
-
-    setSelU(null); setSelH(null); setSettlerM(null); setNukeM(null); setPreview(null);
-    turnPopupShownRef.current=null;
-  }, [onlineMode, runLocalEngineAction]);
+    dispatchGameplayAction({
+      online: { type: "END_TURN" },
+      localApply: applyEndTurn,
+      onOnline: () => { setSelU(null); setSelH(null); setSettlerM(null); setNukeM(null); setPreview(null); },
+      onLocal: () => {
+        setSelU(null); setSelH(null); setSettlerM(null); setNukeM(null); setPreview(null);
+        turnPopupShownRef.current = null;
+      },
+    });
+  }, [dispatchGameplayAction]);
   // Keep advPhase as alias for compatibility
   const advPhase = endTurn;
 
@@ -598,40 +626,63 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // --- Player action callbacks ---
 
   const selResearch = useCallback((techId) => {
-    if(onlineMode){onlineMode.sendAction({type:"SELECT_RESEARCH",techId});return;}
-    runLocalEngineAction(applySelectResearch, { techId });
-  }, [onlineMode, runLocalEngineAction]);
+    dispatchGameplayAction({
+      online: { type:"SELECT_RESEARCH", techId },
+      localApply: applySelectResearch,
+      payload: { techId },
+    });
+  }, [dispatchGameplayAction]);
 
   const upgradeUnit=useCallback((unitId)=>{
-    if(onlineMode){onlineMode.sendAction({type:"UPGRADE_UNIT",unitId});return;}
-    runLocalEngineAction(applyUpgradeUnit, { unitId });
-  },[onlineMode, runLocalEngineAction]);
+    dispatchGameplayAction({
+      online: { type:"UPGRADE_UNIT", unitId },
+      localApply: applyUpgradeUnit,
+      payload: { unitId },
+    });
+  },[dispatchGameplayAction]);
 
   const setProd = useCallback((cityId, type, itemId) => {
-    if(onlineMode){onlineMode.sendAction({type:"SET_PRODUCTION",cityId,prodType:type,itemId});return;}
-    runLocalEngineAction(applySetProduction, { cityId, type, itemId });
-  }, [onlineMode, runLocalEngineAction]);
+    dispatchGameplayAction({
+      online: { type:"SET_PRODUCTION", cityId, prodType:type, itemId },
+      localApply: applySetProduction,
+      payload: { cityId, type, itemId },
+    });
+  }, [dispatchGameplayAction]);
 
   const setTradeFocus = useCallback((cityId, routeIndex, focus) => {
-    if(onlineMode){onlineMode.sendAction({type:"SET_TRADE_FOCUS",cityId,routeIndex,focus});return;}
-    runLocalEngineAction(applySetTradeFocus, { cityId, routeIndex, focus });
-  }, [onlineMode, runLocalEngineAction]);
+    dispatchGameplayAction({
+      online: { type:"SET_TRADE_FOCUS", cityId, routeIndex, focus },
+      localApply: applySetTradeFocus,
+      payload: { cityId, routeIndex, focus },
+    });
+  }, [dispatchGameplayAction]);
 
   const cancelProduction = useCallback((cityId) => {
-    if(onlineMode){onlineMode.sendAction({type:"CANCEL_PRODUCTION",cityId});return;}
-    runLocalEngineAction(applyCancelProduction, { cityId });
-  }, [onlineMode, runLocalEngineAction]);
+    dispatchGameplayAction({
+      online: { type:"CANCEL_PRODUCTION", cityId },
+      localApply: applyCancelProduction,
+      payload: { cityId },
+    });
+  }, [dispatchGameplayAction]);
 
   const buildRoad = useCallback((hexId) => {
-    if(onlineMode){onlineMode.sendAction({type:"BUILD_ROAD",hexId});return;}
-    runLocalEngineAction(applyBuildRoad, { hexId });
-  }, [onlineMode, runLocalEngineAction]);
+    dispatchGameplayAction({
+      online: { type:"BUILD_ROAD", hexId },
+      localApply: applyBuildRoad,
+      payload: { hexId },
+    });
+  }, [dispatchGameplayAction]);
 
   // Keyboard shortcuts (must be after upgradeUnit and buildRoad are defined)
   useKeyboardShortcuts({ sched, phase, cp, selU, setSelU, setSelH, setSettlerM, setNukeM, setPreview, panRef, endTurn, aiThinking, setShowTech, setShowCity, turnTransition, setTurnTransition, upgradeUnit, buildRoad, sud, setShowSaveLoad, setTutorialOn, setTutorialDismissed, zoomRef, wW, wH, setMinimapVisible, hexes });
 
   const moveU = useCallback((unitId, targetCol, targetRow, cost) => {
-    if(onlineMode){onlineMode.sendAction({type:"MOVE_UNIT",unitId,col:targetCol,row:targetRow});return;}
+    if(onlineMode){
+      dispatchGameplayAction({
+        online: { type:"MOVE_UNIT", unitId, col:targetCol, row:targetRow },
+      });
+      return;
+    }
     if(animatingUnitId)return; // block during animation
 
     const currentGs = gsRef.current;
@@ -661,14 +712,17 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
         ?.units?.find(u => u.id === unitId);
       if (!movedUnit || movedUnit.movementCurrent <= 0) setSelU(null);
     });
-  }, [animatingUnitId, runLocalEngineAction, startAnimation]);
+  }, [animatingUnitId, dispatchGameplayAction, runLocalEngineAction, startAnimation]);
 
   const foundCity = useCallback((unitId, col, row) => {
-    if(onlineMode){onlineMode.sendAction({type:"FOUND_CITY",unitId,col,row});setSettlerM(null);setSelU(null);return;}
-    runLocalEngineAction(applyFoundCity, { unitId, col, row });
-    setSettlerM(null);
-    setSelU(null);
-  }, [onlineMode, runLocalEngineAction]);
+    dispatchGameplayAction({
+      online: { type:"FOUND_CITY", unitId, col, row },
+      localApply: applyFoundCity,
+      payload: { unitId, col, row },
+      onOnline: () => { setSettlerM(null); setSelU(null); },
+      onLocal: () => { setSettlerM(null); setSelU(null); },
+    });
+  }, [dispatchGameplayAction]);
 
   const saveCurrentGame = useCallback(() => {
     const name = saveName.trim() || `Turn ${turnNumber} - ${cp.name}`;
@@ -704,52 +758,18 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const findHexFromEvent=useCallback(e=>{const el=e.target.closest("[data-hex]");if(!el)return null;
     const id=+el.dataset.hex,col=+el.dataset.col,row=+el.dataset.row;
     return{id,col,row,hex:hexes[id],uk:`${col},${row}`};},[hexes]);
-  const isPointInHex=useCallback((worldX,worldY,hex)=>{
-    const localX=Math.abs(worldX-hex.x);
-    const localY=Math.abs(worldY-hex.y);
-    const halfHeight=(SQRT3*HEX_SIZE)/2;
-    return localX<=HEX_SIZE && localY<=halfHeight && (SQRT3*localX)+localY<=SQRT3*HEX_SIZE;
-  },[]);
   const findHexFromClientPoint=useCallback((clientX,clientY)=>{
-    const containerRect=gameContainerRef.current?.getBoundingClientRect();
-    const z=zoomRef.current;
-    const p=panRef.current;
-    const viewportWidth=containerRect?.width||window.innerWidth;
-    const viewportHeight=containerRect?.height||window.innerHeight;
-    const viewportLeft=containerRect?.left||0;
-    const viewportTop=containerRect?.top||0;
-    const cx=viewportWidth/2;
-    const cy=viewportHeight/2;
-    const localX=clientX-viewportLeft;
-    const localY=clientY-viewportTop;
-    const worldX=(localX-(p.x+cx-(wW*z)/2))/z;
-    const worldY=(localY-(p.y+cy-(wH*z)/2))/z;
-    const approxCol=Math.round((worldX-HEX_SIZE-50)/(1.5*HEX_SIZE));
-    let bestHex=null;
-    let bestDistSq=Infinity;
-    for(let col=approxCol-1;col<=approxCol+1;col++){
-      if(col<0||col>=mapCols)continue;
-      const baseRow=(worldY-HEX_SIZE-50-(col%2===1?(SQRT3*HEX_SIZE)/2:0))/(SQRT3*HEX_SIZE);
-      const approxRow=Math.round(baseRow);
-      for(let row=approxRow-1;row<=approxRow+1;row++){
-        if(row<0||row>=mapRows)continue;
-        const hex=hexAt(hexes,col,row);
-        if(!hex)continue;
-        const dx=hex.x-worldX;
-        const dy=hex.y-worldY;
-        const distSq=dx*dx+dy*dy;
-        if(isPointInHex(worldX,worldY,hex)){
-          return{id:hex.id,col:hex.col,row:hex.row,hex,uk:hex.uk};
-        }
-        if(distSq<bestDistSq){
-          bestDistSq=distSq;
-          bestHex=hex;
-        }
-      }
-    }
-    if(!bestHex||bestDistSq>HEX_SIZE*HEX_SIZE*1.2)return null;
-    return{id:bestHex.id,col:bestHex.col,row:bestHex.row,hex:bestHex,uk:bestHex.uk};
-  },[gameContainerRef,hexes,isPointInHex,mapCols,mapRows,panRef,zoomRef,wW,wH]);
+    const { worldX, worldY } = clientPointToWorldPoint({
+      clientX,
+      clientY,
+      containerRect: gameContainerRef.current?.getBoundingClientRect(),
+      pan: panRef.current,
+      zoom: zoomRef.current,
+      worldWidth: wW,
+      worldHeight: wH,
+    });
+    return findHexFromWorldPoint({ worldX, worldY, hexes });
+  },[gameContainerRef,hexes,panRef,zoomRef,wW,wH]);
 
   const commitPreview=useCallback(nextPreview=>{
     const nextKey=nextPreview?[
