@@ -15,10 +15,34 @@ const DIFF_KEYS = Object.keys(AI_DIFFICULTY);
 const SLOT_COLORS = { ai: "#b08030", closed: "#555" };
 const SLOT_LABELS = { ai: "AI", closed: "Closed" };
 
+function useTicker(active) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) setNow(Date.now());
+  }, [active]);
+
+  return now;
+}
+
+function formatCountdown(msRemaining) {
+  if (msRemaining <= 0) return "0:00";
+  const totalSeconds = Math.ceil(msRemaining / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 // ============================================================
 // ONLINE CIV SELECT
 // ============================================================
-function OnlineCivSelect({ myPlayerId, hostPlayerId, civPicks, sendAction, mapSize, aiSlots: serverAiSlots }) {
+function OnlineCivSelect({ myPlayerId, hostPlayerId, civPicks, sendAction, mapSize, aiSlots: serverAiSlots, setupLocked }) {
   const [selectedCiv, setSelectedCiv] = useState("Rome");
   const [selectedSize, setSelectedSize] = useState(mapSize || "medium");
   const maxPlayers = MAP_SIZES[selectedSize]?.maxPlayers || 2;
@@ -65,8 +89,8 @@ function OnlineCivSelect({ myPlayerId, hostPlayerId, civPicks, sendAction, mapSi
     sendAction({
       type: "PICK_CIV",
       civilization: selectedCiv,
-      mapSize: isP1 ? selectedSize : undefined,
-      aiSlots: isP1 ? activeAi : undefined,
+      mapSize: isHost ? selectedSize : undefined,
+      aiSlots: isHost ? activeAi : undefined,
     });
   };
 
@@ -85,6 +109,11 @@ function OnlineCivSelect({ myPlayerId, hostPlayerId, civPicks, sendAction, mapSi
         <div style={{ color: "#4a5a3a", fontSize: 10, letterSpacing: 2 }}>
           {isHost ? "You are hosting this match" : `Host is ${hostPlayerId === "p1" ? "Player 1" : "Player 2"}`}
         </div>
+        {!isHost && !hasPicked && (
+          <div style={{ color: "#4a5a3a", fontSize: 9, letterSpacing: 1 }}>
+            {setupLocked ? "Match settings are locked." : "Waiting for the host to finish configuring the match."}
+          </div>
+        )}
 
         {isHost && !hasPicked && (
           <div style={{ marginBottom: 8 }}>
@@ -213,8 +242,12 @@ export default function OnlineGame({ roomId, onBack }) {
   const {
     gameState, connected, myPlayerId, hostPlayerId, sendAction, error,
     roomPhase, civPicks, opponentDisconnected, events, clearEvents,
-    aiSlots, mapSize, roomReset,
+    aiSlots, mapSize, roomReset, setupLocked,
+    stateVersion, connectionState, roomStatus, reconnectDeadlineAt,
   } = useMultiplayerGame(roomId);
+  const now = useTicker(Boolean(reconnectDeadlineAt));
+  const reconnectRemainingMs = reconnectDeadlineAt ? Math.max(0, reconnectDeadlineAt - now) : 0;
+  const reconnectCountdown = reconnectDeadlineAt ? formatCountdown(reconnectRemainingMs) : null;
 
   // Must use state (not ref) so setting it triggers a re-render past the loading screen
   const [mapConfigured, setMapConfigured] = useState(false);
@@ -240,7 +273,11 @@ export default function OnlineGame({ roomId, onBack }) {
           Empires of Earth
         </h1>
         <div style={{ color: "#6a7a50", fontSize: 14, letterSpacing: 3 }}>
-          {connected ? "Waiting for opponent..." : "Connecting..."}
+          {roomStatus === "room_full" ? "Room is full"
+            : connectionState === "connecting" ? "Connecting to room..."
+            : connectionState === "reconnecting" ? "Reconnecting to room..."
+            : !myPlayerId ? "Joining room..."
+            : "Waiting for opponent..."}
         </div>
         <div style={{
           fontSize: 48, color: "#c8d8a0", letterSpacing: 12, fontFamily: "monospace",
@@ -252,8 +289,13 @@ export default function OnlineGame({ roomId, onBack }) {
         <div style={{ color: "#4a5a3a", fontSize: 10 }}>Share this code with your opponent</div>
         {myPlayerId && <div style={{ color: "#4a5a3a", fontSize: 10 }}>You are {myPlayerId === "p1" ? "Player 1" : "Player 2"}</div>}
         {roomReset && <div style={{ color: "#c8d8a0", fontSize: 10 }}>This room was reset after its previous session expired.</div>}
+        {opponentDisconnected && reconnectCountdown && (
+          <div style={{ color: "#c8d8a0", fontSize: 10 }}>
+            Opponent disconnected. Rejoin window remaining: {reconnectCountdown}
+          </div>
+        )}
         <div onClick={onBack} style={{ color: "#6a7a50", fontSize: 9, cursor: "pointer", textDecoration: "underline", marginTop: 8 }}>{"\u2190"} Leave</div>
-        {error && <div style={{ color: "#ff6060", fontSize: 10 }}>{error}</div>}
+        {error && <div style={{ color: "#ff6060", fontSize: 10 }}>{error.message}</div>}
       </div>
     );
   }
@@ -268,6 +310,7 @@ export default function OnlineGame({ roomId, onBack }) {
         sendAction={sendAction}
         aiSlots={aiSlots}
         mapSize={mapSize}
+        setupLocked={setupLocked}
       />
     );
   }
@@ -287,18 +330,45 @@ export default function OnlineGame({ roomId, onBack }) {
     }
 
     return (
-      <HexStrategyGame
-        onlineMode={{
-          gameState,
-          myPlayerId,
-          sendAction,
-          opponentDisconnected,
-          error,
-          isMyTurn: gameState.currentPlayerId === myPlayerId,
-          events,
-          clearEvents,
-        }}
-      />
+      <>
+        {(opponentDisconnected || connectionState === "reconnecting" || error) && (
+          <div style={{
+            position: "absolute",
+            top: 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 60,
+            background: "rgba(12,18,8,.95)",
+            border: "1px solid rgba(120,160,70,.45)",
+            borderRadius: 10,
+            padding: "8px 16px",
+            minWidth: 280,
+            textAlign: "center",
+            pointerEvents: "none",
+          }}>
+            <div style={{ color: "#c8d8a0", fontSize: 11, letterSpacing: 1 }}>
+              {connectionState === "reconnecting" && "Reconnecting to multiplayer server..."}
+              {connectionState !== "reconnecting" && opponentDisconnected && `Opponent disconnected${reconnectCountdown ? ` · ${reconnectCountdown} left` : ""}`}
+              {connectionState !== "reconnecting" && !opponentDisconnected && error && error.message}
+            </div>
+            <div style={{ color: "#6a7a50", fontSize: 9, marginTop: 2 }}>
+              State v{stateVersion}
+            </div>
+          </div>
+        )}
+        <HexStrategyGame
+          onlineMode={{
+            gameState,
+            myPlayerId,
+            sendAction,
+            opponentDisconnected,
+            error: error?.message || null,
+            isMyTurn: gameState.currentPlayerId === myPlayerId,
+            events,
+            clearEvents,
+          }}
+        />
+      </>
     );
   }
 

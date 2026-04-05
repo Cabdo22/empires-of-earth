@@ -132,6 +132,7 @@ export default class EmpiresServer {
     this.updatedAt = null;
     this.hostPlayerId = null;
     this.hostSessionId = null;
+    this.stateVersion = 0;
   }
 
   createEmptyPlayerSlots() {
@@ -220,6 +221,7 @@ export default class EmpiresServer {
     this.civPicks = {};
     this.mapSize = "medium";
     this.aiSlots = [];
+    this.stateVersion = 0;
     if (!preserveHost) {
       this.hostPlayerId = null;
       this.hostSessionId = null;
@@ -291,7 +293,27 @@ export default class EmpiresServer {
       hostPlayerId: this.getHostPlayerId(),
       reconnectWindowMs: RECONNECT_WINDOW_MS,
       setupLocked: !["WAITING", "CIV_SELECT"].includes(this.phase),
+      serverNow: Date.now(),
     };
+  }
+
+  logEvent(event, data = {}) {
+    console.log(`[multiplayer] ${event}`, {
+      roomId: this.room.id,
+      phase: this.phase,
+      ...data,
+    });
+  }
+
+  sendError(connection, code, message, extra = {}) {
+    connection.send(JSON.stringify({
+      type: "error",
+      code,
+      message,
+      serverNow: Date.now(),
+      reconnectWindowMs: RECONNECT_WINDOW_MS,
+      ...extra,
+    }));
   }
 
   async onStart() {
@@ -307,6 +329,7 @@ export default class EmpiresServer {
       this.updatedAt = saved.updatedAt || this.createdAt;
       this.hostPlayerId = saved.hostPlayerId || null;
       this.hostSessionId = saved.hostSessionId || null;
+      this.stateVersion = saved.stateVersion || 0;
     } else {
       this.createdAt = Date.now();
       this.updatedAt = this.createdAt;
@@ -327,6 +350,7 @@ export default class EmpiresServer {
       updatedAt: this.updatedAt,
       hostPlayerId: this.hostPlayerId,
       hostSessionId: this.hostSessionId,
+      stateVersion: this.stateVersion,
     });
   }
 
@@ -339,7 +363,20 @@ export default class EmpiresServer {
     if (!slot) return;
 
     const otherSlot = slot.playerId === "p1" ? "p2" : "p1";
-    this.broadcastToPlayer(otherSlot, { type: "opponent_disconnected" });
+    const reconnectDeadlineAt = slot.disconnectedAt + RECONNECT_WINDOW_MS;
+    this.logEvent("opponent_disconnected", {
+      playerId: slot.playerId,
+      disconnectedAt: slot.disconnectedAt,
+      reconnectDeadlineAt,
+    });
+    this.broadcastToPlayer(otherSlot, {
+      type: "opponent_disconnected",
+      playerId: slot.playerId,
+      disconnectedAt: slot.disconnectedAt,
+      reconnectDeadlineAt,
+      reconnectWindowMs: RECONNECT_WINDOW_MS,
+      serverNow: Date.now(),
+    });
     await this.persist();
   }
 
@@ -348,7 +385,7 @@ export default class EmpiresServer {
     try {
       data = JSON.parse(message);
     } catch {
-      sender.send(JSON.stringify({ type: "error", message: "Invalid JSON" }));
+      this.sendError(sender, "INVALID_JSON", "Invalid JSON");
       return;
     }
 
@@ -359,11 +396,11 @@ export default class EmpiresServer {
 
     const playerId = sender.state?.playerId;
     if (!playerId) {
-      sender.send(JSON.stringify({ type: "error", message: "Not assigned to a slot" }));
+      this.sendError(sender, "NO_SLOT", "Not assigned to a slot");
       return;
     }
     if (!this.isCurrentConnection(playerId, sender.id)) {
-      sender.send(JSON.stringify({ type: "error", message: "Session replaced by a newer connection" }));
+      this.sendError(sender, "SESSION_REPLACED", "Session replaced by a newer connection");
       return;
     }
 
@@ -375,14 +412,14 @@ export default class EmpiresServer {
         await this.handleGameAction(data, playerId, sender);
         break;
       default:
-        sender.send(JSON.stringify({ type: "error", message: `Cannot act in phase ${this.phase}` }));
+        this.sendError(sender, "INVALID_PHASE", `Cannot act in phase ${this.phase}`);
     }
   }
 
   async handleHello(data, connection) {
     const sessionId = typeof data.sessionId === "string" ? data.sessionId.trim() : "";
     if (!sessionId) {
-      connection.send(JSON.stringify({ type: "error", message: "Missing session id" }));
+      this.sendError(connection, "MISSING_SESSION_ID", "Missing session id");
       return;
     }
 
@@ -391,15 +428,20 @@ export default class EmpiresServer {
     if (this.shouldResetExpiredRoom(expiredPlayerIds)) {
       this.resetRoomState();
       roomReset = true;
+      this.logEvent("room_reset", { expiredPlayerIds });
     }
 
     let slot = this.getPlayerSlotForSession(sessionId);
     const isReconnect = Boolean(slot);
+    if (!slot && expiredPlayerIds.length) {
+      this.logEvent("slot_expired", { expiredPlayerIds });
+    }
 
     if (!slot) {
       slot = this.getFirstUnclaimedSlot();
       if (!slot) {
-        connection.send(JSON.stringify({ type: "error", message: "Room is full" }));
+        this.logEvent("room_full", { sessionId });
+        this.sendError(connection, "ROOM_FULL", "Room is full");
         return;
       }
     }
@@ -419,6 +461,7 @@ export default class EmpiresServer {
       reclaimed: isReconnect,
       opponentDisconnected: this.isOpponentDisconnected(slot.playerId),
       roomReset,
+      stateVersion: this.stateVersion,
       ...this.getSetupSummary(),
     };
 
@@ -427,6 +470,12 @@ export default class EmpiresServer {
     }
 
     connection.send(JSON.stringify(assignedMsg));
+    this.logEvent("assigned", {
+      playerId: slot.playerId,
+      sessionId,
+      reclaimed: isReconnect,
+      roomReset,
+    });
 
     if (this.phase === "WAITING" && this.areBothHumanSlotsClaimed()) {
       this.phase = "CIV_SELECT";
@@ -435,7 +484,12 @@ export default class EmpiresServer {
 
     if (isReconnect) {
       const otherPlayerId = slot.playerId === "p1" ? "p2" : "p1";
-      this.broadcastToPlayer(otherPlayerId, { type: "opponent_reconnected" });
+      this.logEvent("opponent_reconnected", { playerId: slot.playerId });
+      this.broadcastToPlayer(otherPlayerId, {
+        type: "opponent_reconnected",
+        playerId: slot.playerId,
+        serverNow: Date.now(),
+      });
     }
 
     await this.persist();
@@ -461,7 +515,7 @@ export default class EmpiresServer {
     if (data.type === "PICK_CIV") {
       const civKey = typeof data.civilization === "string" ? data.civilization : "";
       if (!CIV_DEFS[civKey]) {
-        sender.send(JSON.stringify({ type: "error", message: "Invalid civilization" }));
+        this.sendError(sender, "INVALID_CIVILIZATION", "Invalid civilization");
         return;
       }
 
@@ -471,14 +525,15 @@ export default class EmpiresServer {
       const isHost = this.isHostPlayer(playerId, senderSessionId);
       if (data.mapSize !== undefined || data.aiSlots !== undefined) {
         if (!isHost) {
-          sender.send(JSON.stringify({ type: "error", message: "Only host can configure match settings" }));
+          this.logEvent("invalid_setup_attempt", { playerId, reason: "not_host" });
+          this.sendError(sender, "HOST_ONLY_SETUP", "Only host can configure match settings");
           return;
         }
       }
 
       if (data.mapSize !== undefined) {
         if (!MAP_SIZES[data.mapSize]) {
-          sender.send(JSON.stringify({ type: "error", message: "Invalid map size" }));
+          this.sendError(sender, "INVALID_MAP_SIZE", "Invalid map size");
           return;
         }
         this.mapSize = data.mapSize;
@@ -490,7 +545,7 @@ export default class EmpiresServer {
         const maxAiSlots = Math.max(0, (MAP_SIZES[this.mapSize]?.maxPlayers || 2) - 2);
         const sanitized = this.sanitizeAiSlots(data.aiSlots, maxAiSlots);
         if (!sanitized.ok) {
-          sender.send(JSON.stringify({ type: "error", message: sanitized.message }));
+          this.sendError(sender, "INVALID_AI_CONFIGURATION", sanitized.message);
           return;
         }
         this.aiSlots = sanitized.aiSlots;
@@ -525,6 +580,7 @@ export default class EmpiresServer {
         }
 
         this.gameState = createInitialState(playerConfigs);
+        this.stateVersion = 1;
         this.phase = "PLAYING";
         this.broadcastPhase();
         this.broadcastState();
@@ -553,20 +609,22 @@ export default class EmpiresServer {
 
     const applyFn = actionMap[data.type];
     if (!applyFn) {
-      sender.send(JSON.stringify({ type: "error", message: "Unknown action" }));
+      this.sendError(sender, "UNKNOWN_ACTION", "Unknown action");
       return;
     }
 
     // Validate
     const error = validateAction(this.gameState, data, playerId);
     if (error) {
-      sender.send(JSON.stringify({ type: "error", message: error }));
+      this.logEvent("action_rejected", { playerId, actionType: data.type, reason: error });
+      this.sendError(sender, "ACTION_REJECTED", error);
       return;
     }
 
     // Apply
     const { state, events } = applyFn(this.gameState, data);
     this.gameState = state;
+    this.stateVersion += 1;
 
     // Update explored hexes for current player
     const currentPlayer = this.gameState.players.find(p => p.id === playerId);
@@ -625,7 +683,12 @@ export default class EmpiresServer {
   }
 
   broadcastPhase() {
-    this.broadcastAll({ type: "phase_change", phase: this.phase });
+    this.broadcastAll({
+      type: "phase_change",
+      phase: this.phase,
+      serverNow: Date.now(),
+      setupLocked: !["WAITING", "CIV_SELECT"].includes(this.phase),
+    });
   }
 
   broadcastToPlayer(playerId, msg) {
@@ -647,6 +710,9 @@ export default class EmpiresServer {
         type: "state",
         state: filtered,
         events: events || [],
+        stateVersion: this.stateVersion,
+        serverNow: Date.now(),
+        reconnectWindowMs: RECONNECT_WINDOW_MS,
       }));
     }
   }
