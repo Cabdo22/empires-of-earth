@@ -43,6 +43,7 @@ HexStrategyGame.jsx
 ## Gameplay Mutation Model
 
 - `engine/actions.js` is the shared mutation layer for local play and multiplayer semantics.
+- `engine/gameplayActionApplier.js` is the shared online-supported action contract used by local gameplay dispatch, PartyKit authority, and parity tests.
 - `HexStrategyGame.jsx` dispatches local actions into those engine functions and handles UI-side event effects like SFX, flashes, and combat numbers.
 - `party/server.js` reuses the same engine turn/action logic for server-authoritative online games.
 - `ai/aiEngine.js` executes AI turns against full game state and then uses the same turn-advance behavior as the rest of the engine.
@@ -65,6 +66,8 @@ HexStrategyGame.jsx
 - `engine/combat.js`: combat preview math
 - `engine/gameInit.js`: initial state creation
 - `engine/fog.js`: fog filtering for multiplayer clients
+- `engine/gameplayActionApplier.js`: canonical action-type to engine-applier mapping for online-supported gameplay actions
+- `engine/actionValidation.js`: shared legality checks for server-authoritative multiplayer actions
 
 ### Active game UI
 
@@ -80,6 +83,7 @@ HexStrategyGame.jsx
 - `utils/cloneState.js`: deep clone helper with `structuredClone` fallback
 - `utils/saveGames.js`: save serialization, migration, and localStorage helpers
 - `tests/engine-regression.test.js`: regression checks for explicit map config and core engine actions
+- `tests/multiplayer-parity.test.js`: local/online continuity checks for shared gameplay action dispatch
 
 ## Common Tasks
 
@@ -87,13 +91,13 @@ HexStrategyGame.jsx
 - Change combat behavior: start in `engine/combat.js` and `engine/actions.js`
 - Change end-turn behavior: update `engine/turnProcessing.js` and any related action wrappers
 - Adjust UI layout or panels: work inside `components/GameViewport.jsx`, `components/GameHud.jsx`, or `components/GameModals.jsx`
-- Change multiplayer rules: keep `party/server.js` aligned with the engine action layer, not a separate rules path
+- Change multiplayer rules: update `engine/actionValidation.js`, `engine/gameplayActionApplier.js`, and the parity tests before changing `party/server.js`
 
 ## Known Technical Debt
 
 - `HexStrategyGame.jsx` is still large and remains the primary orchestration file.
 - Some non-engine UI helpers still retain legacy compatibility with `setMapConfig()`.
-- The project still needs a first-class regression test suite around the engine.
+- The project still needs broader scenario coverage, but online-supported gameplay actions now have a dedicated parity test path and should stay on it.
 
 ## Git Notes
 

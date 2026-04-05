@@ -16,20 +16,9 @@ import { getLeaderDef } from './data/leaders.js';
 import {
   advanceToNextPlayerState,
   applyAcceptDiplomacyProposal,
-  applyAttack,
-  applyBuildRoad,
-  applyCancelProduction,
   applyCreateDiplomacyProposal,
   applyDeclareWar,
-  applyEndTurn,
-  applyFoundCity,
-  applyLaunchNuke,
-  applyMoveUnit,
   applyRejectDiplomacyProposal,
-  applySelectResearch,
-  applySetProduction,
-  applySetTradeFocus,
-  applyUpgradeUnit,
 } from './engine/actions.js';
 import {
   applyRelationModifier,
@@ -56,6 +45,7 @@ import { GameModals } from './components/GameModals.jsx';
 import useUnitAnimation from './hooks/useUnitAnimation.js';
 import { cloneState } from './utils/cloneState.js';
 import { clientPointToWorldPoint, findHexFromWorldPoint } from './utils/boardCoordinates.js';
+import { applyGameplayAction } from './engine/gameplayActionApplier.js';
 import { createSavedGameEntry, deserializeGameState, readSavedGames, writeSavedGames } from './utils/saveGames.js';
 
 let uidCtr = 0;
@@ -406,11 +396,36 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     return result;
   }, [handleLocalEngineEvents]);
 
-  const dispatchGameplayAction = useCallback(({ online, localApply, payload, eventOptions, onOnline, onLocal }) => {
-    if (onlineMode && online) {
-      onlineMode.sendAction(online);
+  const runLocalGameplayAction = useCallback((action, eventOptions) => {
+    let result = { state: gsRef.current, events: [], changed: false, error: null };
+    setGs(prev => {
+      if (!prev) return prev;
+      const applied = applyGameplayAction(prev, action);
+      const nextState = applied?.state ?? prev;
+      result = {
+        state: nextState,
+        events: applied?.events || [],
+        changed: applied?.changed ?? nextState !== prev,
+        error: applied?.error || null,
+      };
+      return nextState;
+    });
+    handleLocalEngineEvents(result.events, eventOptions);
+    return result;
+  }, [handleLocalEngineEvents]);
+
+  const dispatchGameplayAction = useCallback(({ action, online, localApply, payload, eventOptions, onOnline, onLocal }) => {
+    const onlineAction = online || action;
+    if (onlineMode && onlineAction) {
+      onlineMode.sendAction(onlineAction);
       if (onOnline) onOnline();
       return { mode: "online", changed: false, state: gsRef.current, events: [] };
+    }
+
+    if (action) {
+      const result = runLocalGameplayAction(action, eventOptions);
+      if (onLocal) onLocal(result);
+      return { mode: "local", ...result };
     }
 
     if (!localApply) {
@@ -420,7 +435,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     const result = runLocalEngineAction(localApply, payload, eventOptions);
     if (onLocal) onLocal(result);
     return { mode: "local", ...result };
-  }, [onlineMode, runLocalEngineAction]);
+  }, [onlineMode, runLocalEngineAction, runLocalGameplayAction]);
 
   const declareWarAction = useCallback((targetPlayerId) => {
     if(!targetPlayerId || onlineMode) return;
@@ -457,9 +472,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // === NUKE ===
   const launchNuke=useCallback((nuId,tc,tr)=>{
     dispatchGameplayAction({
-      online: { type: "LAUNCH_NUKE", nukeId: nuId, col: tc, row: tr },
-      localApply: applyLaunchNuke,
-      payload: { nukeId: nuId, col: tc, row: tr },
+      action: { type: "LAUNCH_NUKE", nukeId: nuId, col: tc, row: tr },
       onOnline: () => { setNukeM(null); setSelU(null); },
       onLocal: () => { setNukeM(null); setSelU(null); SFX.nuke(); },
     });
@@ -467,9 +480,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   const doCombat = useCallback((attackerId, defCol, defRow) => {
     dispatchGameplayAction({
-      online: { type: "ATTACK", attackerId, col: defCol, row: defRow },
-      localApply: applyAttack,
-      payload: { attackerId, col: defCol, row: defRow },
+      action: { type: "ATTACK", attackerId, col: defCol, row: defRow },
       eventOptions: { blockedKey: `${defCol},${defRow}` },
       onOnline: () => { setSelU(null); setPreview(null); },
       onLocal: () => { setSelU(null); setPreview(null); },
@@ -479,8 +490,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // === END TURN (replaces old phase system) ===
   const endTurn = useCallback(() => {
     dispatchGameplayAction({
-      online: { type: "END_TURN" },
-      localApply: applyEndTurn,
+      action: { type: "END_TURN" },
       onOnline: () => { setSelU(null); setSelH(null); setSettlerM(null); setNukeM(null); setPreview(null); },
       onLocal: () => {
         setSelU(null); setSelH(null); setSettlerM(null); setNukeM(null); setPreview(null);
@@ -627,49 +637,37 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   const selResearch = useCallback((techId) => {
     dispatchGameplayAction({
-      online: { type:"SELECT_RESEARCH", techId },
-      localApply: applySelectResearch,
-      payload: { techId },
+      action: { type:"SELECT_RESEARCH", techId },
     });
   }, [dispatchGameplayAction]);
 
   const upgradeUnit=useCallback((unitId)=>{
     dispatchGameplayAction({
-      online: { type:"UPGRADE_UNIT", unitId },
-      localApply: applyUpgradeUnit,
-      payload: { unitId },
+      action: { type:"UPGRADE_UNIT", unitId },
     });
   },[dispatchGameplayAction]);
 
   const setProd = useCallback((cityId, type, itemId) => {
     dispatchGameplayAction({
-      online: { type:"SET_PRODUCTION", cityId, prodType:type, itemId },
-      localApply: applySetProduction,
-      payload: { cityId, type, itemId },
+      action: { type:"SET_PRODUCTION", cityId, prodType:type, itemId },
     });
   }, [dispatchGameplayAction]);
 
   const setTradeFocus = useCallback((cityId, routeIndex, focus) => {
     dispatchGameplayAction({
-      online: { type:"SET_TRADE_FOCUS", cityId, routeIndex, focus },
-      localApply: applySetTradeFocus,
-      payload: { cityId, routeIndex, focus },
+      action: { type:"SET_TRADE_FOCUS", cityId, routeIndex, focus },
     });
   }, [dispatchGameplayAction]);
 
   const cancelProduction = useCallback((cityId) => {
     dispatchGameplayAction({
-      online: { type:"CANCEL_PRODUCTION", cityId },
-      localApply: applyCancelProduction,
-      payload: { cityId },
+      action: { type:"CANCEL_PRODUCTION", cityId },
     });
   }, [dispatchGameplayAction]);
 
   const buildRoad = useCallback((hexId) => {
     dispatchGameplayAction({
-      online: { type:"BUILD_ROAD", hexId },
-      localApply: applyBuildRoad,
-      payload: { hexId },
+      action: { type:"BUILD_ROAD", hexId },
     });
   }, [dispatchGameplayAction]);
 
@@ -706,19 +704,17 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     };
 
     startAnimation(unitId, visuals, waypoints, () => {
-      const result = runLocalEngineAction(applyMoveUnit, { unitId, col: targetCol, row: targetRow });
+      const result = runLocalGameplayAction({ type:"MOVE_UNIT", unitId, col: targetCol, row: targetRow });
       const movedUnit = result.state?.players
         ?.find(p => p.id === result.state.currentPlayerId)
         ?.units?.find(u => u.id === unitId);
       if (!movedUnit || movedUnit.movementCurrent <= 0) setSelU(null);
     });
-  }, [animatingUnitId, dispatchGameplayAction, runLocalEngineAction, startAnimation]);
+  }, [animatingUnitId, dispatchGameplayAction, runLocalGameplayAction, startAnimation]);
 
   const foundCity = useCallback((unitId, col, row) => {
     dispatchGameplayAction({
-      online: { type:"FOUND_CITY", unitId, col, row },
-      localApply: applyFoundCity,
-      payload: { unitId, col, row },
+      action: { type:"FOUND_CITY", unitId, col, row },
       onOnline: () => { setSettlerM(null); setSelU(null); },
       onLocal: () => { setSettlerM(null); setSelU(null); },
     });

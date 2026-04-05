@@ -11,10 +11,7 @@ import { createInitialState } from '../engine/gameInit.js';
 import { getVisibleHexes } from '../engine/movement.js';
 import { filterStateForPlayer } from '../engine/fog.js';
 import {
-  applyMoveUnit, applyAttack, applyLaunchNuke,
-  applySelectResearch, applySetProduction, applyUpgradeUnit,
-  applyFoundCity, applyCancelProduction, applyEndTurn,
-  applyBuildRoad, applySetTradeFocus, advanceToNextPlayerState,
+  advanceToNextPlayerState,
 } from '../engine/actions.js';
 import {
   recalcAllTradeRoutes,
@@ -22,6 +19,7 @@ import {
 import { aiExecuteTurn } from '../ai/aiEngine.js';
 import { AI_DIFFICULTY } from '../engine/gameInit.js';
 import { validateGameplayAction } from '../engine/actionValidation.js';
+import { applyGameplayAction } from '../engine/gameplayActionApplier.js';
 
 const RECONNECT_WINDOW_MS = 15 * 60 * 1000;
 
@@ -501,22 +499,8 @@ export default class EmpiresServer {
   async handleGameAction(data, playerId, sender) {
     if (!this.gameState) return;
 
-    const actionMap = {
-      MOVE_UNIT: (gs, a) => applyMoveUnit(gs, { unitId: a.unitId, col: a.col, row: a.row }),
-      ATTACK: (gs, a) => applyAttack(gs, { attackerId: a.attackerId, col: a.col, row: a.row }),
-      LAUNCH_NUKE: (gs, a) => applyLaunchNuke(gs, { nukeId: a.nukeId, col: a.col, row: a.row }),
-      SELECT_RESEARCH: (gs, a) => applySelectResearch(gs, { techId: a.techId }),
-      SET_PRODUCTION: (gs, a) => applySetProduction(gs, { cityId: a.cityId, type: a.prodType, itemId: a.itemId }),
-      UPGRADE_UNIT: (gs, a) => applyUpgradeUnit(gs, { unitId: a.unitId }),
-      FOUND_CITY: (gs, a) => applyFoundCity(gs, { unitId: a.unitId, col: a.col, row: a.row }),
-      CANCEL_PRODUCTION: (gs, a) => applyCancelProduction(gs, { cityId: a.cityId }),
-      BUILD_ROAD: (gs, a) => applyBuildRoad(gs, { hexId: a.hexId }),
-      SET_TRADE_FOCUS: (gs, a) => applySetTradeFocus(gs, { cityId: a.cityId, routeIndex: a.routeIndex, focus: a.focus }),
-      END_TURN: (gs) => applyEndTurn(gs),
-    };
-
-    const applyFn = actionMap[data.type];
-    if (!applyFn) {
+    const applyResult = applyGameplayAction(this.gameState, data);
+    if (applyResult.error) {
       this.sendError(sender, "UNKNOWN_ACTION", "Unknown action");
       return;
     }
@@ -530,7 +514,7 @@ export default class EmpiresServer {
     }
 
     // Apply
-    const { state, events } = applyFn(this.gameState, data);
+    const { state, events } = applyResult;
     this.gameState = state;
     this.stateVersion += 1;
 
