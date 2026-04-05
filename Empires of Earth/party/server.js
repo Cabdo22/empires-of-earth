@@ -21,6 +21,9 @@ import {
   recalcAllTradeRoutes,
 } from '../engine/turnProcessing.js';
 import { aiExecuteTurn } from '../ai/aiEngine.js';
+import { AI_DIFFICULTY } from '../engine/gameInit.js';
+
+const RECONNECT_WINDOW_MS = 15 * 60 * 1000;
 
 // ============================================================
 // ACTION VALIDATION
@@ -125,6 +128,10 @@ export default class EmpiresServer {
     this.civPicks = {}; // { p1: "Rome", p2: "China" }
     this.mapSize = "medium";
     this.aiSlots = []; // [{ difficulty: "normal" }, ...] — AI players beyond p1/p2
+    this.createdAt = null;
+    this.updatedAt = null;
+    this.hostPlayerId = null;
+    this.hostSessionId = null;
   }
 
   createEmptyPlayerSlots() {
@@ -141,6 +148,7 @@ export default class EmpiresServer {
       currentConnectionId: slot.currentConnectionId || null,
       connected: Boolean(slot.connected),
       lastSeenAt: slot.lastSeenAt || null,
+      disconnectedAt: slot.disconnectedAt || null,
     };
   }
 
@@ -185,6 +193,7 @@ export default class EmpiresServer {
     slot.currentConnectionId = connectionId;
     slot.connected = true;
     slot.lastSeenAt = Date.now();
+    slot.disconnectedAt = null;
     return slot;
   }
 
@@ -195,7 +204,94 @@ export default class EmpiresServer {
     slot.currentConnectionId = null;
     slot.connected = false;
     slot.lastSeenAt = Date.now();
+    slot.disconnectedAt = Date.now();
     return slot;
+  }
+
+  clearSlot(slot) {
+    const playerId = typeof slot === "string" ? slot : slot.playerId;
+    this.playerSlots[playerId] = this.createSlotRecord(playerId);
+  }
+
+  resetRoomState({ preserveHost = false } = {}) {
+    this.gameState = null;
+    this.phase = "WAITING";
+    this.playerSlots = this.createEmptyPlayerSlots();
+    this.civPicks = {};
+    this.mapSize = "medium";
+    this.aiSlots = [];
+    if (!preserveHost) {
+      this.hostPlayerId = null;
+      this.hostSessionId = null;
+      this.createdAt = Date.now();
+    }
+  }
+
+  isSlotExpired(slot, now = Date.now()) {
+    return Boolean(
+      slot?.sessionId &&
+      !slot.connected &&
+      slot.disconnectedAt &&
+      (now - slot.disconnectedAt) > RECONNECT_WINDOW_MS
+    );
+  }
+
+  expireDisconnectedSlots(now = Date.now()) {
+    const expiredPlayerIds = [];
+    for (const slot of Object.values(this.playerSlots)) {
+      if (!this.isSlotExpired(slot, now)) continue;
+      expiredPlayerIds.push(slot.playerId);
+      delete this.civPicks[slot.playerId];
+      this.clearSlot(slot);
+    }
+    return expiredPlayerIds;
+  }
+
+  shouldResetExpiredRoom(expiredPlayerIds) {
+    if (!expiredPlayerIds.length) return false;
+    const noClaimedHumans = !this.playerSlots.p1?.sessionId && !this.playerSlots.p2?.sessionId;
+    return noClaimedHumans && this.phase !== "PLAYING";
+  }
+
+  getHostPlayerId() {
+    return this.hostPlayerId || "p1";
+  }
+
+  isHostPlayer(playerId, sessionId = null) {
+    if (!playerId) return false;
+    if (this.hostPlayerId && playerId !== this.hostPlayerId) return false;
+    if (this.hostSessionId && sessionId && this.hostSessionId !== sessionId) return false;
+    return playerId === this.getHostPlayerId();
+  }
+
+  sanitizeAiSlots(aiSlots, maxAiSlots) {
+    if (!Array.isArray(aiSlots)) return { ok: false, message: "Invalid AI configuration" };
+
+    const diffKeys = new Set(Object.keys(AI_DIFFICULTY));
+    const normalized = [];
+    for (const slot of aiSlots) {
+      const difficulty = slot?.difficulty || "normal";
+      if (!diffKeys.has(difficulty)) {
+        return { ok: false, message: "Invalid AI configuration" };
+      }
+      normalized.push({ difficulty });
+    }
+
+    if (normalized.length > maxAiSlots) {
+      return { ok: false, message: "Invalid AI configuration" };
+    }
+
+    return { ok: true, aiSlots: normalized };
+  }
+
+  getSetupSummary() {
+    return {
+      mapSize: this.mapSize,
+      aiSlots: this.aiSlots,
+      hostPlayerId: this.getHostPlayerId(),
+      reconnectWindowMs: RECONNECT_WINDOW_MS,
+      setupLocked: !["WAITING", "CIV_SELECT"].includes(this.phase),
+    };
   }
 
   async onStart() {
@@ -204,13 +300,22 @@ export default class EmpiresServer {
       this.gameState = saved.gameState;
       this.phase = saved.phase;
       this.playerSlots = this.normalizePlayerSlots(saved.playerSlots);
-      this.civPicks = saved.civPicks;
+      this.civPicks = saved.civPicks || {};
       this.mapSize = saved.mapSize || "medium";
       this.aiSlots = saved.aiSlots || [];
+      this.createdAt = saved.createdAt || Date.now();
+      this.updatedAt = saved.updatedAt || this.createdAt;
+      this.hostPlayerId = saved.hostPlayerId || null;
+      this.hostSessionId = saved.hostSessionId || null;
+    } else {
+      this.createdAt = Date.now();
+      this.updatedAt = this.createdAt;
     }
   }
 
   async persist() {
+    if (!this.createdAt) this.createdAt = Date.now();
+    this.updatedAt = Date.now();
     await this.room.storage.put("state", {
       gameState: this.gameState,
       phase: this.phase,
@@ -218,6 +323,10 @@ export default class EmpiresServer {
       civPicks: this.civPicks,
       mapSize: this.mapSize,
       aiSlots: this.aiSlots,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      hostPlayerId: this.hostPlayerId,
+      hostSessionId: this.hostSessionId,
     });
   }
 
@@ -277,6 +386,13 @@ export default class EmpiresServer {
       return;
     }
 
+    const expiredPlayerIds = this.expireDisconnectedSlots();
+    let roomReset = false;
+    if (this.shouldResetExpiredRoom(expiredPlayerIds)) {
+      this.resetRoomState();
+      roomReset = true;
+    }
+
     let slot = this.getPlayerSlotForSession(sessionId);
     const isReconnect = Boolean(slot);
 
@@ -291,12 +407,19 @@ export default class EmpiresServer {
     this.assignSlot(slot, sessionId, connection.id);
     connection.setState({ playerId: slot.playerId, sessionId });
 
+    if (!this.hostPlayerId || !this.hostSessionId || this.hostPlayerId === slot.playerId) {
+      if (!this.hostPlayerId) this.hostPlayerId = slot.playerId;
+      if (!this.hostSessionId || this.hostPlayerId === slot.playerId) this.hostSessionId = slot.sessionId;
+    }
+
     const assignedMsg = {
       type: "assigned",
       playerId: slot.playerId,
       phase: this.phase,
       reclaimed: isReconnect,
       opponentDisconnected: this.isOpponentDisconnected(slot.playerId),
+      roomReset,
+      ...this.getSetupSummary(),
     };
 
     if ((this.phase === "PLAYING" || this.phase === "FINISHED") && this.gameState) {
@@ -336,16 +459,49 @@ export default class EmpiresServer {
   // === CIV SELECT PHASE ===
   async handleCivSelect(data, playerId, sender) {
     if (data.type === "PICK_CIV") {
+      const civKey = typeof data.civilization === "string" ? data.civilization : "";
+      if (!CIV_DEFS[civKey]) {
+        sender.send(JSON.stringify({ type: "error", message: "Invalid civilization" }));
+        return;
+      }
+
       this.civPicks[playerId] = data.civilization;
 
-      if (data.mapSize) this.mapSize = data.mapSize;
-      if (data.aiSlots) this.aiSlots = data.aiSlots;
+      const senderSessionId = sender.state?.sessionId || null;
+      const isHost = this.isHostPlayer(playerId, senderSessionId);
+      if (data.mapSize !== undefined || data.aiSlots !== undefined) {
+        if (!isHost) {
+          sender.send(JSON.stringify({ type: "error", message: "Only host can configure match settings" }));
+          return;
+        }
+      }
+
+      if (data.mapSize !== undefined) {
+        if (!MAP_SIZES[data.mapSize]) {
+          sender.send(JSON.stringify({ type: "error", message: "Invalid map size" }));
+          return;
+        }
+        this.mapSize = data.mapSize;
+        const maxAiSlots = Math.max(0, (MAP_SIZES[this.mapSize]?.maxPlayers || 2) - 2);
+        this.aiSlots = this.aiSlots.slice(0, maxAiSlots);
+      }
+
+      if (data.aiSlots !== undefined) {
+        const maxAiSlots = Math.max(0, (MAP_SIZES[this.mapSize]?.maxPlayers || 2) - 2);
+        const sanitized = this.sanitizeAiSlots(data.aiSlots, maxAiSlots);
+        if (!sanitized.ok) {
+          sender.send(JSON.stringify({ type: "error", message: sanitized.message }));
+          return;
+        }
+        this.aiSlots = sanitized.aiSlots;
+      }
+
+      this.civPicks[playerId] = civKey;
 
       this.broadcastAll({
         type: "civ_picks",
         picks: this.civPicks,
-        mapSize: this.mapSize,
-        aiSlots: this.aiSlots,
+        ...this.getSetupSummary(),
       });
 
       // If both have picked, start the game

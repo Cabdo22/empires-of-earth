@@ -18,7 +18,7 @@ const SLOT_LABELS = { ai: "AI", closed: "Closed" };
 // ============================================================
 // ONLINE CIV SELECT
 // ============================================================
-function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSlots: serverAiSlots }) {
+function OnlineCivSelect({ myPlayerId, hostPlayerId, civPicks, sendAction, mapSize, aiSlots: serverAiSlots }) {
   const [selectedCiv, setSelectedCiv] = useState("Rome");
   const [selectedSize, setSelectedSize] = useState(mapSize || "medium");
   const maxPlayers = MAP_SIZES[selectedSize]?.maxPlayers || 2;
@@ -28,8 +28,14 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSl
   );
   const hasPicked = civPicks[myPlayerId];
   const civKeys = Object.keys(CIV_DEFS);
+  const isHost = myPlayerId === hostPlayerId;
+
+  useEffect(() => {
+    setSelectedSize(mapSize || "medium");
+  }, [mapSize]);
 
   const cycleSlot = (idx) => {
+    if (!isHost) return;
     SFX.click();
     setAiSlots(prev => {
       const next = [...prev];
@@ -39,6 +45,7 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSl
   };
 
   const cycleDifficulty = (idx) => {
+    if (!isHost) return;
     SFX.click();
     setAiSlots(prev => {
       const next = [...prev];
@@ -75,8 +82,11 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSl
         <div style={{ color: "#6a7a50", fontSize: 12, letterSpacing: 3 }}>
           {hasPicked ? "Waiting for opponent to pick..." : `${myPlayerId === "p1" ? "Player 1" : "Player 2"} \u2014 Choose Your Civilization`}
         </div>
+        <div style={{ color: "#4a5a3a", fontSize: 10, letterSpacing: 2 }}>
+          {isHost ? "You are hosting this match" : `Host is ${hostPlayerId === "p1" ? "Player 1" : "Player 2"}`}
+        </div>
 
-        {isP1 && !hasPicked && (
+        {isHost && !hasPicked && (
           <div style={{ marginBottom: 8 }}>
             <div style={{ color: "#6a7a50", fontSize: 10, letterSpacing: 2, marginBottom: 6, textAlign: "center" }}>MAP SIZE</div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -99,9 +109,9 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSl
         {!hasPicked && maxAiSlots > 0 && (
           <div style={{ marginBottom: 8, minWidth: 280 }}>
             <div style={{ color: "#6a7a50", fontSize: 10, letterSpacing: 2, marginBottom: 6, textAlign: "center" }}>
-              AI PLAYERS {!isP1 && "(Host configures)"}
+              AI PLAYERS {!isHost && "(Host configures)"}
             </div>
-            {(isP1 ? aiSlots : (serverAiSlots || []).map(s => ({ type: "ai", difficulty: s.difficulty })))
+            {(isHost ? aiSlots : (serverAiSlots || []).map(s => ({ type: "ai", difficulty: s.difficulty })))
               .slice(0, maxAiSlots).map((slot, i) => {
               const slotNum = i + 3; // p1=human, p2=human, p3+ = AI slots
               const isActive = slot.type === "ai";
@@ -111,33 +121,33 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSl
                   background: isActive ? "rgba(30,40,20,.6)" : "rgba(20,20,20,.3)",
                   border: `1px solid ${isActive ? "rgba(100,140,50,.4)" : "rgba(60,60,60,.3)"}`,
                 }}>
-                  <div onClick={() => isP1 && cycleSlot(i)}
+                  <div onClick={() => isHost && cycleSlot(i)}
                     style={{
                       width: 26, height: 26, borderRadius: "50%",
                       background: SLOT_COLORS[isActive ? "ai" : "closed"],
                       display: "flex", alignItems: "center", justifyContent: "center",
                       color: "#fff", fontSize: 11, fontWeight: 700,
-                      cursor: isP1 ? "pointer" : "default",
+                      cursor: isHost ? "pointer" : "default",
                     }}
-                    title={isP1 ? "Click to toggle AI / Closed" : ""}>
+                    title={isHost ? "Click to toggle AI / Closed" : ""}>
                     {slotNum}
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ color: isActive ? "#c8d8a0" : "#6a6a6a", fontSize: 11, fontWeight: 600 }}>Player {slotNum}</div>
-                    <div onClick={() => isP1 && cycleSlot(i)}
-                      style={{ color: SLOT_COLORS[isActive ? "ai" : "closed"], fontSize: 9, cursor: isP1 ? "pointer" : "default", fontWeight: 600, letterSpacing: 1 }}>
+                    <div onClick={() => isHost && cycleSlot(i)}
+                      style={{ color: SLOT_COLORS[isActive ? "ai" : "closed"], fontSize: 9, cursor: isHost ? "pointer" : "default", fontWeight: 600, letterSpacing: 1 }}>
                       {SLOT_LABELS[isActive ? "ai" : "closed"]}
                     </div>
                   </div>
                   {isActive && (
-                    <div onClick={() => isP1 && cycleDifficulty(i)}
+                    <div onClick={() => isHost && cycleDifficulty(i)}
                       style={{
                         padding: "2px 8px", borderRadius: 4, fontSize: 9,
-                        cursor: isP1 ? "pointer" : "default",
+                        cursor: isHost ? "pointer" : "default",
                         background: "rgba(100,80,30,.4)", border: "1px solid rgba(200,160,60,.4)",
                         color: "#e0c060", letterSpacing: 1, fontWeight: 600,
                       }}
-                      title={isP1 ? "Click to cycle difficulty" : ""}>
+                      title={isHost ? "Click to cycle difficulty" : ""}>
                       {AI_DIFFICULTY[slot.difficulty || "normal"]?.label || "Normal"}
                     </div>
                   )}
@@ -201,9 +211,9 @@ function OnlineCivSelect({ myPlayerId, civPicks, sendAction, mapSize, isP1, aiSl
 // ============================================================
 export default function OnlineGame({ roomId, onBack }) {
   const {
-    gameState, connected, myPlayerId, sendAction, error,
+    gameState, connected, myPlayerId, hostPlayerId, sendAction, error,
     roomPhase, civPicks, opponentDisconnected, events, clearEvents,
-    aiSlots, mapSize,
+    aiSlots, mapSize, roomReset,
   } = useMultiplayerGame(roomId);
 
   // Must use state (not ref) so setting it triggers a re-render past the loading screen
@@ -241,6 +251,7 @@ export default function OnlineGame({ roomId, onBack }) {
         </div>
         <div style={{ color: "#4a5a3a", fontSize: 10 }}>Share this code with your opponent</div>
         {myPlayerId && <div style={{ color: "#4a5a3a", fontSize: 10 }}>You are {myPlayerId === "p1" ? "Player 1" : "Player 2"}</div>}
+        {roomReset && <div style={{ color: "#c8d8a0", fontSize: 10 }}>This room was reset after its previous session expired.</div>}
         <div onClick={onBack} style={{ color: "#6a7a50", fontSize: 9, cursor: "pointer", textDecoration: "underline", marginTop: 8 }}>{"\u2190"} Leave</div>
         {error && <div style={{ color: "#ff6060", fontSize: 10 }}>{error}</div>}
       </div>
@@ -252,9 +263,9 @@ export default function OnlineGame({ roomId, onBack }) {
     return (
       <OnlineCivSelect
         myPlayerId={myPlayerId}
+        hostPlayerId={hostPlayerId}
         civPicks={civPicks}
         sendAction={sendAction}
-        isP1={myPlayerId === "p1"}
         aiSlots={aiSlots}
         mapSize={mapSize}
       />

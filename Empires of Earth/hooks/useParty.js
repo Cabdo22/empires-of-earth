@@ -29,6 +29,7 @@ export function useMultiplayerGame(roomId) {
   const [gameState, setGameState] = useState(null);
   const [connected, setConnected] = useState(false);
   const [myPlayerId, setMyPlayerId] = useState(null);
+  const [hostPlayerId, setHostPlayerId] = useState("p1");
   const [error, setError] = useState(null);
   const [roomPhase, setRoomPhase] = useState("WAITING");
   const [civPicks, setCivPicks] = useState({});
@@ -36,6 +37,8 @@ export function useMultiplayerGame(roomId) {
   const [events, setEvents] = useState([]);
   const [aiSlots, setAiSlots] = useState([]);
   const [mapSize, setMapSize] = useState("medium");
+  const [roomReset, setRoomReset] = useState(false);
+  const [setupLocked, setSetupLocked] = useState(false);
   const socketRef = useRef(null);
   const sessionIdRef = useRef(null);
 
@@ -49,12 +52,15 @@ export function useMultiplayerGame(roomId) {
     setMyPlayerId(null);
     setGameState(null);
     setError(null);
+    setHostPlayerId("p1");
     setRoomPhase("WAITING");
     setCivPicks({});
     setAiSlots([]);
     setMapSize("medium");
     setEvents([]);
     setOpponentDisconnected(false);
+    setRoomReset(false);
+    setSetupLocked(false);
 
     const socket = new PartySocket({
       host: PARTYKIT_HOST,
@@ -86,6 +92,11 @@ export function useMultiplayerGame(roomId) {
             setRoomPhase(data.phase);
             if (data.state) setGameState(data.state);
             setOpponentDisconnected(Boolean(data.opponentDisconnected));
+            if (data.hostPlayerId) setHostPlayerId(data.hostPlayerId);
+            setRoomReset(Boolean(data.roomReset));
+            setSetupLocked(Boolean(data.setupLocked));
+            if (data.aiSlots) setAiSlots(data.aiSlots);
+            if (data.mapSize) setMapSize(data.mapSize);
             break;
 
           case "state":
@@ -100,12 +111,15 @@ export function useMultiplayerGame(roomId) {
 
           case "phase_change":
             setRoomPhase(data.phase);
+            setSetupLocked(!["WAITING", "CIV_SELECT"].includes(data.phase));
             break;
 
           case "civ_picks":
             setCivPicks(data.picks);
             if (data.aiSlots) setAiSlots(data.aiSlots);
             if (data.mapSize) setMapSize(data.mapSize);
+            if (data.hostPlayerId) setHostPlayerId(data.hostPlayerId);
+            setSetupLocked(Boolean(data.setupLocked));
             break;
 
           case "opponent_disconnected":
@@ -141,6 +155,7 @@ export function useMultiplayerGame(roomId) {
     gameState,
     connected,
     myPlayerId,
+    hostPlayerId,
     sendAction,
     error,
     roomPhase,
@@ -150,5 +165,7 @@ export function useMultiplayerGame(roomId) {
     clearEvents,
     aiSlots,
     mapSize,
+    roomReset,
+    setupLocked,
   };
 }
