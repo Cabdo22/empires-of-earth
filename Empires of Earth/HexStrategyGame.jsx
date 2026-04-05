@@ -1218,7 +1218,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     <div ref={gameContainerRef} onMouseMove={onPanelMove} onMouseUp={onPanelUp} style={{width:"100vw",height:"100vh",background:"linear-gradient(145deg,#0a0e06 0%,#141e0c 40%,#0e1608 100%)",overflow:"hidden",position:"relative",userSelect:"none",touchAction:"none",fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,serif"}}>
 
       {/* === MAP LAYER (below UI) === */}
-      <svg ref={svgRef} onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU} onContextMenu={e=>e.preventDefault()} style={{cursor:"grab",position:"absolute",top:0,left:0,width:"100%",height:"100%",zIndex:1}}>
+      <svg ref={svgRef} onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU} onWheel={onWh} onContextMenu={e=>e.preventDefault()} style={{cursor:"grab",position:"absolute",top:0,left:0,width:"100%",height:"100%",zIndex:1}}>
         <defs>
           <style>{`
             @keyframes unitPulse { 0%,100%{opacity:.4;} 50%{opacity:.8;} }
