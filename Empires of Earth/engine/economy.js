@@ -6,6 +6,7 @@ import { TERRAIN_INFO, RESOURCE_INFO } from '../data/terrain.js';
 import { TECH_TREE } from '../data/techs.js';
 import { UNIT_DEFS, MILITARY_REQ_UNITS, UPGRADE_PATHS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
+import { PROJECT_DEFS } from '../data/projects.js';
 import { hexAt, getNeighbors, TRADE_FOCUS, TRADE_DISTANCE_BONUS_PER, FOREIGN_TRADE_MULTIPLIER } from '../data/constants.js';
 import { getDiplomacyIncomeBonus } from './diplomacy.js';
 
@@ -88,16 +89,16 @@ export const calcCityYields = (city, player, hexes) => {
   let food = centerY.food;
   let prod = centerY.production;
   let gold = centerY.gold;
-  let science = 2 + centerY.science; // base 2 science per city + tile science
+  let science = 1 + centerY.science;
 
   // Base city infrastructure output
   food += 2;
-  prod += 3;
-  science += 4;
+  prod += 2;
+  science += 2;
 
   // Population scaling — citizens contribute labor and knowledge
-  prod += (city.population || 1);
-  science += Math.ceil((city.population || 1) * 0.75);
+  prod += Math.max(1, Math.ceil((city.population || 1) * 0.75));
+  science += Math.max(1, Math.ceil((city.population || 1) * 0.5));
 
   // Add worked tile yields
   for (const tileId of (city.workedTileIds || [])) {
@@ -127,14 +128,12 @@ export const calcCityYields = (city, player, hexes) => {
 
   // Tech bonuses
   if (player.researchedTechs.includes("agriculture") && cityHex.terrainType === "grassland") food += 2;
-  if (player.researchedTechs.includes("mysticism")) science += 2;
+  if (player.researchedTechs.includes("mysticism")) science += 1;
   if (player.researchedTechs.includes("engineering")) prod += 2;
-  if (player.researchedTechs.includes("guilds")) gold += 3;
+  if (player.researchedTechs.includes("guilds")) gold += 2;
   if (player.researchedTechs.includes("pottery")) gold += 1;
-  if (player.researchedTechs.includes("currency")) gold += Math.floor((city.population || 1) / 2);
-  if (player.researchedTechs.includes("telecommunications")) science += 3;
-  if (player.researchedTechs.includes("fusion_power")) science += 5;
-  if (player.researchedTechs.includes("space_program")) science += 4;
+  if (player.researchedTechs.includes("currency")) gold += Math.floor((city.population || 1) / 3);
+  if (player.researchedTechs.includes("telecommunications")) science += 1;
 
   // District bonuses
   for (const districtId of city.districts) {
@@ -217,11 +216,20 @@ export const calcPlayerIncome = (player, hexes) => {
   return { food, production, science, gold };
 };
 
+export const calcUnitMaintenance = (player) =>
+  (player.units || []).reduce((sum, unit) => {
+    const def = UNIT_DEFS[unit.unitType];
+    if (!def || unit.unitType === "scout" || unit.unitType === "settler") return sum;
+    if (unit.unitType === "nuke") return sum + 3;
+    if (unit.unitType === "icbm") return sum + 4;
+    return sum + Math.max(1, Math.floor((def.cost || 0) / 10));
+  }, 0);
+
 export const calcPlayerIncomeWithState = (player, state) => {
   const base = calcPlayerIncome(player, state.hexes);
   return {
     ...base,
-    gold: base.gold + getDiplomacyIncomeBonus(state, player.id),
+    gold: base.gold + getDiplomacyIncomeBonus(state, player.id) - calcUnitMaintenance(player),
   };
 };
 
@@ -338,3 +346,14 @@ export const getAvailableDistricts = (player, city, hexes) =>
       return true;
     })
     .map(([id, d]) => ({ id, ...d }));
+
+export const getAvailableProjects = (player, city) =>
+  Object.entries(PROJECT_DEFS)
+    .filter(([id, project]) => {
+      if (player.scienceProjectsCompleted?.includes(id)) return false;
+      if (project.techReq && !player.researchedTechs.includes(project.techReq)) return false;
+      if ((project.prereqProjects || []).some((req) => !player.scienceProjectsCompleted?.includes(req))) return false;
+      if ((project.districtReqs || []).some((req) => !city.districts.includes(req))) return false;
+      return true;
+    })
+    .map(([id, project]) => ({ id, ...project }));

@@ -139,10 +139,10 @@ export const getHexesInRadius = (col, row, radius, hexes) =>
   hexes.filter(h => hexDist(col, row, h.col, h.row) <= radius);
 
 // Game balance constants
-export const CITY_DEF_BONUS = 2;
-export const CITY_HP_BASE = 20;
-export const CITY_HP_PER_ERA = 8;
-export const CITY_HP_PER_POP = 3;
+export const CITY_DEF_BONUS = 3;
+export const CITY_HP_BASE = 24;
+export const CITY_HP_PER_ERA = 9;
+export const CITY_HP_PER_POP = 4;
 export const FOG_SIGHT = { scout: 2, fighter: 3, bomber: 2, default: 1 };
 
 // Road & Trade constants

@@ -22,7 +22,7 @@ export const UNIT_DEFS = {
   machine_gun:      { name: "Machine Gun",      icon: "🔫",    strength: 6, hp: 15, move: 2, range: 2, cost: 18,  techReq: "electronics",      domain: "land", resourceReq: "oil" },
 
   // ── Cavalry line ──
-  horseman:         { name: "Horseman",         icon: "🐴",    strength: 3, hp: 16, move: 3, range: 0, cost: 10,  techReq: "animal_husbandry", domain: "land", resourceReq: "iron" },
+  horseman:         { name: "Horseman",         icon: "🐴",    strength: 3, hp: 16, move: 3, range: 0, cost: 10,  techReq: "animal_husbandry", domain: "land" },
   knight:           { name: "Knight",           icon: "🐴",    strength: 4, hp: 20, move: 3, range: 0, cost: 15,  techReq: "feudalism",        domain: "land", resourceReq: "iron" },
   cavalier:         { name: "Cavalier",         icon: "🐴",    strength: 5, hp: 24, move: 3, range: 0, cost: 18,  techReq: "engineering",      domain: "land", resourceReq: "iron" },
   tank:             { name: "Tank",             icon: "🔩",    strength: 7, hp: 30, move: 3, range: 0, cost: 22,  techReq: "electronics",      domain: "land", resourceReq: "oil" },
@@ -52,14 +52,14 @@ export const UNIT_DEFS = {
 
   // ── Unique civ units ──
   legionary:        { name: "Legionary",        icon: "⚔",    strength: 4, hp: 24, move: 2, range: 0, cost: 11,  techReq: "bronze_working",   domain: "land",      civReq: "Rome",    replaces: "swordsman", resourceReq: "iron" },
-  chu_ko_nu:        { name: "Chu-Ko-Nu",        icon: "🏹",    strength: 3, hp: 12, move: 2, range: 2, cost: 9,   techReq: "archery",          domain: "land",      civReq: "China",   replaces: "archer",   ability: "rapid_shot" },
+  chu_ko_nu:        { name: "Chu-Ko-Nu",        icon: "🏹",    strength: 3, hp: 11, move: 2, range: 2, cost: 10,  techReq: "archery",          domain: "land",      civReq: "China",   replaces: "archer",   ability: "rapid_shot" },
   war_chariot:      { name: "War Chariot",      icon: "🐴",    strength: 4, hp: 22, move: 3, range: 0, cost: 13,  techReq: "feudalism",        domain: "land",      civReq: "Egypt",   replaces: "knight", resourceReq: "iron" },
   jaguar:           { name: "Jaguar Warrior",   icon: "🐆",    strength: 2, hp: 18, move: 2, range: 0, cost: 7,   techReq: null,               domain: "land",      civReq: "Aztec",   replaces: "warrior",  ability: "heal_on_kill" },
-  marine:           { name: "Marine",           icon: "⚓",    strength: 8, hp: 34, move: 3, range: 0, cost: 21,  techReq: "logistics",        domain: "amphibious", civReq: "America", replaces: "modern_infantry", ability: "water_speed" },
-  man_o_war:        { name: "Man-o-War",        icon: "🏴‍☠️",  strength: 6, hp: 24, move: 4, range: 2, cost: 16,  techReq: "steam_power",      domain: "sea",       civReq: "England", replaces: "frigate", resourceReq: "oil" },
+  marine:           { name: "Marine",           icon: "⚓",    strength: 8, hp: 33, move: 3, range: 0, cost: 22,  techReq: "logistics",        domain: "amphibious", civReq: "America", replaces: "modern_infantry", ability: "water_speed" },
+  man_o_war:        { name: "Man-o-War",        icon: "🏴‍☠️",  strength: 5, hp: 24, move: 4, range: 1, cost: 17,  techReq: "steam_power",      domain: "sea",       civReq: "England", replaces: "frigate", resourceReq: "oil" },
   musketeer:        { name: "Musketeer",        icon: "🔫",    strength: 7, hp: 30, move: 2, range: 0, cost: 18,  techReq: "gunpowder",        domain: "land",      civReq: "France",  replaces: "musketman", ability: "forest_move" },
-  panzer:           { name: "Panzer",           icon: "🔩",    strength: 8, hp: 32, move: 4, range: 0, cost: 22,  techReq: "electronics",      domain: "land",      civReq: "Germany", replaces: "tank", resourceReq: "oil" },
-  great_bombard:    { name: "Great Bombard",    icon: "💥",    strength: 4, hp: 12, move: 1, range: 3, cost: 10,  techReq: "masonry",          domain: "land",      civReq: "Ottoman", replaces: "catapult", ability: "city_siege" },
+  panzer:           { name: "Panzer",           icon: "🔩",    strength: 8, hp: 32, move: 4, range: 0, cost: 23,  techReq: "electronics",      domain: "land",      civReq: "Germany", replaces: "tank", resourceReq: "oil" },
+  great_bombard:    { name: "Great Bombard",    icon: "💥",    strength: 4, hp: 11, move: 1, range: 3, cost: 11,  techReq: "masonry",          domain: "land",      civReq: "Ottoman", replaces: "catapult", ability: "city_siege" },
 };
 
 // Units requiring Military district to produce

@@ -7,7 +7,7 @@ import { TECH_TREE } from '../data/techs.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { getMapDimensionsFromHexes, hexAt, getNeighbors, hexDist, gameRng } from '../data/constants.js';
 import { getPlayerMaxEra, calcCombatPreview } from '../engine/combat.js';
-import { getAvailableTechs, getAvailableUnits, getAvailableDistricts, canUpgradeUnit, calcPlayerIncomeWithState } from '../engine/economy.js';
+import { getAvailableTechs, getAvailableUnits, getAvailableDistricts, getAvailableProjects, canUpgradeUnit, calcPlayerIncomeWithState } from '../engine/economy.js';
 import { getReachableHexes, getVisibleHexes, isHexOccupied } from '../engine/movement.js';
 import { addLogMsg, processResearchAndIncome, processCityTurn, expandTerritory, healGarrison, initCityBorders, recalcAllTradeRoutes } from '../engine/turnProcessing.js';
 import { ROAD_COST } from '../data/constants.js';
@@ -317,6 +317,7 @@ const aiPickProduction = (city, player, hexes, enemies, smarter, strategy) => {
 
   const availUnits = getAvailableUnits(player, city, hexes);
   const availDistricts = getAvailableDistricts(player, city, hexes);
+  const availProjects = getAvailableProjects(player, city);
   const militaryCount = player.units.filter(u =>
     u.unitType !== "scout" && u.unitType !== "settler" && u.unitType !== "nuke" && u.unitType !== "icbm"
   ).length;
@@ -338,6 +339,11 @@ const aiPickProduction = (city, player, hexes, enemies, smarter, strategy) => {
     const ch = hexes[city.hexId];
     return hexDist(eu.hexCol, eu.hexRow, ch.col, ch.row) <= 5;
   });
+
+  if (strategy?.focus === "science" && !enemyNearby && availProjects.length > 0) {
+    const project = availProjects.sort((a, b) => a.cost - b.cost)[0];
+    return { type: "project", itemId: project.id };
+  }
 
   // Strategy-adjusted military threshold
   const focusMod = strategy?.focus === "military" ? 3 : strategy?.focus === "economic" ? -1 : 0;

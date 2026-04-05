@@ -50,6 +50,32 @@ const placeResources = (grid, rng, protectedHexes, spawns, mapConfig) => {
   const key = (c, r) => `${c},${r}`;
   const { cols, rows } = mapConfig;
 
+  const ensureCapitalFoodSpecial = (spawn) => {
+    const ring = getNeighbors(spawn.col, spawn.row, mapConfig)
+      .map(([c, r]) => ({ c, r, tile: grid[c][r] }))
+      .filter(({ tile }) => tile && tile.terrain !== "mountain");
+    if (ring.length === 0) return;
+
+    const existingFood = ring.find(({ tile }) => tile.resource === "wheat" || tile.resource === "fish");
+    if (existingFood) return;
+
+    const coastalWater = ring.filter(({ tile }) => tile.terrain === "water" && tile.isCoastal);
+    if (coastalWater.length > 0) {
+      const target = coastalWater[Math.floor(rng() * coastalWater.length)];
+      target.tile.resource = "fish";
+      return;
+    }
+
+    const land = ring.filter(({ tile }) => tile.terrain !== "water");
+    if (land.length === 0) return;
+    const target = land.sort((a, b) => {
+      const aScore = (a.tile.terrain === "grassland" ? 2 : 0) + (a.tile.terrain === "forest" ? 1 : 0);
+      const bScore = (b.tile.terrain === "grassland" ? 2 : 0) + (b.tile.terrain === "forest" ? 1 : 0);
+      return bScore - aScore;
+    })[0];
+    target.tile.resource = "wheat";
+  };
+
   // Assign each land hex to the nearest spawn (player region)
   const regions = spawns.map(() => ({ land: [], workable: [] }));
 
@@ -94,14 +120,7 @@ const placeResources = (grid, rng, protectedHexes, spawns, mapConfig) => {
       }
     }
 
-    // Also guarantee wheat near each spawn
-    for (const { c, r } of sorted) {
-      if (grid[c][r].resource) continue;
-      if (grid[c][r].terrain === "grassland") {
-        grid[c][r].resource = "wheat";
-        break;
-      }
-    }
+    ensureCapitalFoodSpecial(spawns[si]);
   }
 
   // Place remaining resources randomly across all land (respecting density target)

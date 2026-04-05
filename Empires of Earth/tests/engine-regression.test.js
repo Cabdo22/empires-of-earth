@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { hexCenter, setMapConfig } from "../data/constants.js";
 import { createInitialState } from "../engine/gameInit.js";
 import { applyEndTurn, applyFoundCity, applyMoveUnit } from "../engine/actions.js";
+import { calcPlayerIncomeWithState } from "../engine/economy.js";
 import { createInitialDiplomacyState } from "../engine/diplomacy.js";
 import { getRangedTargets } from "../engine/movement.js";
 import { clientPointToWorldPoint, findHexFromWorldPoint, getPanForWorldPointAtClientPoint, worldPointToClientPoint } from "../utils/boardCoordinates.js";
@@ -269,6 +270,29 @@ runTest("applyFoundCity and applyEndTurn preserve explicit map-config state", ()
   const ended = applyEndTurn(founded).state;
   assert.equal(ended.currentPlayerId, "p2");
   assert.deepEqual(ended.mapConfig, { cols: 5, rows: 5 });
+});
+
+runTest("capital starts always get an early food special and income accounts for upkeep", () => {
+  const game = createInitialState(
+    [
+      { civ: "Rome", type: "human" },
+      { civ: "China", type: "ai", difficulty: "normal" },
+    ],
+    { mapSizeKey: "small", seed: 12345 }
+  );
+
+  for (const player of game.players) {
+    const city = player.cities[0];
+    const borderResources = (city.borderHexIds || [])
+      .filter((hexId) => hexId !== city.hexId)
+      .map((hexId) => game.hexes[hexId]?.resource);
+    assert.ok(borderResources.includes("wheat") || borderResources.includes("fish"));
+  }
+
+  const player = game.players[0];
+  const originalGoldIncome = calcPlayerIncomeWithState(player, game).gold;
+  player.units.push({ id: "extra-1", unitType: "warrior", hexCol: 0, hexRow: 0, movementCurrent: 2, hpCurrent: 15, hasAttacked: false });
+  assert.equal(calcPlayerIncomeWithState(player, game).gold, originalGoldIncome - 1);
 });
 
 if (results.some((result) => !result.ok)) {

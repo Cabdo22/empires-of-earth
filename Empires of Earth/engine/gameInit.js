@@ -86,6 +86,7 @@ export const createInitialState = (playerConfigs, options = {}) => {
       gold: 30,
       researchedTechs: ["basic_tools"],
       currentResearch: null,
+      scienceProjectsCompleted: [],
       type: cfg.type || "human",        // "human" or "ai"
       difficulty: cfg.difficulty || "normal",  // "easy", "normal", "hard"
       cities: [{

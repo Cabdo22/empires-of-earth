@@ -4,10 +4,11 @@
 
 import { UNIT_DEFS, BARB_UNITS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
+import { PROJECT_DEFS } from '../data/projects.js';
 import { TECH_TREE } from '../data/techs.js';
 import { RANDOM_EVENTS } from '../data/events.js';
 import { getMapDimensionsFromHexes, hexAt, getNeighbors, hexDist, gameRng, FOG_SIGHT, CITY_HP_BASE, CITY_HP_PER_ERA, CITY_HP_PER_POP, TRADE_FOCUS } from '../data/constants.js';
-import { calcCityYields, calcPlayerIncome, autoAssignTiles, isWorkableHex, getHexYields } from './economy.js';
+import { calcCityYields, calcPlayerIncome, calcUnitMaintenance, autoAssignTiles, isWorkableHex, getHexYields } from './economy.js';
 import { isHexOccupied, findOpenNeighbor } from './movement.js';
 import { getPlayerMaxEra } from './combat.js';
 
@@ -127,6 +128,7 @@ export const addLogMsg = (msg, g, playerId = null) => {
 // Process research progress and gold income for a player
 export const processResearchAndIncome = (player, g, sfxQ) => {
   const income = calcPlayerIncome(player, g.hexes);
+  const upkeep = calcUnitMaintenance(player);
   if (player.currentResearch) {
     player.currentResearch.progress += income.science;
     const tech = TECH_TREE[player.currentResearch.techId];
@@ -137,7 +139,7 @@ export const processResearchAndIncome = (player, g, sfxQ) => {
       if (sfxQ) sfxQ.push("research");
     }
   }
-  player.gold += income.gold;
+  player.gold += income.gold - upkeep;
 };
 
 // Process a single city's production and growth
@@ -146,11 +148,19 @@ export const processCityTurn = (city, player, g, sfxQ) => {
   if (city.currentProduction) {
     city.productionProgress += yields.production;
     const isUnit = city.currentProduction.type === "unit";
-    const def = isUnit ? UNIT_DEFS[city.currentProduction.itemId] : DISTRICT_DEFS[city.currentProduction.itemId];
+    const isProject = city.currentProduction.type === "project";
+    const def = isUnit
+      ? UNIT_DEFS[city.currentProduction.itemId]
+      : isProject
+        ? PROJECT_DEFS[city.currentProduction.itemId]
+        : DISTRICT_DEFS[city.currentProduction.itemId];
     let effCost = def ? def.cost : 0;
     if (def && isUnit) {
       if (player.civilization === "Germany") effCost -= 3;
       if (player.researchedTechs.includes("conscription")) effCost -= 2;
+      if (city.currentProduction.itemId === "settler") {
+        effCost += Math.max(0, ((player.cities?.length || 1) - 1) * 4);
+      }
       effCost = Math.max(1, effCost);
     }
     if (def && city.productionProgress >= effCost) {
@@ -176,6 +186,11 @@ export const processCityTurn = (city, player, g, sfxQ) => {
         });
         if (city.currentProduction.itemId === "settler") city.population = Math.max(1, (city.population || 1) - 1);
         if (city.currentProduction.itemId === "nuke" || city.currentProduction.itemId === "icbm") player.gold -= 50;
+      } else if (isProject) {
+        if (!player.scienceProjectsCompleted) player.scienceProjectsCompleted = [];
+        if (!player.scienceProjectsCompleted.includes(city.currentProduction.itemId)) {
+          player.scienceProjectsCompleted.push(city.currentProduction.itemId);
+        }
       } else {
         city.districts.push(city.currentProduction.itemId);
         // When port is built, find the best coastal water hex for naval spawning
@@ -218,7 +233,7 @@ export const processCityTurn = (city, player, g, sfxQ) => {
   }
   const hpMax = calcCityMaxHP(city, player);
   city.hpMax = hpMax;
-  if (city.hp < hpMax) city.hp = Math.min(hpMax, city.hp + 3);
+  if (city.hp < hpMax) city.hp = Math.min(hpMax, city.hp + 4);
 };
 
 // Legacy — territory now managed via city borders

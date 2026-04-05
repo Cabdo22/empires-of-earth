@@ -1,9 +1,10 @@
 import React from "react";
 import { UNIT_DEFS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
+import { PROJECT_DEFS } from '../data/projects.js';
 import { TERRAIN_INFO, RESOURCE_INFO } from '../data/terrain.js';
 import { calcCityYields, getHexYields, isWorkableHex } from '../engine/economy.js';
-import { getAvailableUnits, getAvailableDistricts } from '../engine/economy.js';
+import { getAvailableUnits, getAvailableDistricts, getAvailableProjects } from '../engine/economy.js';
 import { TRADE_FOCUS } from '../data/constants.js';
 import { btnStyle, panelStyle } from '../styles.js';
 
@@ -12,6 +13,7 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
   const y = calcCityYields(city, cp, hexes);
   const avU = getAvailableUnits(cp, city, hexes);
   const avD = getAvailableDistricts(cp, city, hexes);
+  const avP = getAvailableProjects(cp, city);
   const cPos = cityPosRef.current;
   const cStyle = cPos.x != null ? { left: cPos.x, top: cPos.y } : { top: cPos.y, right: 14 };
 
@@ -110,15 +112,19 @@ export function CityPanel({ city, cp, hexes, cityPosRef, cityCollapsed, setCityC
           <div style={{ marginBottom: 4 }} />
         </>}
         {city.currentProduction ? <div style={{ fontSize: 11, padding: "5px 8px", background: "rgba(80,120,40,.3)", borderRadius: 4, marginBottom: 6 }}>
-          Building: {city.currentProduction.type === "unit" ? UNIT_DEFS[city.currentProduction.itemId]?.name : DISTRICT_DEFS[city.currentProduction.itemId]?.name}
-          <span style={{ color: "#8a9a70" }}> ({city.productionProgress}/{(() => { const isU = city.currentProduction.type === "unit"; let c = isU ? UNIT_DEFS[city.currentProduction.itemId]?.cost : DISTRICT_DEFS[city.currentProduction.itemId]?.cost; if (isU) { if (cp.civilization === "Germany") c -= 3; if (cp.researchedTechs.includes("conscription")) c -= 2; c = Math.max(1, c); } return c; })()})</span>
+          Building: {city.currentProduction.type === "unit" ? UNIT_DEFS[city.currentProduction.itemId]?.name : city.currentProduction.type === "project" ? PROJECT_DEFS[city.currentProduction.itemId]?.name : DISTRICT_DEFS[city.currentProduction.itemId]?.name}
+          <span style={{ color: "#8a9a70" }}> ({city.productionProgress}/{(() => { const isU = city.currentProduction.type === "unit"; const isP = city.currentProduction.type === "project"; let c = isU ? UNIT_DEFS[city.currentProduction.itemId]?.cost : isP ? PROJECT_DEFS[city.currentProduction.itemId]?.cost : DISTRICT_DEFS[city.currentProduction.itemId]?.cost; if (isU) { if (cp.civilization === "Germany") c -= 3; if (cp.researchedTechs.includes("conscription")) c -= 2; if (city.currentProduction.itemId === "settler") c += Math.max(0, ((cp.cities?.length || 1) - 1) * 4); c = Math.max(1, c); } return c; })()})</span>
           <button onClick={() => cancelProduction(city.id)} style={{ ...btnStyle(false), fontSize: 8, marginLeft: 6, padding: "2px 5px" }}>✕</button>
         </div>
           : <div><div style={{ fontSize: 12, color: "#dce8c0", fontWeight: 600, marginBottom: 5 }}>Build:</div>
             <div style={{ fontSize: 10, color: "#8a9a70", fontWeight: 600, letterSpacing: 1, marginBottom: 3 }}>UNITS</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 6 }}>{avU.map(u => <button key={u.id} onClick={() => setProd(city.id, "unit", u.id)} title={`Str:${u.strength} HP:${u.hp} Mv:${u.move}${u.range ? ` Rng:${u.range}` : ""} [${u.domain}]`} style={{ ...btnStyle(false), fontSize: 10, padding: "4px 8px" }}>{u.icon}{u.name}<span style={{ color: "#b89040", fontWeight: 700, fontSize: 11, marginLeft: 2 }}>({u.cost}⚙)</span></button>)}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 6 }}>{avU.map(u => <button key={u.id} onClick={() => setProd(city.id, "unit", u.id)} title={`Str:${u.strength} HP:${u.hp} Mv:${u.move}${u.range ? ` Rng:${u.range}` : ""} [${u.domain}]`} style={{ ...btnStyle(false), fontSize: 10, padding: "4px 8px" }}>{u.icon}{u.name}<span style={{ color: "#b89040", fontWeight: 700, fontSize: 11, marginLeft: 2 }}>({u.id === "settler" ? u.cost + Math.max(0, ((cp.cities?.length || 1) - 1) * 4) : u.cost}⚙)</span></button>)}</div>
             <div style={{ fontSize: 10, color: "#8a9a70", fontWeight: 600, letterSpacing: 1, marginBottom: 3 }}>DISTRICTS</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>{avD.map(d => <button key={d.id} onClick={() => setProd(city.id, "district", d.id)} style={{ ...btnStyle(false), fontSize: 10, padding: "4px 8px" }}>{d.icon}{d.name}<span style={{ color: "#b89040", fontWeight: 700, fontSize: 11, marginLeft: 2 }}>({d.cost}⚙)</span></button>)}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: avP.length > 0 ? 6 : 0 }}>{avD.map(d => <button key={d.id} onClick={() => setProd(city.id, "district", d.id)} style={{ ...btnStyle(false), fontSize: 10, padding: "4px 8px" }}>{d.icon}{d.name}<span style={{ color: "#b89040", fontWeight: 700, fontSize: 11, marginLeft: 2 }}>({d.cost}⚙)</span></button>)}</div>
+            {avP.length > 0 && <>
+              <div style={{ fontSize: 10, color: "#8a9a70", fontWeight: 600, letterSpacing: 1, marginBottom: 3 }}>PROJECTS</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>{avP.map(p => <button key={p.id} onClick={() => setProd(city.id, "project", p.id)} style={{ ...btnStyle(false), fontSize: 10, padding: "4px 8px" }}>{p.icon}{p.name}<span style={{ color: "#60a0d0", fontWeight: 700, fontSize: 11, marginLeft: 2 }}>({p.cost}⚙)</span></button>)}</div>
+            </>}
           </div>}</>}
     </div>
   );

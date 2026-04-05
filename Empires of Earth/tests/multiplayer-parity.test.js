@@ -14,6 +14,7 @@ import {
   applySetTradeFocus,
   applyUpgradeUnit,
 } from "../engine/actions.js";
+import { getAvailableProjects } from "../engine/economy.js";
 import { validateGameplayAction } from "../engine/actionValidation.js";
 import { createInitialDiplomacyState, declareWar } from "../engine/diplomacy.js";
 import { filterStateForPlayer } from "../engine/fog.js";
@@ -84,6 +85,7 @@ const makePlayer = (id, overrides = {}) => ({
   gold: 100,
   researchedTechs: ["basic_tools", "agriculture", "hunting", "trade", "bronze_working"],
   currentResearch: null,
+  scienceProjectsCompleted: [],
   type: "human",
   difficulty: "normal",
   cities: [],
@@ -302,6 +304,31 @@ runTest("shared trade-focus, cancel-production, and upgrade actions match direct
   assert.equal(shared.state.players[0].cities[0].tradeRoutes[0].focus, "scholar");
   assert.equal(shared.state.players[0].cities[0].currentProduction, null);
   assert.equal(shared.state.players[0].units[0].unitType, "swordsman");
+});
+
+runTest("science projects unlock through the normal production flow and replace instant tech victory", () => {
+  const p1 = makePlayer("p1", {
+    researchedTechs: ["basic_tools", "fusion_power", "space_program"],
+    cities: [makeCity("rome", 0, { districts: ["library", "workshop", "bank"] })],
+  });
+  const state = makeState({ players: [p1, makePlayer("p2")] });
+  state.hexes[0].cityId = "rome";
+  state.hexes[0].ownerPlayerId = "p1";
+
+  const projects = getAvailableProjects(p1, p1.cities[0]).map((project) => project.id);
+  assert.ok(projects.includes("fusion_reactor"));
+  assert.ok(projects.includes("orbital_launch"));
+  assert.equal(state.victoryStatus, null);
+
+  const withProject = applyGameplayAction(state, {
+    type: "SET_PRODUCTION",
+    cityId: "rome",
+    prodType: "project",
+    itemId: "fusion_reactor",
+  });
+
+  assert.equal(withProject.error, null);
+  assert.deepEqual(withProject.state.players[0].cities[0].currentProduction, { type: "project", itemId: "fusion_reactor" });
 });
 
 runTest("shared build-road action matches direct engine behavior", () => {

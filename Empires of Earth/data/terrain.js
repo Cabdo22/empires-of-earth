@@ -15,6 +15,6 @@ export const RESOURCE_INFO = {
   iron:     { label: "Iron",     icon: "⛏",  bonus: { prod: 2 },              techReq: "bronze_working" },
   coal:     { label: "Coal",     icon: "⚫", bonus: { prod: 2, gold: 1 },     techReq: "machinery" },
   oil:      { label: "Oil",      icon: "🛢",  bonus: { prod: 2, gold: 1 },     techReq: "steam_power" },
-  aluminum: { label: "Aluminum", icon: "🔷", bonus: { prod: 1, science: 1 },  techReq: "electronics" },
-  uranium:  { label: "Uranium",  icon: "☢",  bonus: { science: 2, prod: 1 },  techReq: "quantum_computing" },
+  aluminum: { label: "Aluminum", icon: "🔷", bonus: { prod: 1, science: 1 },  techReq: "aviation" },
+  uranium:  { label: "Uranium",  icon: "☢",  bonus: { science: 2, prod: 1 },  techReq: "combustion" },
 };

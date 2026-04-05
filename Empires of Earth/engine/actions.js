@@ -8,6 +8,7 @@
 import { hexAt, getNeighbors, hexDist, getHexesInRadius, ROAD_COST } from '../data/constants.js';
 import { TECH_TREE } from '../data/techs.js';
 import { UNIT_DEFS, SIEGE_UNITS } from '../data/units.js';
+import { PROJECT_DEFS } from '../data/projects.js';
 import { CIV_DEFS } from '../data/civs.js';
 import { calcCombatPreview } from './combat.js';
 import { canUpgradeUnit, autoAssignTiles } from './economy.js';
@@ -196,11 +197,11 @@ export const applyAttack = (state, { attackerId, col, row }) => {
     const isRanged = attDef.range > 0 && !isSiege;
     let cityDmg;
     if (isSiege) {
-      cityDmg = attDef.strength * 5;
+      cityDmg = attDef.strength * 4;
     } else if (isRanged) {
       cityDmg = attDef.strength;
     } else {
-      cityDmg = attDef.strength * 3;
+      cityDmg = attDef.strength * 2;
     }
     if (attDef.ability === "city_siege") cityDmg += 3;
     defCity.hp = (defCity.hp || 20) - cityDmg;
@@ -210,7 +211,10 @@ export const applyAttack = (state, { attackerId, col, row }) => {
     // City counter-damage: melee non-siege attackers take 3 damage
     let cityCounter = 0;
     if (attDef.range === 0 && !isSiege) {
-      cityCounter = 3;
+      cityCounter = 4
+        + (defPlayer.researchedTechs.includes("masonry") ? 1 : 0)
+        + (defPlayer.researchedTechs.includes("engineering") ? 1 : 0)
+        + (((defCity.population || 1) >= 4) ? 1 : 0);
       attUnit.hpCurrent -= cityCounter;
     }
 

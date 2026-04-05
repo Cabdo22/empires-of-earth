@@ -1,8 +1,9 @@
 import { hexAt, hexDist, ROAD_COST, TRADE_FOCUS } from '../data/constants.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { TECH_TREE } from '../data/techs.js';
+import { PROJECT_DEFS } from '../data/projects.js';
 import { getReachableHexes, getRangedTargets } from './movement.js';
-import { getAvailableTechs, canUpgradeUnit } from './economy.js';
+import { getAvailableTechs, getAvailableProjects, canUpgradeUnit } from './economy.js';
 import { areAtWar } from './diplomacy.js';
 
 export const validateGameplayAction = (gameState, action, playerId) => {
@@ -76,6 +77,11 @@ export const validateGameplayAction = (gameState, action, playerId) => {
     case "SET_PRODUCTION": {
       const city = player.cities.find(c => c.id === action.cityId);
       if (!city) return "City not found";
+      if (action.prodType === "project") {
+        if (!PROJECT_DEFS[action.itemId]) return "Project not found";
+        const available = getAvailableProjects(player, city);
+        if (!available.some((project) => project.id === action.itemId)) return "Project unavailable";
+      }
       return null;
     }
     case "UPGRADE_UNIT": {
