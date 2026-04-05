@@ -1,8 +1,58 @@
-import React from "react";
+import React, { useState } from "react";
 import { panelStyle, btnStyle } from '../styles.js';
 import { getLeaderDef } from '../data/leaders.js';
 
 const treatyLabel = (type) => type.replace("_", " ");
+
+function LeaderPortraitButton({ leader, playerId, onOpenLeader }) {
+  const [imgError, setImgError] = useState(false);
+  const initials = leader.leader.split(" ").map((part) => part[0]).join("").slice(0, 2);
+
+  return (
+    <button
+      onClick={() => onOpenLeader(playerId)}
+      style={{
+        width: 52,
+        height: 52,
+        padding: 0,
+        overflow: "hidden",
+        borderRadius: 8,
+        cursor: "pointer",
+        background: "linear-gradient(180deg, rgba(44,34,16,.95), rgba(16,14,10,.96))",
+        border: "1px solid rgba(165,140,76,.35)",
+        boxShadow: "inset 0 1px 0 rgba(255,230,180,.05)",
+        color: "#e7d8a8",
+        fontFamily: "inherit",
+        position: "relative",
+      }}
+      aria-label={`Open ${leader.leader}`}
+      title={leader.leader}
+    >
+      {!imgError && leader.portrait ? (
+        <img
+          src={leader.portrait}
+          alt={leader.leader}
+          onError={() => setImgError(true)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: leader.portraitPosition || "50% 50%",
+            transform: `scale(${leader.portraitScale || 1})`,
+            transformOrigin: "center center",
+            display: "block",
+            filter: "saturate(.95) contrast(1.02)",
+          }}
+        />
+      ) : (
+        <span style={{ display: "flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, letterSpacing: 1.2 }}>
+          {initials}
+        </span>
+      )}
+      <span style={{ position: "absolute", inset: 0, borderRadius: 8, boxShadow: "inset 0 0 0 1px rgba(255,255,255,.03)" }} />
+    </button>
+  );
+}
 
 export function DiplomacyPanel({
   currentPlayer,
@@ -43,9 +93,7 @@ export function DiplomacyPanel({
         return (
           <div key={player.id} style={{ background: "rgba(20,28,12,.78)", border: "1px solid rgba(100,140,50,.2)", borderRadius: 8, padding: 10, marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <button onClick={() => onOpenLeader(player.id)} style={{ background: "rgba(0,0,0,.18)", border: "1px solid rgba(165,140,76,.35)", color: "#e7d8a8", width: 52, height: 52, borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>
-                {leader.leader.split(" ").map((part) => part[0]).join("").slice(0, 2)}
-              </button>
+              <LeaderPortraitButton leader={leader} playerId={player.id} onOpenLeader={onOpenLeader} />
               <div style={{ flex: 1 }}>
                 <div style={{ color: player.colorLight, fontSize: 12, fontWeight: 600 }}>{player.name}</div>
                 <div style={{ color: "#8fa06e", fontSize: 9, textTransform: "uppercase", letterSpacing: 1.5 }}>{leader.leader}</div>
