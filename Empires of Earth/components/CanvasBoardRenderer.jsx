@@ -390,7 +390,7 @@ export function CanvasBoardRenderer({
       onWheel={onWheel}
       style={{ cursor: "grab", position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 1 }}
     >
-      <div ref={gRef} style={{ position: "absolute", top: 0, left: 0, width: wW, height: wH, willChange: "transform" }}>
+      <div ref={gRef} style={{ position: "absolute", top: 0, left: 0, width: wW, height: wH, willChange: "transform", transformOrigin: "0 0" }}>
         <canvas ref={terrainCanvasRef} width={wW} height={wH} style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
         <canvas ref={entityCanvasRef} width={wW} height={wH} style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
         <canvas ref={overlayCanvasRef} width={wW} height={wH} style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { HEX_SIZE, SQRT3, HEX_POINTS, hexCenter, hexAt, getNeighbors, getMapDimensions, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS } from './data/constants.js';
+import { HEX_SIZE, SQRT3, HEX_POINTS, hexCenter, hexAt, getNeighbors, getMapDimensions, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS, MAP_SIZES } from './data/constants.js';
 import { TECH_TREE } from './data/techs.js';
 import { RESOURCE_INFO } from './data/terrain.js';
 import { UNIT_DEFS } from './data/units.js';
@@ -50,6 +50,7 @@ import { createSavedGameEntry, deserializeGameState, readSavedGames, writeSavedG
 
 let uidCtr = 0;
 const EMPTY_UNIT_BUCKET = { all: [], myUnits: [], enemyUnits: [] };
+const CANVAS_AUTO_HEX_THRESHOLD = MAP_SIZES.medium.cols * MAP_SIZES.medium.rows;
 
 export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[mapSizePick,setMapSizePick]=useState(null); // null | "small" | "medium" | "large"
@@ -126,9 +127,9 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const inc=useMemo(()=>gs?calcPlayerIncomeWithState(cp,gs):{food:0,production:0,science:0,gold:0},[cp,gs]);
   const activeRenderer=useMemo(()=>{
     if(rendererMode!=="auto")return rendererMode;
-    return hexes.length>=450 ? "canvas" : "svg";
+    return hexes.length>=CANVAS_AUTO_HEX_THRESHOLD ? "canvas" : "svg";
   },[rendererMode,hexes.length]);
-  const effectivePerformanceMode=performanceModeTouched ? performanceMode : hexes.length>=450;
+  const effectivePerformanceMode=performanceModeTouched ? performanceMode : hexes.length>=CANVAS_AUTO_HEX_THRESHOLD;
   const knownPlayers=useMemo(()=>gs?getKnownPlayers(gs,cpId):[],[gs,cpId]);
   const diplomacyRelations=useMemo(()=>{
     if(!gs)return {};

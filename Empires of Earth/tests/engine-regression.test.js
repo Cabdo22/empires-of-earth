@@ -5,6 +5,7 @@ import { createInitialState } from "../engine/gameInit.js";
 import { applyEndTurn, applyFoundCity, applyMoveUnit } from "../engine/actions.js";
 import { createInitialDiplomacyState } from "../engine/diplomacy.js";
 import { getRangedTargets } from "../engine/movement.js";
+import { findHexFromWorldPoint } from "../utils/boardCoordinates.js";
 
 const results = [];
 
@@ -136,6 +137,23 @@ runTest("getRangedTargets is clamped to the hex array dimensions", () => {
   assert.equal(targets.size, 15);
   assert.ok(!targets.has("4,4"));
   assert.ok(targets.has("3,3"));
+});
+
+runTest("canvas hex hit-testing uses the current board dimensions instead of ambient globals", () => {
+  setMapConfig("small");
+  const mediumHexes = makeHexes(25, 22);
+  const targetHex = mediumHexes.find((hex) => hex.col === 18 && hex.row === 10);
+
+  const hit = findHexFromWorldPoint({
+    worldX: targetHex.x,
+    worldY: targetHex.y,
+    hexes: mediumHexes,
+  });
+
+  assert.ok(hit);
+  assert.equal(hit.hex.id, targetHex.id);
+  assert.equal(hit.col, 18);
+  assert.equal(hit.row, 10);
 });
 
 runTest("applyFoundCity and applyEndTurn preserve explicit map-config state", () => {

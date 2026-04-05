@@ -1,4 +1,4 @@
-import { COLS, ROWS, HEX_SIZE, SQRT3, hexAt } from '../data/constants.js';
+import { HEX_SIZE, SQRT3, getMapDimensions, hexAt } from '../data/constants.js';
 
 export const isPointInHex = (worldX, worldY, hex) => {
   const localX = Math.abs(worldX - hex.x);
@@ -32,14 +32,15 @@ export const clientPointToWorldPoint = ({
 };
 
 export const findHexFromWorldPoint = ({ worldX, worldY, hexes }) => {
+  const { cols, rows } = getMapDimensions(hexes);
   const approxCol = Math.round((worldX - HEX_SIZE - 50) / (1.5 * HEX_SIZE));
 
   for (let col = approxCol - 1; col <= approxCol + 1; col++) {
-    if (col < 0 || col >= COLS) continue;
+    if (col < 0 || col >= cols) continue;
     const baseRow = (worldY - HEX_SIZE - 50 - (col % 2 === 1 ? (SQRT3 * HEX_SIZE) / 2 : 0)) / (SQRT3 * HEX_SIZE);
     const approxRow = Math.round(baseRow);
     for (let row = approxRow - 1; row <= approxRow + 1; row++) {
-      if (row < 0 || row >= ROWS) continue;
+      if (row < 0 || row >= rows) continue;
       const hex = hexAt(hexes, col, row);
       if (!hex) continue;
       if (isPointInHex(worldX, worldY, hex)) {
