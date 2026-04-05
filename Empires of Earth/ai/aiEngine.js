@@ -24,6 +24,7 @@ import {
   acceptProposal,
   canProposeTradePact,
 } from '../engine/diplomacy.js';
+import { cloneState } from '../utils/cloneState.js';
 
 // Aggregate all enemy units and cities across all opponents
 const getAllEnemyUnits = (enemies) => enemies.flatMap(e => e.units);
@@ -941,7 +942,7 @@ const aiBuildRoads = (player, g) => {
 // ============================================================
 
 export const aiExecuteTurn = (gameState) => {
-  const g = JSON.parse(JSON.stringify(gameState));
+  const g = cloneState(gameState);
   const aiPlayer = g.players.find(p => p.id === g.currentPlayerId);
   const enemies = g.players.filter(p => p.id !== g.currentPlayerId);
   const diff = AI_DIFFICULTY[aiPlayer.difficulty] || AI_DIFFICULTY.normal;

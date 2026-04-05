@@ -54,9 +54,19 @@ import { GameViewport } from './components/GameViewport.jsx';
 import { GameHud } from './components/GameHud.jsx';
 import { GameModals } from './components/GameModals.jsx';
 import useUnitAnimation from './hooks/useUnitAnimation.js';
+import { cloneState } from './utils/cloneState.js';
 
 let uidCtr = 0;
 const EMPTY_UNIT_BUCKET = { all: [], myUnits: [], enemyUnits: [] };
+const SAVES_STORAGE_KEY = "eoe_saves";
+
+const readSavedGames = () => {
+  try {
+    return JSON.parse(localStorage.getItem(SAVES_STORAGE_KEY) || "[]");
+  } catch {
+    return [];
+  }
+};
 
 export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[mapSizePick,setMapSizePick]=useState(null); // null | "small" | "medium" | "large"
@@ -73,6 +83,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[showDiplomacy,setShowDiplomacy]=useState(false);
   const[showSaveLoad,setShowSaveLoad]=useState(false);
   const[saveName,setSaveName]=useState("");
+  const[savedGames,setSavedGames]=useState(()=>readSavedGames());
   const[showCity,setShowCity]=useState(null);
   const[settlerM,setSettlerM]=useState(null);
   const[nukeM,setNukeM]=useState(null);
@@ -113,6 +124,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   }, [gameStarted, gs]);
   useEffect(()=>{if(!performanceModeTouched)return;try{localStorage.setItem("eoe_performance_mode",performanceMode?"1":"0");}catch{}},[performanceMode,performanceModeTouched]);
   useEffect(()=>{try{localStorage.setItem("eoe_renderer_mode",rendererMode);}catch{}},[rendererMode]);
+  useEffect(()=>{if(showSaveLoad)setSavedGames(readSavedGames());},[showSaveLoad]);
 
   // Derived state (safe when gs is null)
   const hexes=gs?.hexes||[];
@@ -272,7 +284,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     if(newlyMet.length===0)return;
     setGs(prev=>{
       if(!prev||!prev.metPlayers)return prev;
-      const nextState=JSON.parse(JSON.stringify(prev));
+      const nextState=cloneState(prev);
       ensureDiplomacyState(nextState);
       const mp={...nextState.metPlayers};
       const myMet=[...(mp[viewPlayerId]||[])];
@@ -289,7 +301,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     });
     const metId=newlyMet[0];
     if(metId){
-      const nextState=JSON.parse(JSON.stringify(gs));
+      const nextState=cloneState(gs);
       ensureDiplomacyState(nextState);
       const scene=getLeaderScenePayload(nextState, viewPlayerId, metId, "firstMeet");
       if(scene) setLeaderScene(scene);
@@ -461,7 +473,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // Toggle a single tile's worked status (manual citizen assignment)
   const toggleTile = useCallback((cityId, hexId) => {
     setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
+      const g = cloneState(prev);
       const player = g.players.find(p => p.id === g.currentPlayerId);
       const city = player?.cities.find(c => c.id === cityId);
       if (!city) return prev;
@@ -485,7 +497,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // Auto-assign tiles prioritizing a specific yield
   const maximizeTiles = useCallback((cityId, priority) => {
     setGs(prev => {
-      const g = JSON.parse(JSON.stringify(prev));
+      const g = cloneState(prev);
       const player = g.players.find(p => p.id === g.currentPlayerId);
       const city = player?.cities.find(c => c.id === cityId);
       if (!city) return prev;
@@ -664,6 +676,31 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     setSettlerM(null);
     setSelU(null);
   }, [onlineMode, runLocalEngineAction]);
+
+  const saveCurrentGame = useCallback(() => {
+    const name = saveName.trim() || `Turn ${turnNumber} - ${cp.name}`;
+    const nextSaves = [{ id: Date.now(), name, date: new Date().toLocaleString(), data: JSON.stringify(gs) }, ...savedGames].slice(0, 20);
+    try {
+      localStorage.setItem(SAVES_STORAGE_KEY, JSON.stringify(nextSaves));
+    } catch {}
+    setSavedGames(nextSaves);
+    setSaveName("");
+    setShowSaveLoad(false);
+  }, [cp.name, gs, saveName, savedGames, turnNumber]);
+
+  const loadSavedGame = useCallback((saveData) => {
+    setGs(JSON.parse(saveData));
+    setShowSaveLoad(false);
+    turnPopupShownRef.current = null;
+  }, []);
+
+  const deleteSavedGame = useCallback((saveId) => {
+    const nextSaves = savedGames.filter((save) => save.id !== saveId);
+    try {
+      localStorage.setItem(SAVES_STORAGE_KEY, JSON.stringify(nextSaves));
+    } catch {}
+    setSavedGames(nextSaves);
+  }, [savedGames]);
 
   // === RENDER HEXES (memoized) ===
   // Helper: find hex from SVG event via data attributes
@@ -894,6 +931,40 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,settlerBlocked,actable,nukeM,nukeR,flashes,fogVisible,fogExplored,discoveredResources,displayPlayerById,effectivePerformanceMode]);
 
   const renderAll=useCallback(()=>boardHexes.map(tile=><MemoHex key={tile.key} {...tile}/>),[boardHexes]);
+  const terrainCanvasTiles=useMemo(()=>boardHexes.map(tile=>({
+    key: tile.key,
+    hex: tile.hex,
+    isFogged: tile.isFogged,
+    isExplored: tile.isExplored,
+    player: tile.player,
+    city: tile.city,
+  })),[boardHexes]);
+  const entityCanvasTiles=useMemo(()=>boardHexes.map(tile=>({
+    key: tile.key,
+    hex: tile.hex,
+    city: tile.city,
+    player: tile.player,
+    units: tile.units,
+    unitCount: tile.unitCount,
+    isFogged: tile.isFogged,
+    isExplored: tile.isExplored,
+    discoveredResources: tile.discoveredResources,
+    unitSelected: tile.unitSelected,
+    canAct: tile.canAct,
+  })),[boardHexes]);
+  const overlayCanvasTiles=useMemo(()=>boardHexes.map(tile=>({
+    key: tile.key,
+    hex: tile.hex,
+    inMoveRange: tile.inMoveRange,
+    inAttackRange: tile.inAttackRange,
+    inNukeRange: tile.inNukeRange,
+    settlerMode: tile.settlerMode,
+    settlerBlocked: tile.settlerBlocked,
+    city: tile.city,
+    isHovered: tile.isHovered,
+    isSelected: tile.isSelected,
+    flash: tile.flash,
+  })),[boardHexes]);
 
   // City border overlay (rendered above all hexes so no hex can cover borders)
   const borderOverlay=useMemo(()=>{
@@ -1009,6 +1080,9 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     onHexClick,
     onHexCtx,
     boardHexes,
+    terrainCanvasTiles,
+    entityCanvasTiles,
+    overlayCanvasTiles,
     borderOverlay,
     cityBannerOverlay,
     overlayRef,
@@ -1068,6 +1142,10 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     panelStyle,
     saveName,
     setSaveName,
+    savedGames,
+    saveCurrentGame,
+    loadSavedGame,
+    deleteSavedGame,
     setGs,
     turnPopupShownRef,
     preview,

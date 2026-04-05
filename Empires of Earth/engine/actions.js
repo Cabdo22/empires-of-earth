@@ -31,8 +31,7 @@ import {
   addLogMsg, initCityBorders,
 } from './turnProcessing.js';
 import { checkVictoryState } from './victory.js';
-
-const clone = (state) => JSON.parse(JSON.stringify(state));
+import { cloneState } from '../utils/cloneState.js';
 
 export const advanceToNextPlayerState = (g, sfxQ = null) => {
   rollRandomEvent(g, sfxQ);
@@ -80,7 +79,7 @@ const tryCaptureCity = (city, attackerPlayer, defenderPlayer, hex, g) => {
 
 // ---- MOVE UNIT ----
 export const applyMoveUnit = (state, { unitId, col, row }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const player = g.players.find(p => p.id === g.currentPlayerId);
   const unit = player?.units.find(u => u.id === unitId);
   if (!unit) return { state, events: [] };
@@ -108,7 +107,7 @@ export const applyMoveUnit = (state, { unitId, col, row }) => {
 
 // ---- ATTACK ----
 export const applyAttack = (state, { attackerId, col, row }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const events = [];
   const attPlayer = g.players.find(p => p.id === g.currentPlayerId);
   const allEnemies = g.players.filter(p => p.id !== g.currentPlayerId);
@@ -241,7 +240,7 @@ export const applyAttack = (state, { attackerId, col, row }) => {
 
 // ---- LAUNCH NUKE ----
 export const applyLaunchNuke = (state, { nukeId, col, row }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const events = [];
   const aP = g.players.find(p => p.id === g.currentPlayerId);
 
@@ -286,7 +285,7 @@ export const applyLaunchNuke = (state, { nukeId, col, row }) => {
 
 // ---- SELECT RESEARCH ----
 export const applySelectResearch = (state, { techId }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const player = g.players.find(p => p.id === g.currentPlayerId);
   player.currentResearch = { techId, progress: 0 };
   addLogMsg(`${player.name} researching ${TECH_TREE[techId].name}`, g, player.id);
@@ -295,7 +294,7 @@ export const applySelectResearch = (state, { techId }) => {
 
 // ---- SET PRODUCTION ----
 export const applySetProduction = (state, { cityId, type, itemId }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const city = g.players.find(p => p.id === g.currentPlayerId).cities.find(c => c.id === cityId);
   if (city) {
     city.currentProduction = { type, itemId };
@@ -306,7 +305,7 @@ export const applySetProduction = (state, { cityId, type, itemId }) => {
 
 // ---- UPGRADE UNIT ----
 export const applyUpgradeUnit = (state, { unitId }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const player = g.players.find(p => p.id === g.currentPlayerId);
   const unit = player.units.find(u => u.id === unitId);
   if (!unit) return { state, events: [] };
@@ -325,7 +324,7 @@ export const applyUpgradeUnit = (state, { unitId }) => {
 
 // ---- FOUND CITY ----
 export const applyFoundCity = (state, { unitId, col, row }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const player = g.players.find(p => p.id === g.currentPlayerId);
   const unitIdx = player.units.findIndex(u => u.id === unitId);
   if (unitIdx === -1) return { state, events: [] };
@@ -365,7 +364,7 @@ export const applyFoundCity = (state, { unitId, col, row }) => {
 
 // ---- CANCEL PRODUCTION ----
 export const applyCancelProduction = (state, { cityId }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const city = g.players.find(p => p.id === g.currentPlayerId).cities.find(c => c.id === cityId);
   if (city) { city.currentProduction = null; city.productionProgress = 0; }
   return { state: g, events: [] };
@@ -374,7 +373,7 @@ export const applyCancelProduction = (state, { cityId }) => {
 // ---- END TURN ----
 // CRITICAL: cycles through N players using (curIdx + 1) % players.length
 export const applyEndTurn = (state) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const sfxQ = [];
   const currentPlayer = g.players.find(p => p.id === g.currentPlayerId);
 
@@ -389,7 +388,7 @@ export const applyEndTurn = (state) => {
 };
 
 export const applyDeclareWar = (state, { targetPlayerId }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const actorId = g.currentPlayerId;
   const actor = g.players.find((p) => p.id === actorId);
   const target = g.players.find((p) => p.id === targetPlayerId);
@@ -400,7 +399,7 @@ export const applyDeclareWar = (state, { targetPlayerId }) => {
 };
 
 export const applyCreateDiplomacyProposal = (state, { targetPlayerId, proposalType, autoResolveAi = false }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const actorId = g.currentPlayerId;
   const actor = g.players.find((p) => p.id === actorId);
   const target = g.players.find((p) => p.id === targetPlayerId);
@@ -431,7 +430,7 @@ export const applyCreateDiplomacyProposal = (state, { targetPlayerId, proposalTy
 };
 
 export const applyAcceptDiplomacyProposal = (state, { proposalId }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const proposal = acceptProposal(g, proposalId);
   if (!proposal) return { state, events: [] };
   const from = g.players.find((p) => p.id === proposal.fromPlayerId);
@@ -441,7 +440,7 @@ export const applyAcceptDiplomacyProposal = (state, { proposalId }) => {
 };
 
 export const applyRejectDiplomacyProposal = (state, { proposalId }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const proposal = rejectProposal(g, proposalId);
   if (!proposal) return { state, events: [] };
   const from = g.players.find((p) => p.id === proposal.fromPlayerId);
@@ -452,7 +451,7 @@ export const applyRejectDiplomacyProposal = (state, { proposalId }) => {
 
 // ---- BUILD ROAD ----
 export const applyBuildRoad = (state, { hexId }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const player = g.players.find(p => p.id === g.currentPlayerId);
   const hex = g.hexes[hexId];
 
@@ -473,7 +472,7 @@ export const applyBuildRoad = (state, { hexId }) => {
 
 // ---- SET TRADE FOCUS ----
 export const applySetTradeFocus = (state, { cityId, routeIndex, focus }) => {
-  const g = clone(state);
+  const g = cloneState(state);
   const player = g.players.find(p => p.id === g.currentPlayerId);
   const city = player.cities.find(c => c.id === cityId);
   if (!city || !city.tradeRoutes || !city.tradeRoutes[routeIndex]) return { state, events: [] };

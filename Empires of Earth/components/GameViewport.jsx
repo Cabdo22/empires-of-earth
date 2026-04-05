@@ -25,6 +25,9 @@ export function GameViewport({ controller }) {
     onHexClick,
     onHexCtx,
     boardHexes,
+    terrainCanvasTiles,
+    entityCanvasTiles,
+    overlayCanvasTiles,
     borderOverlay,
     cityBannerOverlay,
     overlayRef,
@@ -49,6 +52,9 @@ export function GameViewport({ controller }) {
       onContextMenu={onCanvasContext}
       onWheel={onWh}
       boardHexes={boardHexes}
+      terrainCanvasTiles={terrainCanvasTiles}
+      entityCanvasTiles={entityCanvasTiles}
+      overlayCanvasTiles={overlayCanvasTiles}
       borderOverlay={borderOverlay}
       cityBannerOverlay={cityBannerOverlay}
       overlayRef={overlayRef}

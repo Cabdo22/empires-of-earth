@@ -68,6 +68,9 @@ export function CanvasBoardRenderer({
   onContextMenu,
   onWheel,
   boardHexes,
+  terrainCanvasTiles,
+  entityCanvasTiles,
+  overlayCanvasTiles,
   borderOverlay,
   cityBannerOverlay,
   overlayRef,
@@ -87,7 +90,7 @@ export function CanvasBoardRenderer({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, wW, wH);
-    for (const tile of boardHexes) {
+    for (const tile of terrainCanvasTiles || boardHexes) {
       const { hex, isFogged, isExplored, player } = tile;
       if (isFogged && !isExplored) {
         drawHex(ctx, hex.x, hex.y, "#bcc9d4", "rgba(180,195,210,.35)", 1, 1);
@@ -112,14 +115,14 @@ export function CanvasBoardRenderer({
         ctx.restore();
       }
     }
-  }, [boardHexes, wW, wH, hexOutline]);
+  }, [terrainCanvasTiles, boardHexes, wW, wH, hexOutline]);
 
   useEffect(() => {
     const canvas = entityCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, wW, wH);
-    for (const tile of boardHexes) {
+    for (const tile of entityCanvasTiles || boardHexes) {
       const { hex, city, player, units, unitCount, isFogged, discoveredResources } = tile;
       if (isFogged && !tile.isExplored) continue;
       if (hex.resource && discoveredResources?.has(hex.resource) && !city) {
@@ -169,14 +172,14 @@ export function CanvasBoardRenderer({
         ctx.restore();
       }
     }
-  }, [boardHexes, wW, wH]);
+  }, [entityCanvasTiles, boardHexes, wW, wH]);
 
   useEffect(() => {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, wW, wH);
-    for (const tile of boardHexes) {
+    for (const tile of overlayCanvasTiles || boardHexes) {
       const { hex, inMoveRange, inAttackRange, inNukeRange, settlerMode, settlerBlocked, city, isHovered, isSelected, flash } = tile;
       if (inMoveRange) drawHex(ctx, hex.x, hex.y, "rgba(96,208,255,.1)", "#60d0ff", 2, 0.8);
       if (inAttackRange) drawHex(ctx, hex.x, hex.y, "rgba(255,60,60,.12)", "#ff4040", 2, 0.8);
@@ -197,7 +200,7 @@ export function CanvasBoardRenderer({
         );
       }
     }
-  }, [boardHexes, wW, wH]);
+  }, [overlayCanvasTiles, boardHexes, wW, wH]);
 
   return (
     <div
