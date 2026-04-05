@@ -961,6 +961,12 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const findHexFromEvent=useCallback(e=>{const el=e.target.closest("[data-hex]");if(!el)return null;
     const id=+el.dataset.hex,col=+el.dataset.col,row=+el.dataset.row;
     return{id,col,row,hex:hexes[id],uk:`${col},${row}`};},[hexes]);
+  const isPointInHex=useCallback((worldX,worldY,hex)=>{
+    const localX=Math.abs(worldX-hex.x);
+    const localY=Math.abs(worldY-hex.y);
+    const halfHeight=(SQRT3*HEX_SIZE)/2;
+    return localX<=HEX_SIZE && localY<=halfHeight && (SQRT3*localX)+localY<=SQRT3*HEX_SIZE;
+  },[]);
   const findHexFromClientPoint=useCallback((clientX,clientY)=>{
     const z=zoomRef.current;
     const p=panRef.current;
@@ -982,6 +988,9 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
         const dx=hex.x-worldX;
         const dy=hex.y-worldY;
         const distSq=dx*dx+dy*dy;
+        if(isPointInHex(worldX,worldY,hex)){
+          return{id:hex.id,col:hex.col,row:hex.row,hex,uk:hex.uk};
+        }
         if(distSq<bestDistSq){
           bestDistSq=distSq;
           bestHex=hex;
@@ -990,7 +999,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     }
     if(!bestHex||bestDistSq>HEX_SIZE*HEX_SIZE*1.2)return null;
     return{id:bestHex.id,col:bestHex.col,row:bestHex.row,hex:bestHex,uk:bestHex.uk};
-  },[hexes,panRef,zoomRef,wW,wH]);
+  },[hexes,isPointInHex,panRef,zoomRef,wW,wH]);
 
   const commitPreview=useCallback(nextPreview=>{
     const nextKey=nextPreview?[

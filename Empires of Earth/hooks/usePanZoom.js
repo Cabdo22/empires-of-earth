@@ -4,6 +4,7 @@ export function usePanZoom({ wW, wH }) {
   const panRef = useRef({ x: 0, y: 0 });
   const zoomRef = useRef(1);
   const isPanRef = useRef(false);
+  const pointerDownRef = useRef(false);
   const psRef = useRef({ x: 0, y: 0, px: 0, py: 0 });
   const gRef = useRef(null);
   const svgRef = useRef(null);
@@ -29,18 +30,26 @@ export function usePanZoom({ wW, wH }) {
 
   // Mouse handlers
   const onMD = useCallback(e => {
-    isPanRef.current = true;
+    pointerDownRef.current = true;
+    isPanRef.current = false;
     psRef.current = { x: e.clientX, y: e.clientY, px: panRef.current.x, py: panRef.current.y };
-    if (svgRef.current) svgRef.current.style.cursor = "grabbing";
   }, []);
 
   const onMM = useCallback(e => {
-    if (!isPanRef.current) return;
+    if (!pointerDownRef.current) return;
+    const dx = e.clientX - psRef.current.x;
+    const dy = e.clientY - psRef.current.y;
+    if (!isPanRef.current) {
+      if ((dx * dx) + (dy * dy) < 36) return;
+      isPanRef.current = true;
+      if (svgRef.current) svgRef.current.style.cursor = "grabbing";
+    }
     panRef.current = { x: psRef.current.px + e.clientX - psRef.current.x, y: psRef.current.py + e.clientY - psRef.current.y };
     sched();
   }, [sched]);
 
   const onMU = useCallback(() => {
+    pointerDownRef.current = false;
     isPanRef.current = false;
     if (svgRef.current) svgRef.current.style.cursor = "grab";
   }, []);
