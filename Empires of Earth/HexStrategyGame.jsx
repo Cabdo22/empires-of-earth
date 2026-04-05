@@ -50,24 +50,10 @@ import { usePanZoom } from './hooks/usePanZoom.js';
 import { useMinimap } from './hooks/useMinimap.js';
 import { ModeSelectScreen, MapSizeScreen, LobbyScreen, CivSelectScreen, TurnTransitionScreen, VictoryScreen } from './components/GameScreens.jsx';
 import { MAX_PLAYERS } from './data/constants.js';
-
-import { TechTreePanel } from './components/TechTreePanel.jsx';
-import { CityPanel } from './components/CityPanel.jsx';
-import { CombatPreview } from './components/CombatPreview.jsx';
-import { PlayerPanel } from './components/PlayerPanel.jsx';
-import { ActionBar } from './components/ActionBar.jsx';
-import { Legend } from './components/Legend.jsx';
-import { LogPanel } from './components/LogPanel.jsx';
-import { BottomInfo } from './components/BottomInfo.jsx';
-import { NotificationCircles } from './components/NotificationCircles.jsx';
-import { TutorialTips } from './components/TutorialTips.jsx';
-import { MinimapDisplay } from './components/MinimapDisplay.jsx';
-import { EventPopup } from './components/EventPopup.jsx';
-import { LeaderMeetingScreen } from './components/LeaderMeetingScreen.jsx';
-import { DiplomacyPanel } from './components/DiplomacyPanel.jsx';
-import { CanvasBoardRenderer } from './components/CanvasBoardRenderer.jsx';
+import { GameViewport } from './components/GameViewport.jsx';
+import { GameHud } from './components/GameHud.jsx';
+import { GameModals } from './components/GameModals.jsx';
 import useUnitAnimation from './hooks/useUnitAnimation.js';
-import UnitAnimationOverlay from './components/UnitAnimationOverlay.jsx';
 
 let uidCtr = 0;
 const EMPTY_UNIT_BUCKET = { all: [], myUnits: [], enemyUnits: [] };
@@ -1004,6 +990,126 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const tCounts=boardStats.terrainCounts;
   const landOwned=boardStats.ownedByPlayer;
   const totalLand=boardStats.landCount;
+  const controller = {
+    activeRenderer,
+    svgRef,
+    gRef,
+    wW,
+    wH,
+    onMD,
+    onMM,
+    onMU,
+    onWh,
+    onCanvasMove,
+    onCanvasLeave,
+    onCanvasClick,
+    onCanvasContext,
+    onHexHover,
+    onHexLeave,
+    onHexClick,
+    onHexCtx,
+    boardHexes,
+    borderOverlay,
+    cityBannerOverlay,
+    overlayRef,
+    animVisuals,
+    animatingUnitId,
+    combatAnims,
+    tooltipData,
+    renderAll,
+    uiOverlayRef,
+    turnNumber,
+    cp,
+    endTurn,
+    landOwned,
+    totalLand,
+    barbarians,
+    showTech,
+    setShowTech,
+    showDiplomacy,
+    setShowDiplomacy,
+    showSaveLoad,
+    setShowSaveLoad,
+    tutorialOn,
+    setTutorialOn,
+    setTutorialDismissed,
+    effectivePerformanceMode,
+    setPerformanceModeTouched,
+    setPerformanceMode,
+    rendererMode,
+    setRendererMode,
+    sud,
+    selU,
+    settlerM,
+    setSettlerM,
+    nukeM,
+    setNukeM,
+    upgradeUnit,
+    actable,
+    tCounts,
+    log,
+    viewPlayerId,
+    gs,
+    selH,
+    hexes,
+    unitMap,
+    players,
+    moveMsg,
+    buildRoad,
+    aiThinking,
+    onlineMode,
+    minimapVisible,
+    minimapRef,
+    MINIMAP_W,
+    MINIMAP_H,
+    onMinimapDown,
+    onMinimapMove,
+    onMinimapUp,
+    panelStyle,
+    saveName,
+    setSaveName,
+    setGs,
+    turnPopupShownRef,
+    preview,
+    techPosRef,
+    techCollapsed,
+    setTechCollapsed,
+    onPanelDown,
+    selResearch,
+    cpId,
+    knownPlayers,
+    diplomacyRelations,
+    tradePactBlockReasons,
+    pendingIncoming,
+    pendingOutgoing,
+    openLeaderScene,
+    declareWarAction,
+    proposeDiplomacyAction,
+    acceptProposalAction,
+    rejectProposalAction,
+    showCity,
+    cityCollapsed,
+    setCityCollapsed,
+    setShowCity,
+    setProd,
+    cancelProduction,
+    toggleTile,
+    maximizeTiles,
+    setTradeFocus,
+    discoveredResources,
+    eventPopup,
+    setEventPopup,
+    leaderScene,
+    setLeaderScene,
+    turnPopups,
+    setTurnPopups,
+    tutorialDismissed,
+    op,
+    cityPosRef,
+    gameContainerRef,
+    onPanelMove,
+    onPanelUp,
+  };
 
   // === ONLINE MODE: when rendered by OnlineGame with onlineMode prop, skip all menu screens ===
   // Wait for server game state to arrive before rendering the board
@@ -1039,190 +1145,9 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   return(
     <div ref={gameContainerRef} onMouseMove={onPanelMove} onMouseUp={onPanelUp} style={{width:"100vw",height:"100vh",background:"linear-gradient(145deg,#0a0e06 0%,#141e0c 40%,#0e1608 100%)",overflow:"hidden",position:"relative",userSelect:"none",touchAction:"none",fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,serif"}}>
-
-      {/* === MAP LAYER (below UI) === */}
-      {activeRenderer==="canvas" ? (
-        <CanvasBoardRenderer
-          svgRef={svgRef}
-          gRef={gRef}
-          wW={wW}
-          wH={wH}
-          onMouseDown={onMD}
-          onMouseMove={onCanvasMove}
-          onMouseUp={onMU}
-          onMouseLeave={onCanvasLeave}
-          onClick={onCanvasClick}
-          onContextMenu={onCanvasContext}
-          onWheel={onWh}
-          boardHexes={boardHexes}
-          borderOverlay={borderOverlay}
-          cityBannerOverlay={cityBannerOverlay}
-          overlayRef={overlayRef}
-          animVisuals={animVisuals}
-          animatingUnitId={animatingUnitId}
-          combatAnims={combatAnims}
-          tooltipData={tooltipData}
-        />
-      ) : (
-      <svg ref={svgRef} onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU} onWheel={onWh} onContextMenu={e=>e.preventDefault()} style={{cursor:"grab",position:"absolute",top:0,left:0,width:"100%",height:"100%",zIndex:1}}>
-        <defs>
-          <style>{`
-            @keyframes unitPulse { 0%,100%{opacity:.4;} 50%{opacity:.8;} }
-            @keyframes unitBob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
-            .unit-glow { animation: unitPulse 2s ease-in-out infinite; }
-            .unit-bob { animation: unitBob 2.5s ease-in-out infinite; }
-            @keyframes waveDrift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(3px,1.5px)} }
-            @keyframes waveDrift2 { 0%,100%{transform:translate(2px,4px)} 50%{transform:translate(-1px,6px)} }
-            @keyframes waveDrift3 { 0%,100%{transform:translate(-1px,8px)} 50%{transform:translate(2px,9.5px)} }
-            @keyframes foamPulse { 0%,100%{opacity:.3} 50%{opacity:.15} }
-            @keyframes shimmerFlicker { 0%,100%{opacity:.4} 30%{opacity:.15} 60%{opacity:.5} }
-            .wave-layer1 { animation: waveDrift1 6s ease-in-out infinite; }
-            .wave-layer2 { animation: waveDrift2 8s ease-in-out infinite; }
-            .wave-layer3 { animation: waveDrift3 7s ease-in-out infinite; }
-            .wave-foam { animation: foamPulse 5s ease-in-out infinite; }
-            .wave-shimmer { animation: shimmerFlicker 4s ease-in-out infinite; }
-            @keyframes coastWash1 { 0%,100%{transform:translate(0,0);opacity:.4} 50%{transform:scale(0.95);opacity:.55} }
-            @keyframes coastWash2 { 0%,100%{transform:translate(0,0);opacity:.35} 50%{transform:scale(0.92);opacity:.5} }
-            @keyframes coastWash3 { 0%,100%{transform:translate(0,0);opacity:.3} 50%{transform:scale(0.88);opacity:.45} }
-            .coast-wash1 { animation: coastWash1 4s ease-in-out infinite; }
-            .coast-wash2 { animation: coastWash2 4s ease-in-out infinite; animation-delay: -1.3s; }
-            .coast-wash3 { animation: coastWash3 4s ease-in-out infinite; animation-delay: -2.6s; }
-            @keyframes cloudDrift { 0%,100%{transform:translate(0,0)} 50%{transform:translate(2px,1px)} }
-            .fog-cloud { animation: cloudDrift 8s ease-in-out infinite; }
-          `}</style>
-          <clipPath id="hexClip"><polygon points={HEX_POINTS}/></clipPath>
-          <radialGradient id="gradGrass" cx="40%" cy="35%" r="70%"><stop offset="0%" stopColor="#5a9a2a"/><stop offset="30%" stopColor="#4e8826"/><stop offset="60%" stopColor="#437520"/><stop offset="100%" stopColor="#2a5014"/></radialGradient>
-          <radialGradient id="varGrass" cx="60%" cy="55%" r="55%"><stop offset="0%" stopColor="#2a4a10"/><stop offset="100%" stopColor="#3a6a1a" stopOpacity="0"/></radialGradient>
-          <radialGradient id="gradForest" cx="40%" cy="35%" r="70%"><stop offset="0%" stopColor="#306828"/><stop offset="30%" stopColor="#265a1e"/><stop offset="60%" stopColor="#1e4a16"/><stop offset="100%" stopColor="#12380c"/></radialGradient>
-          <radialGradient id="gradMountain" cx="40%" cy="30%" r="70%"><stop offset="0%" stopColor="#6a6555"/><stop offset="30%" stopColor="#5a5545"/><stop offset="60%" stopColor="#4a4538"/><stop offset="100%" stopColor="#35302a"/></radialGradient>
-          <radialGradient id="gradWater" cx="40%" cy="35%" r="70%"><stop offset="0%" stopColor="#3578aa"/><stop offset="30%" stopColor="#2a6a9a"/><stop offset="60%" stopColor="#1e5580"/><stop offset="100%" stopColor="#0e3050"/></radialGradient>
-        </defs>
-        <g ref={gRef} style={{willChange:"transform"}} onMouseMove={onHexHover} onMouseLeave={onHexLeave} onClick={onHexClick} onContextMenu={onHexCtx}>{renderAll()}
-          {/* Territory border overlay — rendered after all hexes so borders are never covered */}
-          {borderOverlay.map(b=><g key={b.key} transform={`translate(${b.x},${b.y})`} style={{pointerEvents:"none"}}><polyline points={b.pts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke="#000" strokeWidth={6} strokeLinejoin="round" strokeLinecap="round" opacity={0.3}/><polyline points={b.pts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke={b.color} strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.9}/></g>)}
-          {/* City banner overlay — rendered above all hexes so banners can extend across hex boundaries */}
-          {cityBannerOverlay.map(cb=><g key={cb.key} transform={`translate(${cb.x},${cb.y+30})`} style={{pointerEvents:"none"}}>
-            <rect x={-35} y={-8} width={70} height={15} rx={3} fill={cb.colorBg} stroke={cb.color} strokeWidth="1"/>
-            <text x={-3} y={.5} textAnchor="middle" dominantBaseline="middle" fill="#ffd740" fontSize={8} fontWeight="bold" fontFamily="'Palatino Linotype',serif" style={{letterSpacing:.5}}>{cb.name}</text>
-            <circle cx={27} cy={.5} r={7} fill={cb.color} opacity=".8"/>
-            <text x={27} y={1} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={7} fontWeight="bold">{cb.pop}</text>
-            <rect x={-20} y={10} width={40} height={4} rx={1.5} fill="#333" opacity=".7"/><rect x={-20} y={10} width={40*(cb.hp/cb.hpMax)} height={4} rx={1.5} fill={cb.hp>cb.hpMax*.5?"#4a4":"#c44"} opacity=".9"/>
-            {cb.prod&&<text x={0} y={-26} textAnchor="middle" fill="#ffd740" fontSize={8}>⚙ {cb.prod.type==="unit"?UNIT_DEFS[cb.prod.itemId]?.name:DISTRICT_DEFS[cb.prod.itemId]?.name}</text>}
-          </g>)}
-          <UnitAnimationOverlay ref={overlayRef} unitType={animVisuals?.unitType} playerColors={animVisuals||{}} visible={!!animatingUnitId}/>
-          {combatAnims.map(a=><g key={a.id} transform={`translate(${a.x},${a.y})`} style={{pointerEvents:"none"}}>
-            <text x={0} y={-20} textAnchor="middle" fill={a.color} fontSize={18} fontWeight="bold" fontFamily="'Palatino Linotype',serif" stroke="#000" strokeWidth="2" paintOrder="stroke">
-              -{a.dmg}<animate attributeName="y" from="-20" to="-65" dur="1.1s" fill="freeze"/><animate attributeName="opacity" from="1" to="0" dur="1.1s" fill="freeze"/>
-            </text>
-          </g>)}
-          {tooltipData&&<g transform={`translate(${tooltipData.x},${tooltipData.y-52})`} style={{pointerEvents:"none"}}>
-            <rect x={-tooltipData.text.length*3.2} y={-10} width={tooltipData.text.length*6.4} height={18} rx={5} fill="rgba(50,15,5,.95)" stroke="rgba(240,100,60,.7)" strokeWidth="1"/>
-            <text x={0} y={3} textAnchor="middle" dominantBaseline="middle" fill="#ffb090" fontSize={9} fontWeight="bold" fontFamily="'Palatino Linotype',serif" style={{pointerEvents:"none"}}>{tooltipData.text}</text>
-          </g>}
-        </g>
-      </svg>)}
-
-      {/* === UI OVERLAY (above map, fixed to viewport so browser zoom can't push it off-screen) === */}
-      <div ref={uiOverlayRef} style={{position:"fixed",top:0,left:0,width:"100vw",height:"100vh",zIndex:10,pointerEvents:"none"}}>
-
-      {/* Title */}
-      <div style={{position:"absolute",top:0,left:0,right:0,height:50,background:"linear-gradient(180deg,rgba(10,14,6,.95) 0%,rgba(10,14,6,0) 100%)",zIndex:10,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:8,pointerEvents:"none"}}>
-        <div style={{textAlign:"center"}}><h1 style={{color:"#dce8c0",fontSize:20,fontWeight:600,letterSpacing:6,textTransform:"uppercase",margin:0}}>Empires of Earth</h1>
-          <div style={{color:"#98aa78",fontSize:10,letterSpacing:3,marginTop:2}}>Turn {turnNumber} · {cp.name}</div></div></div>
-
-      {/* End Turn button */}
-      <div style={{position:"absolute",top:48,left:"50%",transform:"translateX(-50%)",zIndex:10,display:"flex",gap:6,alignItems:"center",background:"rgba(10,14,6,.85)",borderRadius:6,padding:"3px 8px",border:"1px solid rgba(100,140,50,.3)",pointerEvents:"auto"}}>
-        <button onClick={endTurn} style={{...btnStyle(true),marginBottom:0,marginRight:0,fontSize:14,fontWeight:600,padding:"8px 24px",letterSpacing:1.5}}>End Turn →</button>
-      </div>
-
-      {/* Player panel */}
-      <PlayerPanel cp={cp} hexes={hexes} landOwned={landOwned} totalLand={totalLand} barbarians={barbarians}/>
-
-      {/* Action bar */}
-      <ActionBar showTech={showTech} setShowTech={setShowTech} showDiplomacy={showDiplomacy} setShowDiplomacy={setShowDiplomacy} showSaveLoad={showSaveLoad} setShowSaveLoad={setShowSaveLoad} tutorialOn={tutorialOn} setTutorialOn={setTutorialOn} setTutorialDismissed={setTutorialDismissed} performanceMode={effectivePerformanceMode} setPerformanceMode={value=>{setPerformanceModeTouched(true);setPerformanceMode(value);}} rendererMode={rendererMode} setRendererMode={setRendererMode} sud={sud} selU={selU} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} upgradeUnit={upgradeUnit} cp={cp} actable={actable}/>
-
-      {/* Save/Load modal */}
-      {showSaveLoad && <div style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5,8,3,.5)", pointerEvents: "all" }} onClick={e => { if (e.target === e.currentTarget) setShowSaveLoad(false); }}>
-        <div style={{ ...panelStyle, width: 360, maxHeight: 420, display: "flex", flexDirection: "column", zIndex: 41 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <span style={{ color: "#dce8c0", fontSize: 16, fontWeight: 600, letterSpacing: 2 }}>Save / Load Game</span>
-            <span style={{ cursor: "pointer", color: "#8a9a70", fontSize: 16 }} onClick={() => setShowSaveLoad(false)}>✕</span>
-          </div>
-          <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-            <input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder={`Turn ${turnNumber} - ${cp.name}`} style={{ flex: 1, background: "rgba(20,28,12,.9)", border: "1px solid rgba(100,140,50,.4)", borderRadius: 4, padding: "6px 10px", color: "#c8dca8", fontSize: 12, fontFamily: "inherit", outline: "none" }}/>
-            <button onClick={() => {
-              const saves = JSON.parse(localStorage.getItem("eoe_saves") || "[]");
-              const name = saveName.trim() || `Turn ${turnNumber} - ${cp.name}`;
-              saves.unshift({ id: Date.now(), name, date: new Date().toLocaleString(), data: JSON.stringify(gs) });
-              localStorage.setItem("eoe_saves", JSON.stringify(saves.slice(0, 20)));
-              setSaveName("");
-              setShowSaveLoad(false);
-            }} style={{ ...btnStyle(true), marginBottom: 0, marginRight: 0 }}>💾 Save</button>
-          </div>
-          <div style={{ color: "#8a9a70", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Saved Games</div>
-          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-            {(() => { const saves = JSON.parse(localStorage.getItem("eoe_saves") || "[]"); return saves.length === 0 ? <div style={{ color: "#5a6a4a", fontSize: 10, textAlign: "center", padding: 20 }}>No saves yet</div> : saves.map(s => <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(20,28,12,.6)", borderRadius: 4, padding: "6px 8px", border: "1px solid rgba(100,140,50,.15)" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: "#c8dca8", fontSize: 11 }}>{s.name}</div>
-                <div style={{ color: "#6a7a50", fontSize: 8 }}>{s.date}</div>
-              </div>
-              <button onClick={() => { setGs(JSON.parse(s.data)); setShowSaveLoad(false); turnPopupShownRef.current = null; }} style={{ ...btnStyle(false), marginBottom: 0, marginRight: 0, fontSize: 9, padding: "3px 8px" }}>Load</button>
-              <button onClick={() => { const saves2 = JSON.parse(localStorage.getItem("eoe_saves") || "[]").filter(s2 => s2.id !== s.id); localStorage.setItem("eoe_saves", JSON.stringify(saves2)); setShowSaveLoad(false); setTimeout(() => setShowSaveLoad(true), 0); }} style={{ ...btnStyle(false), marginBottom: 0, marginRight: 0, fontSize: 9, padding: "3px 8px", color: "#e07070" }}>✕</button>
-            </div>); })()}
-          </div>
-        </div>
-      </div>}
-
-      {/* Combat preview */}
-      <CombatPreview preview={preview}/>
-
-      {/* Tech tree */}
-      {showTech&&<TechTreePanel cp={cp} techPosRef={techPosRef} techCollapsed={techCollapsed} setTechCollapsed={setTechCollapsed} setShowTech={setShowTech} onPanelDown={onPanelDown} selResearch={selResearch}/>}
-
-      {/* Diplomacy panel */}
-      {showDiplomacy&&<DiplomacyPanel currentPlayer={players.find(p=>p.id===cpId)} knownPlayers={knownPlayers} relations={diplomacyRelations} tradePactBlockReasons={tradePactBlockReasons} pendingIncoming={pendingIncoming} pendingOutgoing={pendingOutgoing} onClose={()=>setShowDiplomacy(false)} onOpenLeader={(pid)=>openLeaderScene(pid,"diplomacy")} onDeclareWar={declareWarAction} onPropose={proposeDiplomacyAction} onAccept={acceptProposalAction} onReject={rejectProposalAction}/>}
-
-      {/* City panel */}
-      {showCity&&(()=>{const city=cp.cities.find(c=>c.id===showCity);if(!city)return null;
-        return <CityPanel city={city} cp={cp} hexes={hexes} cityPosRef={cityPosRef} cityCollapsed={cityCollapsed} setCityCollapsed={setCityCollapsed} setShowCity={setShowCity} onPanelDown={onPanelDown} setProd={setProd} cancelProduction={cancelProduction} toggleTile={toggleTile} maximizeTiles={maximizeTiles} setTradeFocus={setTradeFocus} allCities={cp.cities} discoveredResources={discoveredResources}/>;})()}
-
-      {/* Legend */}
-      <Legend tCounts={tCounts}/>
-
-      {/* Log */}
-      <LogPanel log={log} currentPlayerId={viewPlayerId} currentPlayerTechs={cp.researchedTechs} gs={gs}/>
-
-      {/* Bottom info */}
-      <BottomInfo selH={selH} hexes={hexes} unitMap={unitMap} players={players} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} moveMsg={moveMsg} buildRoad={buildRoad} cp={cp} gs={gs} viewPlayerId={viewPlayerId}/>
-
-      {/* AI thinking overlay */}
-      {aiThinking&&<div style={{position:"absolute",inset:0,zIndex:40,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(5,8,3,.6)",pointerEvents:"all"}}><div style={{background:"rgba(15,20,10,.95)",border:"2px solid rgba(100,140,50,.5)",borderRadius:12,padding:"24px 40px",textAlign:"center",boxShadow:"0 0 40px rgba(80,120,40,.2)"}}><div style={{fontSize:28,marginBottom:8,animation:"pulse 1.5s ease-in-out infinite"}}>🤖</div><div style={{color:"#c8d8a0",fontSize:16,fontWeight:600,letterSpacing:3}}>AI is thinking...</div><div style={{color:"#8a9a70",fontSize:12,marginTop:6}}>The AI plots its next move</div></div></div>}
-
-      {/* Online mode: Opponent's Turn overlay */}
-      {onlineMode&&!onlineMode.isMyTurn&&!gs?.victoryStatus&&<div style={{position:"absolute",inset:0,zIndex:35,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(5,8,3,.4)",pointerEvents:"all"}}><div style={{background:"rgba(15,20,10,.95)",border:"2px solid rgba(100,140,50,.5)",borderRadius:12,padding:"24px 40px",textAlign:"center",boxShadow:"0 0 40px rgba(80,120,40,.2)"}}><div style={{fontSize:28,marginBottom:8}}>{"\u{1F551}"}</div><div style={{color:"#c8d8a0",fontSize:16,fontWeight:600,letterSpacing:3}}>Opponent's Turn</div><div style={{color:"#8a9a70",fontSize:12,marginTop:6}}>Waiting for your opponent to play...</div></div></div>}
-
-      {/* Online mode: Disconnect warning */}
-      {onlineMode?.opponentDisconnected&&<div style={{position:"absolute",top:80,left:"50%",transform:"translateX(-50%)",zIndex:50,background:"rgba(120,40,20,.95)",border:"1px solid rgba(200,80,40,.6)",borderRadius:8,padding:"8px 20px",pointerEvents:"auto"}}><div style={{color:"#ffb090",fontSize:12,fontWeight:600,letterSpacing:1}}>Opponent Disconnected</div><div style={{color:"#ff9070",fontSize:9,marginTop:2}}>They may reconnect...</div></div>}
-
-      {/* Online mode: Error banner */}
-      {onlineMode?.error&&<div style={{position:"absolute",top:onlineMode.opponentDisconnected?130:80,left:"50%",transform:"translateX(-50%)",zIndex:50,background:"rgba(120,20,20,.95)",border:"1px solid rgba(200,40,40,.6)",borderRadius:8,padding:"6px 16px",pointerEvents:"auto"}}><div style={{color:"#ff6060",fontSize:11}}>{onlineMode.error}</div></div>}
-
-      {/* Random event popup */}
-      <EventPopup event={eventPopup} onDismiss={() => setEventPopup(null)}/>
-
-      {/* Leader meeting / diplomacy scene */}
-      <LeaderMeetingScreen scene={leaderScene} onClose={() => setLeaderScene(null)} onDeclareWar={() => leaderScene && declareWarAction(leaderScene.playerId)} onOpenDiplomacy={() => { setLeaderScene(null); setShowDiplomacy(true); }}/>
-
-      {/* Turn-start popup queue */}
-      <NotificationCircles turnPopups={turnPopups} setTurnPopups={setTurnPopups} setShowTech={setShowTech} setShowCity={setShowCity}/>
-
-      {/* Tutorial tip cards */}
-      <TutorialTips gs={gs} sud={sud} op={op} aiThinking={aiThinking} tutorialOn={tutorialOn} tutorialDismissed={tutorialDismissed} setTutorialDismissed={setTutorialDismissed} setTutorialOn={setTutorialOn}/>
-
-      {/* Minimap */}
-      {minimapVisible && <MinimapDisplay minimapRef={minimapRef} MINIMAP_W={MINIMAP_W} MINIMAP_H={MINIMAP_H} onMinimapDown={onMinimapDown} onMinimapMove={onMinimapMove} onMinimapUp={onMinimapUp}/>}
-
-      </div>{/* close UI overlay */}
+      <GameViewport controller={controller}/>
+      <GameHud controller={controller}/>
+      <GameModals controller={controller}/>
     </div>
   );
 }
