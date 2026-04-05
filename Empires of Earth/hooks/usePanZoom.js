@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect } from "react";
+import { clientPointToWorldPoint, getPanForWorldPointAtClientPoint, getWorldTransform } from "../utils/boardCoordinates.js";
 
 export function usePanZoom({ wW, wH }) {
   const panRef = useRef({ x: 0, y: 0 });
@@ -13,14 +14,21 @@ export function usePanZoom({ wW, wH }) {
   const uiOverlayRef = useRef(null);
   const minimapRenderRef = useRef(null);
   const viewportScaleRef = useRef(window.visualViewport?.scale || 1);
+  const getContainerRect = useCallback(() => gameContainerRef.current?.getBoundingClientRect(), []);
 
   const flush = useCallback(() => {
     const z = zoomRef.current, p = panRef.current;
-    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-    if (gRef.current) gRef.current.style.transform = `translate(${p.x + cx - (wW * z) / 2}px,${p.y + cy - (wH * z) / 2}px) scale(${z})`;
+    const transform = getWorldTransform({
+      containerRect: getContainerRect(),
+      pan: p,
+      zoom: z,
+      worldWidth: wW,
+      worldHeight: wH,
+    });
+    if (gRef.current) gRef.current.style.transform = `translate(${transform.translateX}px,${transform.translateY}px) scale(${z})`;
     dirtyRef.current = false;
     if (minimapRenderRef.current) minimapRenderRef.current();
-  }, [wW, wH]);
+  }, [getContainerRect, wW, wH]);
 
   const sched = useCallback(() => {
     if (!dirtyRef.current) { dirtyRef.current = true; requestAnimationFrame(flush); }
@@ -63,15 +71,29 @@ export function usePanZoom({ wW, wH }) {
     const scale = (e.ctrlKey || e.metaKey) ? .005 : .001;
     const newZ = Math.min(3, Math.max(.3, oldZ - dy * scale));
     if (newZ === oldZ) return;
-    const mx = e.clientX, my = e.clientY;
-    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-    const p = panRef.current;
-    const wx = (mx - p.x - cx + wW * oldZ / 2) / oldZ;
-    const wy = (my - p.y - cy + wH * oldZ / 2) / oldZ;
-    panRef.current = { x: mx - cx + wW * newZ / 2 - wx * newZ, y: my - cy + wH * newZ / 2 - wy * newZ };
+    const rect = getContainerRect();
+    const { worldX, worldY } = clientPointToWorldPoint({
+      clientX: e.clientX,
+      clientY: e.clientY,
+      containerRect: rect,
+      pan: panRef.current,
+      zoom: oldZ,
+      worldWidth: wW,
+      worldHeight: wH,
+    });
+    panRef.current = getPanForWorldPointAtClientPoint({
+      worldX,
+      worldY,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      containerRect: rect,
+      zoom: newZ,
+      worldWidth: wW,
+      worldHeight: wH,
+    });
     zoomRef.current = newZ;
     sched();
-  }, [sched, wW, wH]);
+  }, [getContainerRect, sched, wW, wH]);
 
   // Attach wheel listener as non-passive so preventDefault stops browser scroll/zoom
   useEffect(() => {
@@ -103,12 +125,28 @@ export function usePanZoom({ wW, wH }) {
       const factor = nextScale / prevScale;
       const newZ = Math.min(3, Math.max(.3, oldZ * factor));
       if (Math.abs(newZ - oldZ) < 0.0001) return;
-      const mx = window.innerWidth / 2, my = window.innerHeight / 2;
-      const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-      const p = panRef.current;
-      const wx = (mx - p.x - cx + wW * oldZ / 2) / oldZ;
-      const wy = (my - p.y - cy + wH * oldZ / 2) / oldZ;
-      panRef.current = { x: mx - cx + wW * newZ / 2 - wx * newZ, y: my - cy + wH * newZ / 2 - wy * newZ };
+      const rect = getContainerRect();
+      const centerClientX = (rect?.left ?? 0) + (rect?.width ?? window.innerWidth) / 2;
+      const centerClientY = (rect?.top ?? 0) + (rect?.height ?? window.innerHeight) / 2;
+      const { worldX, worldY } = clientPointToWorldPoint({
+        clientX: centerClientX,
+        clientY: centerClientY,
+        containerRect: rect,
+        pan: panRef.current,
+        zoom: oldZ,
+        worldWidth: wW,
+        worldHeight: wH,
+      });
+      panRef.current = getPanForWorldPointAtClientPoint({
+        worldX,
+        worldY,
+        clientX: centerClientX,
+        clientY: centerClientY,
+        containerRect: rect,
+        zoom: newZ,
+        worldWidth: wW,
+        worldHeight: wH,
+      });
       zoomRef.current = newZ;
       sched();
     };
@@ -135,7 +173,7 @@ export function usePanZoom({ wW, wH }) {
       vv.removeEventListener("resize", onViewportChange); vv.removeEventListener("scroll", onViewportChange);
       document.removeEventListener("wheel", startPoll, { capture: true });
     };
-  }, [sched, wH, wW]);
+  }, [getContainerRect, sched, wH, wW]);
 
   return {
     panRef, zoomRef, isPanRef, gRef, svgRef, gameContainerRef, uiOverlayRef, minimapRenderRef,

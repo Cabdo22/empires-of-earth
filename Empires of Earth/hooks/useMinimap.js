@@ -1,8 +1,9 @@
 import { useRef, useCallback, useEffect } from "react";
 import { hexAt } from '../data/constants.js';
 import { getDisplayColors } from '../engine/discovery.js';
+import { getViewportWorldBounds } from "../utils/boardCoordinates.js";
 
-export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, minimapRenderRef, zoomRef, panRef, sched, viewPlayerId }) {
+export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, minimapRenderRef, zoomRef, panRef, sched, viewPlayerId, gameContainerRef }) {
   const minimapRef = useRef(null);
   const mmDragRef = useRef(false);
   const baseCanvasRef = useRef(null);
@@ -27,13 +28,16 @@ export function useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH
     ctx.drawImage(baseCanvasRef.current, 0, 0);
     const { minX, minY, scaleX: dynScaleX, scaleY: dynScaleY } = dynBoundsRef.current;
     ctx.globalAlpha = 1;
-    const z = zoomRef.current, pan = panRef.current;
-    const vpCx = window.innerWidth / 2, vpCy = window.innerHeight / 2;
-    const wl = ((wW * z) / 2 - pan.x - vpCx) / z, wt = ((wH * z) / 2 - pan.y - vpCy) / z;
-    const vpW = window.innerWidth / z, vpH = window.innerHeight / z;
+    const viewport = getViewportWorldBounds({
+      containerRect: gameContainerRef.current?.getBoundingClientRect(),
+      pan: panRef.current,
+      zoom: zoomRef.current,
+      worldWidth: wW,
+      worldHeight: wH,
+    });
     ctx.strokeStyle = "rgba(255,220,100,.7)"; ctx.lineWidth = 1.5;
-    ctx.strokeRect((wl - minX) * dynScaleX, (wt - minY) * dynScaleY, vpW * dynScaleX, vpH * dynScaleY);
-  }, [MINIMAP_W, MINIMAP_H, zoomRef, panRef, wW, wH]);
+    ctx.strokeRect((viewport.left - minX) * dynScaleX, (viewport.top - minY) * dynScaleY, viewport.width * dynScaleX, viewport.height * dynScaleY);
+  }, [MINIMAP_W, MINIMAP_H, gameContainerRef, zoomRef, panRef, wW, wH]);
 
   const scheduleViewportRender = useCallback(() => {
     if (viewportRafRef.current) return;

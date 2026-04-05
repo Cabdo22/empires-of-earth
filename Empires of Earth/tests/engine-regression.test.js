@@ -5,7 +5,8 @@ import { createInitialState } from "../engine/gameInit.js";
 import { applyEndTurn, applyFoundCity, applyMoveUnit } from "../engine/actions.js";
 import { createInitialDiplomacyState } from "../engine/diplomacy.js";
 import { getRangedTargets } from "../engine/movement.js";
-import { findHexFromWorldPoint } from "../utils/boardCoordinates.js";
+import { clientPointToWorldPoint, findHexFromWorldPoint, getPanForWorldPointAtClientPoint, worldPointToClientPoint } from "../utils/boardCoordinates.js";
+import { CANVAS_AUTO_HEX_THRESHOLD, resolveActiveRenderer, resolvePerformanceMode } from "../utils/rendererPolicy.js";
 
 const results = [];
 
@@ -154,6 +155,89 @@ runTest("canvas hex hit-testing uses the current board dimensions instead of amb
   assert.equal(hit.hex.id, targetHex.id);
   assert.equal(hit.col, 18);
   assert.equal(hit.row, 10);
+});
+
+runTest("board coordinate helpers round-trip world and client points", () => {
+  const containerRect = { left: 40, top: 20, width: 1280, height: 720 };
+  const world = { x: 913, y: 477 };
+  const pan = { x: -120, y: 84 };
+  const zoom = 1.35;
+
+  const client = worldPointToClientPoint({
+    worldX: world.x,
+    worldY: world.y,
+    containerRect,
+    pan,
+    zoom,
+    worldWidth: 2400,
+    worldHeight: 1800,
+  });
+  const roundTrip = clientPointToWorldPoint({
+    clientX: client.clientX,
+    clientY: client.clientY,
+    containerRect,
+    pan,
+    zoom,
+    worldWidth: 2400,
+    worldHeight: 1800,
+  });
+
+  assert.ok(Math.abs(roundTrip.worldX - world.x) < 0.0001);
+  assert.ok(Math.abs(roundTrip.worldY - world.y) < 0.0001);
+});
+
+runTest("zoom anchoring keeps the same world point under the cursor", () => {
+  const containerRect = { left: 10, top: 15, width: 1440, height: 900 };
+  const oldPan = { x: -210, y: 130 };
+  const oldZoom = 1.1;
+  const newZoom = 1.7;
+  const cursor = { clientX: 920, clientY: 510 };
+
+  const anchorWorld = clientPointToWorldPoint({
+    clientX: cursor.clientX,
+    clientY: cursor.clientY,
+    containerRect,
+    pan: oldPan,
+    zoom: oldZoom,
+    worldWidth: 3200,
+    worldHeight: 2400,
+  });
+  const newPan = getPanForWorldPointAtClientPoint({
+    worldX: anchorWorld.worldX,
+    worldY: anchorWorld.worldY,
+    clientX: cursor.clientX,
+    clientY: cursor.clientY,
+    containerRect,
+    zoom: newZoom,
+    worldWidth: 3200,
+    worldHeight: 2400,
+  });
+  const anchoredClient = worldPointToClientPoint({
+    worldX: anchorWorld.worldX,
+    worldY: anchorWorld.worldY,
+    containerRect,
+    pan: newPan,
+    zoom: newZoom,
+    worldWidth: 3200,
+    worldHeight: 2400,
+  });
+
+  assert.ok(Math.abs(anchoredClient.clientX - cursor.clientX) < 0.0001);
+  assert.ok(Math.abs(anchoredClient.clientY - cursor.clientY) < 0.0001);
+});
+
+runTest("auto renderer policy switches to canvas at the medium map threshold", () => {
+  assert.equal(resolveActiveRenderer("auto", CANVAS_AUTO_HEX_THRESHOLD - 1), "svg");
+  assert.equal(resolveActiveRenderer("auto", CANVAS_AUTO_HEX_THRESHOLD), "canvas");
+  assert.equal(resolveActiveRenderer("canvas", 10), "canvas");
+  assert.equal(resolveActiveRenderer("svg", 9999), "svg");
+});
+
+runTest("auto performance mode follows the same threshold until user overrides it", () => {
+  assert.equal(resolvePerformanceMode(false, false, CANVAS_AUTO_HEX_THRESHOLD - 1), false);
+  assert.equal(resolvePerformanceMode(false, false, CANVAS_AUTO_HEX_THRESHOLD), true);
+  assert.equal(resolvePerformanceMode(true, false, CANVAS_AUTO_HEX_THRESHOLD), false);
+  assert.equal(resolvePerformanceMode(true, true, 1), true);
 });
 
 runTest("applyFoundCity and applyEndTurn preserve explicit map-config state", () => {

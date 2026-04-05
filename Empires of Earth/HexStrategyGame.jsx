@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { HEX_SIZE, SQRT3, HEX_POINTS, hexCenter, hexAt, getNeighbors, getMapDimensions, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS, MAP_SIZES } from './data/constants.js';
+import { HEX_SIZE, SQRT3, HEX_POINTS, hexCenter, hexAt, getNeighbors, getMapDimensions, hexDist, getHexesInRadius, EVEN_COL_NEIGHBORS, ODD_COL_NEIGHBORS } from './data/constants.js';
 import { TECH_TREE } from './data/techs.js';
 import { RESOURCE_INFO } from './data/terrain.js';
 import { UNIT_DEFS } from './data/units.js';
@@ -47,10 +47,10 @@ import { cloneState } from './utils/cloneState.js';
 import { clientPointToWorldPoint, findHexFromWorldPoint } from './utils/boardCoordinates.js';
 import { applyGameplayAction } from './engine/gameplayActionApplier.js';
 import { createSavedGameEntry, deserializeGameState, readSavedGames, writeSavedGames } from './utils/saveGames.js';
+import { resolveActiveRenderer, resolvePerformanceMode } from './utils/rendererPolicy.js';
 
 let uidCtr = 0;
 const EMPTY_UNIT_BUCKET = { all: [], myUnits: [], enemyUnits: [] };
-const CANVAS_AUTO_HEX_THRESHOLD = MAP_SIZES.medium.cols * MAP_SIZES.medium.rows;
 
 export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[mapSizePick,setMapSizePick]=useState(null); // null | "small" | "medium" | "large"
@@ -125,11 +125,8 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const enemies=players.filter(p=>p.id!==viewPlayerId);
   const op=enemies[0]; // legacy compat — prefer enemies array
   const inc=useMemo(()=>gs?calcPlayerIncomeWithState(cp,gs):{food:0,production:0,science:0,gold:0},[cp,gs]);
-  const activeRenderer=useMemo(()=>{
-    if(rendererMode!=="auto")return rendererMode;
-    return hexes.length>=CANVAS_AUTO_HEX_THRESHOLD ? "canvas" : "svg";
-  },[rendererMode,hexes.length]);
-  const effectivePerformanceMode=performanceModeTouched ? performanceMode : hexes.length>=CANVAS_AUTO_HEX_THRESHOLD;
+  const activeRenderer=useMemo(()=>resolveActiveRenderer(rendererMode, hexes.length),[rendererMode,hexes.length]);
+  const effectivePerformanceMode=useMemo(()=>resolvePerformanceMode(performanceModeTouched, performanceMode, hexes.length),[performanceModeTouched, performanceMode, hexes.length]);
   const knownPlayers=useMemo(()=>gs?getKnownPlayers(gs,cpId):[],[gs,cpId]);
   const diplomacyRelations=useMemo(()=>{
     if(!gs)return {};
@@ -234,7 +231,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // Panel drag
   const { techPosRef, cityPosRef, onPanelDown, onPanelMove, onPanelUp } = usePanelDrag();
   // Minimap
-  const { minimapRef, onMinimapDown, onMinimapMove, onMinimapUp } = useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, minimapRenderRef, zoomRef, panRef, sched, viewPlayerId });
+  const { minimapRef, onMinimapDown, onMinimapMove, onMinimapUp } = useMinimap({ hexes, fogVisible, fogExplored, players, gs, wW, wH, MINIMAP_W, MINIMAP_H, minimapRenderRef, zoomRef, panRef, sched, viewPlayerId, gameContainerRef });
   // Center camera on player's first city when game starts
   const gameCenteredRef=useRef(false);
   useEffect(()=>{
