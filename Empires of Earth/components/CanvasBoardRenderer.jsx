@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { HEX_POINTS, HEX_SIZE } from '../data/constants.js';
 import { UNIT_DEFS } from '../data/units.js';
 import { DISTRICT_DEFS } from '../data/districts.js';
@@ -68,15 +68,17 @@ function drawHex(ctx, x, y, fill, stroke, lineWidth = 1, alpha = 1) {
 }
 
 function drawTerrainBase(ctx, tile) {
-  const { hex, isFogged, isExplored, player, reducedEffects } = tile;
+  const { hex, isFogged, isExplored, player, reducedEffects, visualDetailLevel = reducedEffects ? 0 : 3 } = tile;
+  const detailLevel = reducedEffects ? 0 : visualDetailLevel;
   if (isFogged && !isExplored) {
     drawHex(ctx, hex.x, hex.y, "#9eaebb", "rgba(214,226,236,.35)", 1.1, 1);
-    if (!reducedEffects) {
+    if (detailLevel > 0) {
       ctx.save();
       ctx.beginPath();
       hexPath(ctx, hex.x, hex.y);
       ctx.clip();
-      for (let i = 0; i < 3; i++) {
+      const cloudCount = detailLevel === 1 ? 1 : detailLevel === 2 ? 2 : 3;
+      for (let i = 0; i < cloudCount; i++) {
         const rx = (rand(hex.id * 11 + i) - 0.5) * 42;
         const ry = (rand(hex.id * 19 + i) - 0.5) * 24;
         const rw = 16 + rand(hex.id * 23 + i) * 14;
@@ -115,7 +117,8 @@ function drawTerrainBase(ctx, tile) {
   if (hex.terrainType === "grassland") {
     ctx.strokeStyle = reducedEffects ? "rgba(156,214,109,.18)" : "rgba(163,223,107,.26)";
     ctx.lineWidth = 1;
-    for (let i = 0; i < (reducedEffects ? 5 : 10); i++) {
+    const bladeCount = reducedEffects ? 5 : detailLevel === 1 ? 4 : detailLevel === 2 ? 7 : 10;
+    for (let i = 0; i < bladeCount; i++) {
       const dx = (rand(hex.id * 31 + i) - 0.5) * 54;
       const dy = (rand(hex.id * 37 + i) - 0.2) * 36;
       ctx.beginPath();
@@ -124,7 +127,8 @@ function drawTerrainBase(ctx, tile) {
       ctx.stroke();
     }
   } else if (hex.terrainType === "forest") {
-    for (let i = 0; i < (reducedEffects ? 4 : 7); i++) {
+    const canopyCount = reducedEffects ? 4 : detailLevel === 1 ? 3 : detailLevel === 2 ? 5 : 7;
+    for (let i = 0; i < canopyCount; i++) {
       const dx = (rand(hex.id * 41 + i) - 0.5) * 50;
       const dy = (rand(hex.id * 43 + i) - 0.45) * 38;
       ctx.fillStyle = i % 2 === 0 ? "rgba(33,86,31,.55)" : "rgba(62,128,56,.45)";
@@ -135,7 +139,8 @@ function drawTerrainBase(ctx, tile) {
   } else if (hex.terrainType === "mountain") {
     ctx.strokeStyle = reducedEffects ? "rgba(236,236,236,.18)" : "rgba(245,245,245,.28)";
     ctx.lineWidth = 1.2;
-    for (let i = 0; i < (reducedEffects ? 2 : 4); i++) {
+    const ridgeCount = reducedEffects ? 2 : detailLevel === 1 ? 2 : detailLevel === 2 ? 3 : 4;
+    for (let i = 0; i < ridgeCount; i++) {
       const dx = (rand(hex.id * 53 + i) - 0.5) * 28;
       const h = 12 + rand(hex.id * 59 + i) * 14;
       ctx.beginPath();
@@ -147,7 +152,8 @@ function drawTerrainBase(ctx, tile) {
   } else if (hex.terrainType === "water") {
     ctx.strokeStyle = reducedEffects ? "rgba(168,222,250,.16)" : "rgba(196,232,252,.22)";
     ctx.lineWidth = 1;
-    for (let i = 0; i < (reducedEffects ? 3 : 6); i++) {
+    const waveCount = reducedEffects ? 3 : detailLevel === 1 ? 2 : detailLevel === 2 ? 4 : 6;
+    for (let i = 0; i < waveCount; i++) {
       const dx = (rand(hex.id * 61 + i) - 0.5) * 48;
       const dy = (rand(hex.id * 67 + i) - 0.5) * 28;
       ctx.beginPath();
@@ -230,11 +236,12 @@ function drawCity(ctx, tile) {
 }
 
 function drawUnit(ctx, tile) {
-  const { hex, units, unitCount, unitSelected, canAct, reducedEffects, city } = tile;
+  const { hex, units, unitCount, unitSelected, canAct, reducedEffects, city, visualDetailLevel = reducedEffects ? 0 : 3 } = tile;
   const unit = units[0];
+  const showActRing = canAct && !unitSelected && !reducedEffects && visualDetailLevel >= 2;
   ctx.save();
   ctx.translate(hex.x, hex.y - (city ? 10 : 6));
-  if (canAct && !unitSelected && !reducedEffects) {
+  if (showActRing) {
     ctx.beginPath();
     ctx.arc(0, 0, 21.5, 0, Math.PI * 2);
     ctx.strokeStyle = `${unit.pCol}aa`;
@@ -251,7 +258,7 @@ function drawUnit(ctx, tile) {
   ctx.fill();
   ctx.strokeStyle = unitSelected ? "#60d0ff" : canAct ? "#a0e060" : unit.pCol;
   ctx.lineWidth = unitSelected ? 2.7 : canAct ? 2.2 : 1.6;
-  if (canAct && !unitSelected) ctx.setLineDash([4, 2]);
+  if (showActRing) ctx.setLineDash([4, 2]);
   ctx.stroke();
   ctx.setLineDash([]);
   drawCenteredText(ctx, UNIT_DEFS[unit.unitType]?.icon || "?", 0, 0, unit.pLight || "#fff", 16, "rgba(0,0,0,.55)");
@@ -304,28 +311,36 @@ export function CanvasBoardRenderer({
   animatingUnitId,
   combatAnims,
   tooltipData,
+  visualDetailLevel,
 }) {
   const terrainCanvasRef = useRef(null);
   const entityCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
+  const terrainTilesRef = useRef(terrainCanvasTiles || boardHexes);
+  const entityTilesRef = useRef(entityCanvasTiles || boardHexes);
+  const overlayTilesRef = useRef(overlayCanvasTiles || boardHexes);
+
+  terrainTilesRef.current = terrainCanvasTiles || boardHexes;
+  entityTilesRef.current = entityCanvasTiles || boardHexes;
+  overlayTilesRef.current = overlayCanvasTiles || boardHexes;
 
   useEffect(() => {
     const canvas = terrainCanvasRef.current;
     if (!canvas) return;
     const ctx = setupCanvas(canvas, wW, wH);
     ctx.clearRect(0, 0, wW, wH);
-    for (const tile of terrainCanvasTiles || boardHexes) {
+    for (const tile of terrainTilesRef.current) {
       drawTerrainBase(ctx, tile);
       if (tile.hex.road && !tile.city) drawRoad(ctx, tile.hex);
     }
-  }, [terrainCanvasTiles, boardHexes, wW, wH]);
+  }, [terrainCanvasTiles, visualDetailLevel, wW, wH]);
 
   useEffect(() => {
     const canvas = entityCanvasRef.current;
     if (!canvas) return;
     const ctx = setupCanvas(canvas, wW, wH);
     ctx.clearRect(0, 0, wW, wH);
-    for (const tile of entityCanvasTiles || boardHexes) {
+    for (const tile of entityTilesRef.current) {
       const { hex, city, player, units, unitCount, isFogged, discoveredResources } = tile;
       if (isFogged && !tile.isExplored) continue;
       if (hex.resource && discoveredResources?.has(hex.resource) && !city) {
@@ -338,14 +353,14 @@ export function CanvasBoardRenderer({
         drawUnit(ctx, tile);
       }
     }
-  }, [entityCanvasTiles, boardHexes, wW, wH]);
+  }, [entityCanvasTiles, visualDetailLevel, wW, wH]);
 
   useEffect(() => {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return;
     const ctx = setupCanvas(canvas, wW, wH);
     ctx.clearRect(0, 0, wW, wH);
-    for (const tile of overlayCanvasTiles || boardHexes) {
+    for (const tile of overlayTilesRef.current) {
       const { hex, inMoveRange, inAttackRange, inNukeRange, settlerMode, settlerBlocked, city, isHovered, isSelected, flash, reducedEffects } = tile;
       if (inMoveRange) drawHex(ctx, hex.x, hex.y, "rgba(96,208,255,.1)", "#60d0ff", 2, 0.8);
       if (inAttackRange) drawHex(ctx, hex.x, hex.y, "rgba(255,60,60,.12)", "#ff4040", 2, 0.8);
@@ -365,7 +380,7 @@ export function CanvasBoardRenderer({
           0.95
         );
       }
-      if (isSelected && !reducedEffects) {
+      if (isSelected && !reducedEffects && tile.visualDetailLevel >= 2) {
         ctx.save();
         ctx.strokeStyle = "rgba(255,248,200,.55)";
         ctx.lineWidth = 1;
@@ -376,7 +391,7 @@ export function CanvasBoardRenderer({
         ctx.restore();
       }
     }
-  }, [overlayCanvasTiles, boardHexes, wW, wH]);
+  }, [overlayCanvasTiles, wW, wH]);
 
   return (
     <div

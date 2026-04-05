@@ -48,7 +48,7 @@ import { cloneState } from './utils/cloneState.js';
 import { clientPointToWorldPoint, findHexFromWorldPoint } from './utils/boardCoordinates.js';
 import { applyGameplayAction } from './engine/gameplayActionApplier.js';
 import { createSavedGameEntry, deserializeGameState, readSavedGames, writeSavedGames } from './utils/saveGames.js';
-import { resolveActiveRenderer, resolvePerformanceMode } from './utils/rendererPolicy.js';
+import { resolveActiveRenderer, resolvePerformanceMode, resolveVisualDetailLevel } from './utils/rendererPolicy.js';
 
 let uidCtr = 0;
 const EMPTY_UNIT_BUCKET = { all: [], myUnits: [], enemyUnits: [] };
@@ -228,7 +228,8 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   // Pan/zoom
   const MINIMAP_W=160,MINIMAP_H=140;
   const wW=mapCols*1.5*HEX_SIZE+HEX_SIZE*2+100,wH=mapRows*SQRT3*HEX_SIZE+SQRT3*HEX_SIZE+100;
-  const { panRef, zoomRef, isPanRef, gRef, svgRef, gameContainerRef, uiOverlayRef, minimapRenderRef, flush, sched, onMD, onMM, onMU, onWh } = usePanZoom({ wW, wH });
+  const { panRef, zoomRef, isPanRef, gRef, svgRef, gameContainerRef, uiOverlayRef, minimapRenderRef, flush, sched, onMD, onMM, onMU, onWh, zoomBucket } = usePanZoom({ wW, wH });
+  const visualDetailLevel=useMemo(()=>resolveVisualDetailLevel({ reducedEffects: effectivePerformanceMode, hexCount: hexes.length, zoom: zoomRef.current }),[effectivePerformanceMode, hexes.length, zoomBucket, zoomRef]);
   // Panel drag
   const { techPosRef, cityPosRef, onPanelDown, onPanelMove, onPanelUp } = usePanelDrag();
   // Minimap
@@ -947,29 +948,45 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,settlerBlocked,actable,nukeM,nukeR,flashes,fogVisible,fogExplored,discoveredResources,displayPlayerById,effectivePerformanceMode]);
 
   const renderAll=useCallback(()=>boardHexes.map(({ key, ...tile })=><MemoHex key={key} {...tile}/>),[boardHexes]);
-  const terrainCanvasTiles=useMemo(()=>boardHexes.map(tile=>({
-    key: tile.key,
-    hex: tile.hex,
-    isFogged: tile.isFogged,
-    isExplored: tile.isExplored,
-    player: tile.player,
-    city: tile.city,
-    reducedEffects: tile.reducedEffects,
-  })),[boardHexes]);
-  const entityCanvasTiles=useMemo(()=>boardHexes.map(tile=>({
-    key: tile.key,
-    hex: tile.hex,
-    city: tile.city,
-    player: tile.player,
-    units: tile.units,
-    unitCount: tile.unitCount,
-    isFogged: tile.isFogged,
-    isExplored: tile.isExplored,
-    discoveredResources: tile.discoveredResources,
-    unitSelected: tile.unitSelected,
-    canAct: tile.canAct,
-    reducedEffects: tile.reducedEffects,
-  })),[boardHexes]);
+  const terrainCanvasTiles=useMemo(()=>hexes.map(hex=>{
+    const uk=hex.uk;
+    const isVisible=fogVisible.has(uk);
+    const ownerP=hex.ownerPlayerId?displayPlayerById[hex.ownerPlayerId]:null;
+    const cE=cityMap[hex.id];
+    return {
+      key: hex.id,
+      hex,
+      isFogged: !isVisible,
+      isExplored: fogExplored.has(uk),
+      player: cE?.player||ownerP,
+      city: cE?.city||null,
+      reducedEffects: effectivePerformanceMode,
+      visualDetailLevel,
+    };
+  }),[hexes,fogVisible,fogExplored,displayPlayerById,cityMap,effectivePerformanceMode,visualDetailLevel]);
+  const entityCanvasTiles=useMemo(()=>hexes.map(hex=>{
+    const uk=hex.uk;
+    const isVisible=fogVisible.has(uk);
+    const bucket=unitMap[uk]||EMPTY_UNIT_BUCKET;
+    const myU=bucket.myUnits;
+    const cE=cityMap[hex.id];
+    const isMy=myU.length>0;
+    return {
+      key: hex.id,
+      hex,
+      city: cE?.city||null,
+      player: cE?.player||(hex.ownerPlayerId?displayPlayerById[hex.ownerPlayerId]:null),
+      units: isVisible?bucket.all:null,
+      unitCount: isVisible?bucket.all.length:0,
+      isFogged: !isVisible,
+      isExplored: fogExplored.has(uk),
+      discoveredResources,
+      unitSelected: !!(selU&&isMy&&myU.some(u=>u.id===selU)),
+      canAct: phase==="MOVEMENT"&&isMy&&myU.some(u=>actable.has(u.id)),
+      reducedEffects: effectivePerformanceMode,
+      visualDetailLevel,
+    };
+  }),[hexes,fogVisible,fogExplored,unitMap,cityMap,displayPlayerById,discoveredResources,selU,phase,actable,effectivePerformanceMode,visualDetailLevel]);
   const overlayCanvasTiles=useMemo(()=>boardHexes.map(tile=>({
     key: tile.key,
     hex: tile.hex,
@@ -983,7 +1000,8 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     isSelected: tile.isSelected,
     flash: tile.flash,
     reducedEffects: tile.reducedEffects,
-  })),[boardHexes]);
+    visualDetailLevel,
+  })),[boardHexes,visualDetailLevel]);
 
   // City border overlay (rendered above all hexes so no hex can cover borders)
   const borderOverlay=useMemo(()=>{
@@ -1099,10 +1117,11 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     onHexClick,
     onHexCtx,
     boardHexes,
-    terrainCanvasTiles,
-    entityCanvasTiles,
-    overlayCanvasTiles,
-    borderOverlay,
+      terrainCanvasTiles,
+      entityCanvasTiles,
+      overlayCanvasTiles,
+      visualDetailLevel,
+      borderOverlay,
     cityBannerOverlay,
     overlayRef,
     animVisuals,

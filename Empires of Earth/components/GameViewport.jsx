@@ -31,6 +31,7 @@ export function GameViewport({ controller }) {
     animatingUnitId,
     combatAnims,
     tooltipData,
+    visualDetailLevel,
   } = controller;
 
   return activeRenderer === "canvas" ? (
@@ -57,6 +58,7 @@ export function GameViewport({ controller }) {
       animatingUnitId={animatingUnitId}
       combatAnims={combatAnims}
       tooltipData={tooltipData}
+      visualDetailLevel={visualDetailLevel}
     />
   ) : (
     <Suspense fallback={<div style={{position:"absolute",inset:0,zIndex:1,background:"rgba(10,14,6,.15)"}} />}>

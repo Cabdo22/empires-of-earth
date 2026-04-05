@@ -6,7 +6,7 @@ import { applyEndTurn, applyFoundCity, applyMoveUnit } from "../engine/actions.j
 import { createInitialDiplomacyState } from "../engine/diplomacy.js";
 import { getRangedTargets } from "../engine/movement.js";
 import { clientPointToWorldPoint, findHexFromWorldPoint, getPanForWorldPointAtClientPoint, worldPointToClientPoint } from "../utils/boardCoordinates.js";
-import { CANVAS_AUTO_HEX_THRESHOLD, resolveActiveRenderer, resolvePerformanceMode } from "../utils/rendererPolicy.js";
+import { CANVAS_AUTO_HEX_THRESHOLD, resolveActiveRenderer, resolvePerformanceMode, resolveVisualDetailLevel } from "../utils/rendererPolicy.js";
 
 const results = [];
 
@@ -238,6 +238,15 @@ runTest("auto performance mode follows the same threshold until user overrides i
   assert.equal(resolvePerformanceMode(false, false, CANVAS_AUTO_HEX_THRESHOLD), true);
   assert.equal(resolvePerformanceMode(true, false, CANVAS_AUTO_HEX_THRESHOLD), false);
   assert.equal(resolvePerformanceMode(true, true, 1), true);
+});
+
+runTest("adaptive full-fx detail level scales by zoom and map size", () => {
+  assert.equal(resolveVisualDetailLevel({ reducedEffects: true, hexCount: 100, zoom: 2 }), 0);
+  assert.equal(resolveVisualDetailLevel({ reducedEffects: false, hexCount: 100, zoom: 2 }), 3);
+  assert.equal(resolveVisualDetailLevel({ reducedEffects: false, hexCount: CANVAS_AUTO_HEX_THRESHOLD, zoom: 1 }), 2);
+  assert.equal(resolveVisualDetailLevel({ reducedEffects: false, hexCount: 100, zoom: 0.8 }), 2);
+  assert.equal(resolveVisualDetailLevel({ reducedEffects: false, hexCount: 2000, zoom: 1.5 }), 1);
+  assert.equal(resolveVisualDetailLevel({ reducedEffects: false, hexCount: 100, zoom: 0.6 }), 1);
 });
 
 runTest("applyFoundCity and applyEndTurn preserve explicit map-config state", () => {

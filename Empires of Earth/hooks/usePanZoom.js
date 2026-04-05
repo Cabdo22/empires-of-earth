@@ -1,9 +1,11 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import { clientPointToWorldPoint, getPanForWorldPointAtClientPoint, getWorldTransform } from "../utils/boardCoordinates.js";
+import { getZoomBucket } from "../utils/rendererPolicy.js";
 
 export function usePanZoom({ wW, wH }) {
   const panRef = useRef({ x: 0, y: 0 });
   const zoomRef = useRef(1);
+  const [zoomBucket, setZoomBucket] = useState(() => getZoomBucket(1));
   const isPanRef = useRef(false);
   const pointerDownRef = useRef(false);
   const psRef = useRef({ x: 0, y: 0, px: 0, py: 0 });
@@ -15,6 +17,10 @@ export function usePanZoom({ wW, wH }) {
   const minimapRenderRef = useRef(null);
   const viewportScaleRef = useRef(window.visualViewport?.scale || 1);
   const getContainerRect = useCallback(() => gameContainerRef.current?.getBoundingClientRect(), []);
+  const syncZoomBucket = useCallback((zoom) => {
+    const nextBucket = getZoomBucket(zoom);
+    setZoomBucket(prev => prev === nextBucket ? prev : nextBucket);
+  }, []);
 
   const flush = useCallback(() => {
     const z = zoomRef.current, p = panRef.current;
@@ -92,8 +98,9 @@ export function usePanZoom({ wW, wH }) {
       worldHeight: wH,
     });
     zoomRef.current = newZ;
+    syncZoomBucket(newZ);
     sched();
-  }, [getContainerRect, sched, wW, wH]);
+  }, [getContainerRect, sched, syncZoomBucket, wW, wH]);
 
   // Attach wheel listener as non-passive so preventDefault stops browser scroll/zoom
   useEffect(() => {
@@ -148,6 +155,7 @@ export function usePanZoom({ wW, wH }) {
         worldHeight: wH,
       });
       zoomRef.current = newZ;
+      syncZoomBucket(newZ);
       sched();
     };
     const sync = () => {
@@ -173,10 +181,10 @@ export function usePanZoom({ wW, wH }) {
       vv.removeEventListener("resize", onViewportChange); vv.removeEventListener("scroll", onViewportChange);
       document.removeEventListener("wheel", startPoll, { capture: true });
     };
-  }, [getContainerRect, sched, wH, wW]);
+  }, [getContainerRect, sched, syncZoomBucket, wH, wW]);
 
   return {
     panRef, zoomRef, isPanRef, gRef, svgRef, gameContainerRef, uiOverlayRef, minimapRenderRef,
-    flush, sched, onMD, onMM, onMU, onWh,
+    flush, sched, onMD, onMM, onMU, onWh, zoomBucket,
   };
 }
