@@ -23,6 +23,7 @@ import {
   scoreAiDiplomacyOffer,
   tickDiplomacy,
   DIPLOMACY_PROPOSAL_TYPES,
+  getTradePactBlockReason,
 } from './diplomacy.js';
 import {
   processResearchAndIncome, processCityTurn, expandTerritory,
@@ -404,7 +405,16 @@ export const applyCreateDiplomacyProposal = (state, { targetPlayerId, proposalTy
   const actor = g.players.find((p) => p.id === actorId);
   const target = g.players.find((p) => p.id === targetPlayerId);
   if (!actor || !target || actorId === targetPlayerId) return { state, events: [] };
+  if (proposalType === DIPLOMACY_PROPOSAL_TYPES.TRADE_PACT) {
+    const blockReason = getTradePactBlockReason(g, actorId, targetPlayerId);
+    if (blockReason) {
+      return { state, events: [{ type: "diplomacy_error", message: blockReason }] };
+    }
+  }
   const proposal = createProposal(g, actorId, targetPlayerId, proposalType);
+  if (proposal?.error) {
+    return { state, events: [{ type: "diplomacy_error", message: proposal.error }] };
+  }
   addLogMsg(`${actor.name} offered ${proposalType.replace("_", " ")} to ${target.name}.`, g, actor.id);
   if (autoResolveAi && target.type === "ai") {
     const accepted = scoreAiDiplomacyOffer(g, actorId, targetPlayerId, proposalType);

@@ -58,6 +58,7 @@ export function DiplomacyPanel({
   currentPlayer,
   knownPlayers,
   relations,
+  tradePactBlockReasons,
   pendingIncoming,
   pendingOutgoing,
   onClose,
@@ -88,6 +89,8 @@ export function DiplomacyPanel({
       {knownPlayers.map((player) => {
         const relation = relations[player.id];
         const leader = getLeaderDef(player.civilization);
+        const tradePactBlockedReason = tradePactBlockReasons?.[player.id] || null;
+        const canProposeTradePact = relation?.status !== "war" && !tradePactBlockedReason;
         const score = relation?.score || 0;
         const scorePct = Math.max(0, Math.min(100, 50 + score / 2));
         return (
@@ -137,11 +140,16 @@ export function DiplomacyPanel({
                 </button>
               )}
               {relation?.status !== "war" && (
-                <button onClick={() => onPropose(player.id, "trade_pact")} style={{ ...btnStyle(false), marginBottom: 0, marginRight: 0, fontSize: 10, padding: "6px 10px" }}>
+                <button onClick={() => onPropose(player.id, "trade_pact")} disabled={!canProposeTradePact} title={tradePactBlockedReason || "Offer a trade pact"} style={{ ...btnStyle(false), marginBottom: 0, marginRight: 0, fontSize: 10, padding: "6px 10px", opacity: canProposeTradePact ? 1 : 0.45, cursor: canProposeTradePact ? "pointer" : "not-allowed" }}>
                   Trade Pact
                 </button>
               )}
             </div>
+            {tradePactBlockedReason && relation?.status !== "war" && (
+              <div style={{ color: "#8fa06e", fontSize: 9, marginTop: 6 }}>
+                {tradePactBlockedReason}
+              </div>
+            )}
           </div>
         );
       })}

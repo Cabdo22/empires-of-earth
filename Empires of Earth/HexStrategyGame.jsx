@@ -37,6 +37,7 @@ import {
   getKnownPlayers,
   getLeaderScenePayload,
   getRelation,
+  getTradePactBlockReason,
 } from './engine/diplomacy.js';
 import { aiExecuteTurn } from './ai/aiEngine.js';
 import { SFX, MenuMusic } from './sfx.js';
@@ -167,6 +168,15 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       toName: players.find(pl=>pl.id===p.toPlayerId)?.name||p.toPlayerId,
     }));
   },[gs,cpId,players]);
+  const tradePactBlockReasons=useMemo(()=>{
+    if(!gs)return {};
+    const out={};
+    for(const p of knownPlayers){
+      const reason=getTradePactBlockReason(gs,cpId,p.id);
+      if(reason) out[p.id]=reason;
+    }
+    return out;
+  },[gs,knownPlayers,cpId]);
   const visData=useMemo(()=>{
     const cache=visDataCacheRef.current;
     const nextIds=new Set();
@@ -415,6 +425,13 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   const proposeDiplomacyAction = useCallback((targetPlayerId, type) => {
     if(!targetPlayerId || onlineMode) return;
+    if(type==="trade_pact" && gsRef.current){
+      const blockReason=getTradePactBlockReason(gsRef.current, gsRef.current.currentPlayerId, targetPlayerId);
+      if(blockReason){
+        setMoveMsg(blockReason);
+        return;
+      }
+    }
     runLocalEngineAction(applyCreateDiplomacyProposal, { targetPlayerId, proposalType: type, autoResolveAi: true });
     setShowDiplomacy(true);
   }, [onlineMode, runLocalEngineAction]);
@@ -1163,7 +1180,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       {showTech&&<TechTreePanel cp={cp} techPosRef={techPosRef} techCollapsed={techCollapsed} setTechCollapsed={setTechCollapsed} setShowTech={setShowTech} onPanelDown={onPanelDown} selResearch={selResearch}/>}
 
       {/* Diplomacy panel */}
-      {showDiplomacy&&<DiplomacyPanel currentPlayer={players.find(p=>p.id===cpId)} knownPlayers={knownPlayers} relations={diplomacyRelations} pendingIncoming={pendingIncoming} pendingOutgoing={pendingOutgoing} onClose={()=>setShowDiplomacy(false)} onOpenLeader={(pid)=>openLeaderScene(pid,"diplomacy")} onDeclareWar={declareWarAction} onPropose={proposeDiplomacyAction} onAccept={acceptProposalAction} onReject={rejectProposalAction}/>}
+      {showDiplomacy&&<DiplomacyPanel currentPlayer={players.find(p=>p.id===cpId)} knownPlayers={knownPlayers} relations={diplomacyRelations} tradePactBlockReasons={tradePactBlockReasons} pendingIncoming={pendingIncoming} pendingOutgoing={pendingOutgoing} onClose={()=>setShowDiplomacy(false)} onOpenLeader={(pid)=>openLeaderScene(pid,"diplomacy")} onDeclareWar={declareWarAction} onPropose={proposeDiplomacyAction} onAccept={acceptProposalAction} onReject={rejectProposalAction}/>}
 
       {/* City panel */}
       {showCity&&(()=>{const city=cp.cities.find(c=>c.id===showCity);if(!city)return null;

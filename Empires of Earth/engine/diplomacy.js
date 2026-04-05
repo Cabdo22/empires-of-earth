@@ -43,6 +43,7 @@ export const createInitialDiplomacyState = (players, turnNumber = 1) => {
   return {
     relationsByPair,
     pendingProposals: [],
+    lastTradePactProposalTurnByPair: {},
     leaderEventsSeen,
     nextProposalId: 1,
   };
@@ -54,6 +55,7 @@ export const ensureDiplomacyState = (state) => {
   }
   if (!state.diplomacy.relationsByPair) state.diplomacy.relationsByPair = {};
   if (!state.diplomacy.pendingProposals) state.diplomacy.pendingProposals = [];
+  if (!state.diplomacy.lastTradePactProposalTurnByPair) state.diplomacy.lastTradePactProposalTurnByPair = {};
   if (!state.diplomacy.leaderEventsSeen) {
     state.diplomacy.leaderEventsSeen = Object.fromEntries((state.players || []).map((p) => [p.id, []]));
   }
@@ -78,6 +80,30 @@ export const areAllied = (state, playerAId, playerBId) =>
 
 export const hasTradePact = (state, playerAId, playerBId) =>
   getRelation(state, playerAId, playerBId).activeTreaties.some((t) => t.type === DIPLOMACY_PROPOSAL_TYPES.TRADE_PACT);
+
+const getTradePactProposalKey = (fromPlayerId, toPlayerId) =>
+  `${getRelationKey(fromPlayerId, toPlayerId)}|${fromPlayerId}`;
+
+export const hasProposedTradePactThisTurn = (state, fromPlayerId, toPlayerId) => {
+  const diplomacy = ensureDiplomacyState(state);
+  const key = getTradePactProposalKey(fromPlayerId, toPlayerId);
+  return diplomacy.lastTradePactProposalTurnByPair[key] === (state.turnNumber || 1);
+};
+
+export const getTradePactBlockReason = (state, fromPlayerId, toPlayerId) => {
+  if (hasTradePact(state, fromPlayerId, toPlayerId)) return "Trade pact active";
+  if (hasProposedTradePactThisTurn(state, fromPlayerId, toPlayerId)) return "Already proposed this turn";
+  return null;
+};
+
+export const canProposeTradePact = (state, fromPlayerId, toPlayerId) =>
+  !getTradePactBlockReason(state, fromPlayerId, toPlayerId);
+
+const markTradePactProposedThisTurn = (state, fromPlayerId, toPlayerId) => {
+  const diplomacy = ensureDiplomacyState(state);
+  const key = getTradePactProposalKey(fromPlayerId, toPlayerId);
+  diplomacy.lastTradePactProposalTurnByPair[key] = state.turnNumber || 1;
+};
 
 export const canAttack = (state, attackerId, defenderId) =>
   !defenderId || areAtWar(state, attackerId, defenderId);
@@ -137,6 +163,9 @@ export const formAlliance = (state, fromPlayerId, toPlayerId) => {
 
 export const addTradePact = (state, fromPlayerId, toPlayerId) => {
   const relation = getRelation(state, fromPlayerId, toPlayerId);
+  if (relation.activeTreaties.some((t) => t.type === DIPLOMACY_PROPOSAL_TYPES.TRADE_PACT)) {
+    return relation;
+  }
   upsertTreaty(relation, { type: DIPLOMACY_PROPOSAL_TYPES.TRADE_PACT, expiresOnTurn: (state.turnNumber || 1) + 12 });
   if (relation.status === DIPLOMACY_STATUSES.NEUTRAL) {
     relation.status = DIPLOMACY_STATUSES.PEACE;
@@ -147,6 +176,11 @@ export const addTradePact = (state, fromPlayerId, toPlayerId) => {
 
 export const createProposal = (state, fromPlayerId, toPlayerId, type, payload = {}) => {
   const diplomacy = ensureDiplomacyState(state);
+  if (type === DIPLOMACY_PROPOSAL_TYPES.TRADE_PACT) {
+    const blockReason = getTradePactBlockReason(state, fromPlayerId, toPlayerId);
+    if (blockReason) return { error: blockReason };
+    markTradePactProposedThisTurn(state, fromPlayerId, toPlayerId);
+  }
   const proposal = {
     id: `dp-${diplomacy.nextProposalId++}`,
     fromPlayerId,

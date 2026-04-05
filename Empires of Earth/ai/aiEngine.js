@@ -22,6 +22,7 @@ import {
   DIPLOMACY_PROPOSAL_TYPES,
   getRelation,
   acceptProposal,
+  canProposeTradePact,
 } from '../engine/diplomacy.js';
 
 // Aggregate all enemy units and cities across all opponents
@@ -84,10 +85,12 @@ const aiMakeDiplomaticDecisions = (g, aiPlayer, players) => {
     }
 
     if (other.type === "ai" && relation.status === "neutral" && relation.score > 15) {
-      if (scoreAiDiplomacyOffer(g, aiPlayer.id, other.id, DIPLOMACY_PROPOSAL_TYPES.TRADE_PACT)) {
+      if (canProposeTradePact(g, aiPlayer.id, other.id) && scoreAiDiplomacyOffer(g, aiPlayer.id, other.id, DIPLOMACY_PROPOSAL_TYPES.TRADE_PACT)) {
         const proposal = createProposal(g, aiPlayer.id, other.id, DIPLOMACY_PROPOSAL_TYPES.TRADE_PACT);
-        acceptProposal(g, proposal.id);
-        addLogMsg(`${aiPlayer.name} signed a trade pact with ${other.name}.`, g, null);
+        if (proposal?.id) {
+          acceptProposal(g, proposal.id);
+          addLogMsg(`${aiPlayer.name} signed a trade pact with ${other.name}.`, g, null);
+        }
       }
     }
   }
