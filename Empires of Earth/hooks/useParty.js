@@ -4,7 +4,26 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import PartySocket from "partysocket";
 
-const PARTYKIT_HOST = import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
+const PARTYKIT_HOST = import.meta.env?.VITE_PARTYKIT_HOST || "localhost:1999";
+const SESSION_STORAGE_PREFIX = "empires-online-session:";
+
+const getRoomSessionKey = (roomId) => `${SESSION_STORAGE_PREFIX}${roomId}`;
+
+const getOrCreateSessionId = (roomId) => {
+  if (!roomId || typeof window === "undefined") return null;
+
+  const storageKey = getRoomSessionKey(roomId);
+  const existing = window.localStorage.getItem(storageKey);
+  if (existing) return existing;
+
+  const sessionId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  window.localStorage.setItem(storageKey, sessionId);
+  return sessionId;
+};
 
 export function useMultiplayerGame(roomId) {
   const [gameState, setGameState] = useState(null);
@@ -18,9 +37,24 @@ export function useMultiplayerGame(roomId) {
   const [aiSlots, setAiSlots] = useState([]);
   const [mapSize, setMapSize] = useState("medium");
   const socketRef = useRef(null);
+  const sessionIdRef = useRef(null);
 
   useEffect(() => {
     if (!roomId) return;
+
+    const sessionId = getOrCreateSessionId(roomId);
+    sessionIdRef.current = sessionId;
+
+    setConnected(false);
+    setMyPlayerId(null);
+    setGameState(null);
+    setError(null);
+    setRoomPhase("WAITING");
+    setCivPicks({});
+    setAiSlots([]);
+    setMapSize("medium");
+    setEvents([]);
+    setOpponentDisconnected(false);
 
     const socket = new PartySocket({
       host: PARTYKIT_HOST,
@@ -32,6 +66,10 @@ export function useMultiplayerGame(roomId) {
     socket.addEventListener("open", () => {
       setConnected(true);
       setError(null);
+      socket.send(JSON.stringify({
+        type: "HELLO",
+        sessionId,
+      }));
     });
 
     socket.addEventListener("close", () => {
@@ -46,6 +84,8 @@ export function useMultiplayerGame(roomId) {
           case "assigned":
             setMyPlayerId(data.playerId);
             setRoomPhase(data.phase);
+            if (data.state) setGameState(data.state);
+            setOpponentDisconnected(Boolean(data.opponentDisconnected));
             break;
 
           case "state":

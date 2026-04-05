@@ -123,11 +123,81 @@ export default class EmpiresServer {
     this.room = room;
     this.gameState = null;
     this.phase = "WAITING"; // WAITING | CIV_SELECT | PLAYING | FINISHED
-    this.playerSlots = {}; // { p1: connectionId, p2: connectionId }
+    this.playerSlots = this.createEmptyPlayerSlots();
     this.civPicks = {}; // { p1: "Rome", p2: "China" }
     this.mapSize = "medium";
     this.aiSlots = []; // [{ difficulty: "normal" }, ...] — AI players beyond p1/p2
-    this.disconnected = {}; // { p1: true/false, p2: true/false }
+  }
+
+  createEmptyPlayerSlots() {
+    return {
+      p1: this.createSlotRecord("p1"),
+      p2: this.createSlotRecord("p2"),
+    };
+  }
+
+  createSlotRecord(playerId, slot = {}) {
+    return {
+      playerId,
+      sessionId: slot.sessionId || null,
+      currentConnectionId: slot.currentConnectionId || null,
+      connected: Boolean(slot.connected),
+      lastSeenAt: slot.lastSeenAt || null,
+    };
+  }
+
+  normalizePlayerSlots(savedSlots) {
+    const normalized = this.createEmptyPlayerSlots();
+
+    if (!savedSlots || typeof savedSlots !== "object") return normalized;
+
+    for (const playerId of ["p1", "p2"]) {
+      const savedSlot = savedSlots[playerId];
+      if (!savedSlot) continue;
+
+      if (typeof savedSlot === "string") {
+        normalized[playerId] = this.createSlotRecord(playerId, {
+          currentConnectionId: savedSlot,
+          connected: false,
+          lastSeenAt: Date.now(),
+        });
+        continue;
+      }
+
+      normalized[playerId] = this.createSlotRecord(playerId, savedSlot);
+    }
+
+    return normalized;
+  }
+
+  getSlot(playerId) {
+    return this.playerSlots[playerId];
+  }
+
+  getPlayerSlotForSession(sessionId) {
+    return Object.values(this.playerSlots).find(slot => slot.sessionId === sessionId) || null;
+  }
+
+  getFirstUnclaimedSlot() {
+    return Object.values(this.playerSlots).find(slot => !slot.sessionId) || null;
+  }
+
+  assignSlot(slot, sessionId, connectionId) {
+    slot.sessionId = sessionId;
+    slot.currentConnectionId = connectionId;
+    slot.connected = true;
+    slot.lastSeenAt = Date.now();
+    return slot;
+  }
+
+  releaseConnection(connectionId) {
+    const slot = Object.values(this.playerSlots).find(s => s.currentConnectionId === connectionId);
+    if (!slot) return null;
+
+    slot.currentConnectionId = null;
+    slot.connected = false;
+    slot.lastSeenAt = Date.now();
+    return slot;
   }
 
   async onStart() {
@@ -135,7 +205,7 @@ export default class EmpiresServer {
     if (saved) {
       this.gameState = saved.gameState;
       this.phase = saved.phase;
-      this.playerSlots = saved.playerSlots;
+      this.playerSlots = this.normalizePlayerSlots(saved.playerSlots);
       this.civPicks = saved.civPicks;
       this.mapSize = saved.mapSize || "medium";
       this.aiSlots = saved.aiSlots || [];
@@ -154,67 +224,16 @@ export default class EmpiresServer {
   }
 
   async onConnect(connection, ctx) {
-    let assignedSlot = null;
-
-    // Check if this connection was previously assigned (reconnect)
-    for (const [slot, connId] of Object.entries(this.playerSlots)) {
-      if (connId === connection.id) {
-        assignedSlot = slot;
-        this.disconnected[slot] = false;
-        break;
-      }
-    }
-
-    // Assign new slot if not reconnecting
-    if (!assignedSlot) {
-      if (!this.playerSlots.p1) {
-        this.playerSlots.p1 = connection.id;
-        assignedSlot = "p1";
-      } else if (!this.playerSlots.p2) {
-        this.playerSlots.p2 = connection.id;
-        assignedSlot = "p2";
-      } else {
-        connection.send(JSON.stringify({ type: "error", message: "Room is full" }));
-        return;
-      }
-    }
-
-    connection.setState({ playerId: assignedSlot });
-
-    connection.send(JSON.stringify({
-      type: "assigned",
-      playerId: assignedSlot,
-      phase: this.phase,
-    }));
-
-    // If both players are connected and still in WAITING, move to CIV_SELECT
-    if (this.phase === "WAITING" && this.playerSlots.p1 && this.playerSlots.p2) {
-      this.phase = "CIV_SELECT";
-      this.broadcastPhase();
-    }
-
-    // If reconnecting during play, re-send filtered state
-    if (this.phase === "PLAYING" && this.gameState) {
-      const filtered = filterStateForPlayer(this.gameState, assignedSlot);
-      connection.send(JSON.stringify({ type: "state", state: filtered }));
-
-      this.broadcastToPlayer(
-        assignedSlot === "p1" ? "p2" : "p1",
-        { type: "opponent_reconnected" }
-      );
-    }
-
-    await this.persist();
+    connection.setState({ playerId: null, sessionId: null });
   }
 
   async onClose(connection) {
-    const slot = connection.state?.playerId;
+    const slot = this.releaseConnection(connection.id);
     if (!slot) return;
 
-    this.disconnected[slot] = true;
-
-    const otherSlot = slot === "p1" ? "p2" : "p1";
+    const otherSlot = slot.playerId === "p1" ? "p2" : "p1";
     this.broadcastToPlayer(otherSlot, { type: "opponent_disconnected" });
+    await this.persist();
   }
 
   async onMessage(message, sender) {
@@ -226,19 +245,18 @@ export default class EmpiresServer {
       return;
     }
 
+    if (data.type === "HELLO") {
+      await this.handleHello(data, sender);
+      return;
+    }
+
     const playerId = sender.state?.playerId;
     if (!playerId) {
       sender.send(JSON.stringify({ type: "error", message: "Not assigned to a slot" }));
       return;
     }
-
-    // Handle reconnect message
-    if (data.type === "RECONNECT") {
-      if (this.gameState) {
-        const filtered = filterStateForPlayer(this.gameState, playerId);
-        sender.send(JSON.stringify({ type: "state", state: filtered }));
-      }
-      sender.send(JSON.stringify({ type: "phase_change", phase: this.phase }));
+    if (!this.isCurrentConnection(playerId, sender.id)) {
+      sender.send(JSON.stringify({ type: "error", message: "Session replaced by a newer connection" }));
       return;
     }
 
@@ -252,6 +270,69 @@ export default class EmpiresServer {
       default:
         sender.send(JSON.stringify({ type: "error", message: `Cannot act in phase ${this.phase}` }));
     }
+  }
+
+  async handleHello(data, connection) {
+    const sessionId = typeof data.sessionId === "string" ? data.sessionId.trim() : "";
+    if (!sessionId) {
+      connection.send(JSON.stringify({ type: "error", message: "Missing session id" }));
+      return;
+    }
+
+    let slot = this.getPlayerSlotForSession(sessionId);
+    const isReconnect = Boolean(slot);
+
+    if (!slot) {
+      slot = this.getFirstUnclaimedSlot();
+      if (!slot) {
+        connection.send(JSON.stringify({ type: "error", message: "Room is full" }));
+        return;
+      }
+    }
+
+    this.assignSlot(slot, sessionId, connection.id);
+    connection.setState({ playerId: slot.playerId, sessionId });
+
+    const assignedMsg = {
+      type: "assigned",
+      playerId: slot.playerId,
+      phase: this.phase,
+      reclaimed: isReconnect,
+      opponentDisconnected: this.isOpponentDisconnected(slot.playerId),
+    };
+
+    if ((this.phase === "PLAYING" || this.phase === "FINISHED") && this.gameState) {
+      assignedMsg.state = filterStateForPlayer(this.gameState, slot.playerId);
+    }
+
+    connection.send(JSON.stringify(assignedMsg));
+
+    if (this.phase === "WAITING" && this.areBothHumanSlotsClaimed()) {
+      this.phase = "CIV_SELECT";
+      this.broadcastPhase();
+    }
+
+    if (isReconnect) {
+      const otherPlayerId = slot.playerId === "p1" ? "p2" : "p1";
+      this.broadcastToPlayer(otherPlayerId, { type: "opponent_reconnected" });
+    }
+
+    await this.persist();
+  }
+
+  areBothHumanSlotsClaimed() {
+    return Boolean(this.playerSlots.p1?.sessionId && this.playerSlots.p2?.sessionId);
+  }
+
+  isOpponentDisconnected(playerId) {
+    const otherPlayerId = playerId === "p1" ? "p2" : "p1";
+    const otherSlot = this.getSlot(otherPlayerId);
+    return Boolean(otherSlot?.sessionId && !otherSlot.connected);
+  }
+
+  isCurrentConnection(playerId, connectionId) {
+    const slot = this.getSlot(playerId);
+    return Boolean(slot && slot.currentConnectionId === connectionId);
   }
 
   // === CIV SELECT PHASE ===
