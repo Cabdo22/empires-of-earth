@@ -53,7 +53,6 @@ export function BottomInfo({
               letterSpacing: 0.2,
               textAlign: "center",
               pointerEvents: "auto",
-              backdropFilter: "blur(8px)",
             }}
           >
             Click a visible hex for terrain details. Tab cycles ready units.

@@ -16,11 +16,10 @@ export const btnStyle = (active) => ({
 });
 
 export const hudSurfaceStyle = {
-  background: "linear-gradient(180deg,rgba(14,20,10,.94) 0%,rgba(10,15,7,.9) 100%)",
+  background: "linear-gradient(180deg,rgba(13,18,10,.95) 0%,rgba(10,14,8,.92) 100%)",
   border: "1px solid rgba(132,165,84,.3)",
   borderRadius: 16,
-  boxShadow: "0 18px 36px rgba(0,0,0,.28), inset 0 1px 0 rgba(240,245,220,.06)",
-  backdropFilter: "blur(12px)",
+  boxShadow: "0 10px 22px rgba(0,0,0,.18), inset 0 1px 0 rgba(240,245,220,.04)",
 };
 
 export const hudPanelStyle = {
@@ -64,9 +63,9 @@ export const hudButtonStyle = (active = false) => ({
   border: active ? "1px solid rgba(186,220,120,.48)" : "1px solid rgba(116,148,72,.35)",
   background: active
     ? "linear-gradient(180deg,rgba(124,170,66,.55) 0%,rgba(72,110,34,.62) 100%)"
-    : "linear-gradient(180deg,rgba(34,44,22,.94) 0%,rgba(20,26,14,.9) 100%)",
+    : "linear-gradient(180deg,rgba(30,40,20,.94) 0%,rgba(20,26,14,.92) 100%)",
   color: active ? "#f0f6de" : "#d2ddb7",
-  boxShadow: active ? "0 10px 18px rgba(50,80,24,.3)" : "none",
+  boxShadow: active ? "0 6px 12px rgba(50,80,24,.2)" : "none",
 });
 
 export const panelStyle = {

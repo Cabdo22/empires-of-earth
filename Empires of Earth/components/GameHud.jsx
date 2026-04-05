@@ -171,7 +171,7 @@ export function GameHud({ controller }) {
       </div>
 
       <div style={{ position: "absolute", top: 110, left: 18, zIndex: 12, display: "flex", alignItems: "flex-start", gap: 10, pointerEvents: "auto" }}>
-        <div style={{ ...hudPanelStyle, width: 60, padding: 8, display: "grid", gap: 8 }}>
+        <div style={{ ...hudPanelStyle, width: 60, padding: 8, display: "grid", gap: 8, background: "rgba(12,18,9,.94)" }}>
           {Object.entries(TAB_CONFIG).map(([key, tab]) => {
             const active = activeLeftTab === key;
             return (
@@ -197,7 +197,7 @@ export function GameHud({ controller }) {
         </div>
 
         {activeLeftTab && (
-          <div style={{ ...hudPanelStyle, width: 316, maxHeight: "calc(100vh - 270px)", overflowY: "auto", padding: "14px 14px 16px" }}>
+          <div style={{ ...hudPanelStyle, width: 316, maxHeight: "calc(100vh - 270px)", overflowY: "auto", padding: "14px 14px 16px", background: "rgba(12,18,9,.95)" }}>
             <div style={{ ...hudSectionLabelStyle, marginBottom: 10 }}>{TAB_CONFIG[activeLeftTab].label}</div>
             {activeTabContent}
           </div>

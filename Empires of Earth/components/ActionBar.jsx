@@ -64,35 +64,33 @@ export function ActionBar({
         </button>
       </div>
 
-      {!compact && (
-        <div>
-          <div style={{ ...hudSectionLabelStyle, marginBottom: 8 }}>Field Settings</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <button
-              onClick={() => {
-                if (!tutorialOn) {
-                  setTutorialOn(true);
-                  setTutorialDismissed({});
-                } else {
-                  setTutorialOn(false);
-                }
-              }}
-              style={dockButtonStyle(tutorialOn)}
-            >
-              <span>💡 Tips</span>
-              <span>{tutorialOn ? "Shown" : "Hidden"}</span>
-            </button>
-            <button onClick={() => setPerformanceMode(!performanceMode)} style={dockButtonStyle(performanceMode)}>
-              <span>{performanceMode ? "⚡ Reduced FX" : "✨ Full FX"}</span>
-              <span>{performanceMode ? "Fast" : "Rich"}</span>
-            </button>
-            <button onClick={cycleRenderer} style={dockButtonStyle(rendererMode !== "svg")}>
-              <span>🖼 Renderer</span>
-              <span style={{ textTransform: "capitalize" }}>{rendererMode}</span>
-            </button>
-          </div>
+      <div style={{ marginTop: compact ? 14 : 0 }}>
+        <div style={{ ...hudSectionLabelStyle, marginBottom: 8 }}>Field Settings</div>
+        <div style={{ display: "grid", gap: 8 }}>
+          <button
+            onClick={() => {
+              if (!tutorialOn) {
+                setTutorialOn(true);
+                setTutorialDismissed({});
+              } else {
+                setTutorialOn(false);
+              }
+            }}
+            style={dockButtonStyle(tutorialOn)}
+          >
+            <span>💡 Tips</span>
+            <span>{tutorialOn ? "Shown" : "Hidden"}</span>
+          </button>
+          <button onClick={() => setPerformanceMode(!performanceMode)} style={dockButtonStyle(performanceMode)}>
+            <span>{performanceMode ? "⚡ Reduced FX" : "✨ Full FX"}</span>
+            <span>{performanceMode ? "Fast" : "Rich"}</span>
+          </button>
+          <button onClick={cycleRenderer} style={dockButtonStyle(rendererMode !== "svg")}>
+            <span>🖼 Renderer</span>
+            <span style={{ textTransform: "capitalize" }}>{rendererMode}</span>
+          </button>
         </div>
-      )}
+      </div>
 
       {(sud || actable.size > 0) && (
         <div style={{ marginTop: 14 }}>
