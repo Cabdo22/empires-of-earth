@@ -53,6 +53,7 @@ import { MinimapDisplay } from './components/MinimapDisplay.jsx';
 import { EventPopup } from './components/EventPopup.jsx';
 import { LeaderMeetingScreen } from './components/LeaderMeetingScreen.jsx';
 import { DiplomacyPanel } from './components/DiplomacyPanel.jsx';
+import { CanvasBoardRenderer } from './components/CanvasBoardRenderer.jsx';
 import useUnitAnimation from './hooks/useUnitAnimation.js';
 import UnitAnimationOverlay from './components/UnitAnimationOverlay.jsx';
 
@@ -85,7 +86,10 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const[turnTransition,setTurnTransition]=useState(null); // null or {playerName, playerColor, playerColorLight}
   const[tutorialOn,setTutorialOn]=useState(true);
   const[minimapVisible,setMinimapVisible]=useState(true);
-  const[performanceMode,setPerformanceMode]=useState(()=>{try{return localStorage.getItem("eoe_performance_mode")==="1";}catch{return false;}});
+  const performancePrefStored=useMemo(()=>{try{return localStorage.getItem("eoe_performance_mode");}catch{return null;}},[]);
+  const[performanceMode,setPerformanceMode]=useState(()=>performancePrefStored==="1");
+  const[performanceModeTouched,setPerformanceModeTouched]=useState(()=>performancePrefStored!=null);
+  const[rendererMode,setRendererMode]=useState(()=>{try{return localStorage.getItem("eoe_renderer_mode")||"auto";}catch{return "auto";}});
   const[tutorialDismissed,setTutorialDismissed]=useState({}); // keyed by tip id
   const[techCollapsed,setTechCollapsed]=useState(false);
   const[cityCollapsed,setCityCollapsed]=useState(false);
@@ -109,7 +113,8 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       MenuMusic.stop();
     }
   }, [gameStarted, gs]);
-  useEffect(()=>{try{localStorage.setItem("eoe_performance_mode",performanceMode?"1":"0");}catch{}},[performanceMode]);
+  useEffect(()=>{if(!performanceModeTouched)return;try{localStorage.setItem("eoe_performance_mode",performanceMode?"1":"0");}catch{}},[performanceMode,performanceModeTouched]);
+  useEffect(()=>{try{localStorage.setItem("eoe_renderer_mode",rendererMode);}catch{}},[rendererMode]);
 
   // Derived state (safe when gs is null)
   const hexes=gs?.hexes||[];
@@ -125,6 +130,11 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const enemies=players.filter(p=>p.id!==viewPlayerId);
   const op=enemies[0]; // legacy compat — prefer enemies array
   const inc=useMemo(()=>gs?calcPlayerIncomeWithState(cp,gs):{food:0,production:0,science:0,gold:0},[cp,gs]);
+  const activeRenderer=useMemo(()=>{
+    if(rendererMode!=="auto")return rendererMode;
+    return hexes.length>=450 ? "canvas" : "svg";
+  },[rendererMode,hexes.length]);
+  const effectivePerformanceMode=performanceModeTouched ? performanceMode : hexes.length>=450;
   const knownPlayers=useMemo(()=>gs?getKnownPlayers(gs,cpId):[],[gs,cpId]);
   const diplomacyRelations=useMemo(()=>{
     if(!gs)return {};
@@ -951,6 +961,36 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
   const findHexFromEvent=useCallback(e=>{const el=e.target.closest("[data-hex]");if(!el)return null;
     const id=+el.dataset.hex,col=+el.dataset.col,row=+el.dataset.row;
     return{id,col,row,hex:hexes[id],uk:`${col},${row}`};},[hexes]);
+  const findHexFromClientPoint=useCallback((clientX,clientY)=>{
+    const z=zoomRef.current;
+    const p=panRef.current;
+    const cx=window.innerWidth/2;
+    const cy=window.innerHeight/2;
+    const worldX=(clientX-(p.x+cx-(wW*z)/2))/z;
+    const worldY=(clientY-(p.y+cy-(wH*z)/2))/z;
+    const approxCol=Math.round((worldX-HEX_SIZE-50)/(1.5*HEX_SIZE));
+    let bestHex=null;
+    let bestDistSq=Infinity;
+    for(let col=approxCol-1;col<=approxCol+1;col++){
+      if(col<0||col>=COLS)continue;
+      const baseRow=(worldY-HEX_SIZE-50-(col%2===1?(SQRT3*HEX_SIZE)/2:0))/(SQRT3*HEX_SIZE);
+      const approxRow=Math.round(baseRow);
+      for(let row=approxRow-1;row<=approxRow+1;row++){
+        if(row<0||row>=ROWS)continue;
+        const hex=hexAt(hexes,col,row);
+        if(!hex)continue;
+        const dx=hex.x-worldX;
+        const dy=hex.y-worldY;
+        const distSq=dx*dx+dy*dy;
+        if(distSq<bestDistSq){
+          bestDistSq=distSq;
+          bestHex=hex;
+        }
+      }
+    }
+    if(!bestHex||bestDistSq>HEX_SIZE*HEX_SIZE*1.2)return null;
+    return{id:bestHex.id,col:bestHex.col,row:bestHex.row,hex:bestHex,uk:bestHex.uk};
+  },[hexes,panRef,zoomRef,wW,wH]);
 
   const commitPreview=useCallback(nextPreview=>{
     const nextKey=nextPreview?[
@@ -1013,8 +1053,8 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
 
   const onHexLeave=useCallback(()=>{scheduleHoveredHex(null);},[scheduleHoveredHex]);
 
-  const onHexClick=useCallback(e=>{
-    e.stopPropagation();if(animatingUnitId)return;const h=findHexFromEvent(e);if(!h||isPanRef.current)return;
+  const handleHexClickTarget=useCallback(h=>{
+    if(animatingUnitId)return;if(!h||isPanRef.current)return;
     const{hex,uk}=h;if(!fogVisible.has(uk))return;
     const bucket=unitMap[uk]||EMPTY_UNIT_BUCKET;const myU=bucket.myUnits;
     const eU=bucket.enemyUnits;const cE=cityMap[hex.id];const isMy=myU.length>0;
@@ -1045,11 +1085,16 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       if(myU.length>1){const ci=myU.findIndex(u=>u.id===selU);setSelU(myU[(ci+1)%myU.length].id);}
       else{const su=myU[0];if(su.unitType==="settler"){setSettlerM(su.id);return;}if(su.unitType==="nuke"||su.unitType==="icbm"){setNukeM(su.id);return;}setSelU(null);setSelH(hex.id);}
     }else{setSelU(null);setSelH(selH===hex.id?null:hex.id);}
-  },[findHexFromEvent,fogVisible,unitMap,cityMap,cpId,selU,nukeM,nukeR,settlerM,phase,selH,reach,moveCostMap,sud,launchNuke,foundCity,doCombat,moveU,animatingUnitId]);
+  },[fogVisible,unitMap,cityMap,cpId,selU,nukeM,nukeR,settlerM,phase,selH,reach,moveCostMap,sud,launchNuke,foundCity,doCombat,moveU,animatingUnitId,isPanRef]);
 
-  const onHexCtx=useCallback(e=>{
-    e.preventDefault();e.stopPropagation();if(animatingUnitId||isPanRef.current||phase!=="MOVEMENT")return;
-    const h=findHexFromEvent(e);if(!h)return;const{hex,uk}=h;
+  const onHexClick=useCallback(e=>{
+    e.stopPropagation();
+    handleHexClickTarget(findHexFromEvent(e));
+  },[findHexFromEvent,handleHexClickTarget]);
+
+  const handleHexContextTarget=useCallback(h=>{
+    if(animatingUnitId||isPanRef.current||phase!=="MOVEMENT")return;
+    if(!h)return;const{hex,uk}=h;
     const bucket=unitMap[uk]||EMPTY_UNIT_BUCKET;const myU=bucket.myUnits;
     const eU=bucket.enemyUnits;const cE=cityMap[hex.id];
     const uSel2=selU&&myU.some(u=>u.id===selU);
@@ -1061,9 +1106,33 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     if(selU&&inMv){moveU(selU,hex.col,hex.row,moveCostMap[uk]);return;}
     if(selU&&!uSel2){const blk=getMoveBlockReason(hex,sud,sud?.def,reach,atkRange,phase,cpId,players);
       if(blk){setMoveMsg(blk);setFlashes(prev=>({...prev,[uk]:"blocked"}));}}
-  },[findHexFromEvent,phase,unitMap,cityMap,cpId,selU,sud,reach,atkRange,moveCostMap,doCombat,moveU,players,animatingUnitId]);
+  },[phase,unitMap,cityMap,cpId,selU,sud,reach,atkRange,moveCostMap,doCombat,moveU,players,animatingUnitId,isPanRef]);
 
-  const renderAll=useCallback(()=>hexes.map((hex,i)=>{
+  const onHexCtx=useCallback(e=>{
+    e.preventDefault();e.stopPropagation();
+    handleHexContextTarget(findHexFromEvent(e));
+  },[findHexFromEvent,handleHexContextTarget]);
+
+  const onCanvasMove=useCallback(e=>{
+    onMM(e);
+    if(isPanRef.current)return;
+    scheduleHoveredHex(findHexFromClientPoint(e.clientX,e.clientY));
+  },[onMM,isPanRef,scheduleHoveredHex,findHexFromClientPoint]);
+  const onCanvasLeave=useCallback(()=>{
+    onMU();
+    scheduleHoveredHex(null);
+  },[onMU,scheduleHoveredHex]);
+  const onCanvasClick=useCallback(e=>{
+    e.stopPropagation();
+    handleHexClickTarget(findHexFromClientPoint(e.clientX,e.clientY));
+  },[handleHexClickTarget,findHexFromClientPoint]);
+  const onCanvasContext=useCallback(e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    handleHexContextTarget(findHexFromClientPoint(e.clientX,e.clientY));
+  },[handleHexContextTarget,findHexFromClientPoint]);
+
+  const boardHexes=useMemo(()=>hexes.map((hex,i)=>{
     const uk=hex.uk;
     const isVisible=fogVisible.has(uk);
     const isExplored2=fogExplored.has(uk);
@@ -1080,11 +1149,33 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     const ownerP=hex.ownerPlayerId?displayPlayerById[hex.ownerPlayerId]:null;
     const blkReason=hovH===hex.id&&selU&&phase==="MOVEMENT"&&sud&&!uSel&&!fogged?getMoveBlockReason(hex,sud,sud.def,reach,atkRange,phase,cpId,players):null;
 
-    return <MemoHex key={hex.id} hex={hex} vis={visData[i]}
-      isHovered={hovH===hex.id} isSelected={selH===hex.id} inMoveRange={inMv} inAttackRange={!!(inMelee||inRng)} inNukeRange={!!inNk}
-      unitSelected={!!uSel} units={fogged?null:uH} unitCount={fogged?0:uH.length}
-      city={fogged?null:(cE?.city||null)} player={cE?.player||ownerP} settlerMode={!!settlerM} settlerBlocked={settlerBlocked.has(uk)} canAct={!!canA} flash={flashes[uk]||null} isFogged={fogged} isExplored={isExplored2} blockReason={blkReason} discoveredResources={discoveredResources} reducedEffects={performanceMode}/>;
-  }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,settlerBlocked,actable,nukeM,nukeR,flashes,fogVisible,fogExplored,discoveredResources,displayPlayerById,performanceMode]);
+    return {
+      key: hex.id,
+      hex,
+      vis: visData[i],
+      isHovered: hovH===hex.id,
+      isSelected: selH===hex.id,
+      inMoveRange: inMv,
+      inAttackRange: !!(inMelee||inRng),
+      inNukeRange: !!inNk,
+      unitSelected: !!uSel,
+      units: fogged?null:uH,
+      unitCount: fogged?0:uH.length,
+      city: fogged?null:(cE?.city||null),
+      player: cE?.player||ownerP,
+      settlerMode: !!settlerM,
+      settlerBlocked: settlerBlocked.has(uk),
+      canAct: !!canA,
+      flash: flashes[uk]||null,
+      isFogged: fogged,
+      isExplored: isExplored2,
+      blockReason: blkReason,
+      discoveredResources,
+      reducedEffects: effectivePerformanceMode,
+    };
+  }),[hexes,hovH,selH,visData,unitMap,cityMap,selU,reach,atkRange,sud,cpId,phase,players,settlerM,settlerBlocked,actable,nukeM,nukeR,flashes,fogVisible,fogExplored,discoveredResources,displayPlayerById,effectivePerformanceMode]);
+
+  const renderAll=useCallback(()=>boardHexes.map(tile=><MemoHex key={tile.key} {...tile}/>),[boardHexes]);
 
   // City border overlay (rendered above all hexes so no hex can cover borders)
   const borderOverlay=useMemo(()=>{
@@ -1218,6 +1309,29 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
     <div ref={gameContainerRef} onMouseMove={onPanelMove} onMouseUp={onPanelUp} style={{width:"100vw",height:"100vh",background:"linear-gradient(145deg,#0a0e06 0%,#141e0c 40%,#0e1608 100%)",overflow:"hidden",position:"relative",userSelect:"none",touchAction:"none",fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,serif"}}>
 
       {/* === MAP LAYER (below UI) === */}
+      {activeRenderer==="canvas" ? (
+        <CanvasBoardRenderer
+          svgRef={svgRef}
+          gRef={gRef}
+          wW={wW}
+          wH={wH}
+          onMouseDown={onMD}
+          onMouseMove={onCanvasMove}
+          onMouseUp={onMU}
+          onMouseLeave={onCanvasLeave}
+          onClick={onCanvasClick}
+          onContextMenu={onCanvasContext}
+          onWheel={onWh}
+          boardHexes={boardHexes}
+          borderOverlay={borderOverlay}
+          cityBannerOverlay={cityBannerOverlay}
+          overlayRef={overlayRef}
+          animVisuals={animVisuals}
+          animatingUnitId={animatingUnitId}
+          combatAnims={combatAnims}
+          tooltipData={tooltipData}
+        />
+      ) : (
       <svg ref={svgRef} onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU} onWheel={onWh} onContextMenu={e=>e.preventDefault()} style={{cursor:"grab",position:"absolute",top:0,left:0,width:"100%",height:"100%",zIndex:1}}>
         <defs>
           <style>{`
@@ -1274,7 +1388,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
             <text x={0} y={3} textAnchor="middle" dominantBaseline="middle" fill="#ffb090" fontSize={9} fontWeight="bold" fontFamily="'Palatino Linotype',serif" style={{pointerEvents:"none"}}>{tooltipData.text}</text>
           </g>}
         </g>
-      </svg>
+      </svg>)}
 
       {/* === UI OVERLAY (above map, fixed to viewport so browser zoom can't push it off-screen) === */}
       <div ref={uiOverlayRef} style={{position:"fixed",top:0,left:0,width:"100vw",height:"100vh",zIndex:10,pointerEvents:"none"}}>
@@ -1293,7 +1407,7 @@ export default function HexStrategyGame({ onlineMode, onBack } = {}){
       <PlayerPanel cp={cp} hexes={hexes} landOwned={landOwned} totalLand={totalLand} barbarians={barbarians}/>
 
       {/* Action bar */}
-      <ActionBar showTech={showTech} setShowTech={setShowTech} showDiplomacy={showDiplomacy} setShowDiplomacy={setShowDiplomacy} showSaveLoad={showSaveLoad} setShowSaveLoad={setShowSaveLoad} tutorialOn={tutorialOn} setTutorialOn={setTutorialOn} setTutorialDismissed={setTutorialDismissed} performanceMode={performanceMode} setPerformanceMode={setPerformanceMode} sud={sud} selU={selU} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} upgradeUnit={upgradeUnit} cp={cp} actable={actable}/>
+      <ActionBar showTech={showTech} setShowTech={setShowTech} showDiplomacy={showDiplomacy} setShowDiplomacy={setShowDiplomacy} showSaveLoad={showSaveLoad} setShowSaveLoad={setShowSaveLoad} tutorialOn={tutorialOn} setTutorialOn={setTutorialOn} setTutorialDismissed={setTutorialDismissed} performanceMode={effectivePerformanceMode} setPerformanceMode={value=>{setPerformanceModeTouched(true);setPerformanceMode(value);}} rendererMode={rendererMode} setRendererMode={setRendererMode} sud={sud} selU={selU} settlerM={settlerM} setSettlerM={setSettlerM} nukeM={nukeM} setNukeM={setNukeM} upgradeUnit={upgradeUnit} cp={cp} actable={actable}/>
 
       {/* Save/Load modal */}
       {showSaveLoad && <div style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5,8,3,.5)", pointerEvents: "all" }} onClick={e => { if (e.target === e.currentTarget) setShowSaveLoad(false); }}>

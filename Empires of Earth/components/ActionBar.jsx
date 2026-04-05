@@ -3,7 +3,12 @@ import { UNIT_DEFS } from '../data/units.js';
 import { canUpgradeUnit } from '../engine/economy.js';
 import { btnStyle } from '../styles.js';
 
-export function ActionBar({ showTech, setShowTech, showDiplomacy, setShowDiplomacy, showSaveLoad, setShowSaveLoad, tutorialOn, setTutorialOn, setTutorialDismissed, performanceMode, setPerformanceMode, sud, selU, settlerM, setSettlerM, nukeM, setNukeM, upgradeUnit, cp, actable }) {
+export function ActionBar({ showTech, setShowTech, showDiplomacy, setShowDiplomacy, showSaveLoad, setShowSaveLoad, tutorialOn, setTutorialOn, setTutorialDismissed, performanceMode, setPerformanceMode, rendererMode, setRendererMode, sud, selU, settlerM, setSettlerM, nukeM, setNukeM, upgradeUnit, cp, actable }) {
+  const cycleRenderer = () => {
+    const order = ["auto", "canvas", "svg"];
+    const next = order[(order.indexOf(rendererMode) + 1) % order.length];
+    setRendererMode(next);
+  };
   return (
     <>
       {/* Left sidebar buttons (Tech, Diplomacy, Save/Load, Tips) */}
@@ -13,6 +18,7 @@ export function ActionBar({ showTech, setShowTech, showDiplomacy, setShowDiploma
         <button onClick={() => setShowSaveLoad(!showSaveLoad)} style={{ ...btnStyle(showSaveLoad), marginRight: 0, marginBottom: 0, padding: "8px 22px", fontSize: 13, letterSpacing: 1 }}>💾 Save/Load</button>
         <button onClick={() => { if (!tutorialOn) { setTutorialOn(true); setTutorialDismissed({}); } else { setTutorialOn(false); } }} style={{ ...btnStyle(tutorialOn), marginRight: 0, marginBottom: 0, padding: "8px 22px", fontSize: 13, letterSpacing: 1 }}>💡 Tips</button>
         <button onClick={() => setPerformanceMode(!performanceMode)} style={{ ...btnStyle(performanceMode), marginRight: 0, marginBottom: 0, padding: "8px 22px", fontSize: 13, letterSpacing: 1 }}>{performanceMode ? "⚡ Reduced FX" : "✨ Full FX"}</button>
+        <button onClick={cycleRenderer} style={{ ...btnStyle(rendererMode !== "svg"), marginRight: 0, marginBottom: 0, padding: "8px 22px", fontSize: 13, letterSpacing: 1 }}>🖼 {rendererMode === "auto" ? "Renderer: Auto" : rendererMode === "canvas" ? "Renderer: Canvas" : "Renderer: SVG"}</button>
       </div>
 
       {/* Unit action bar */}
